@@ -1,14 +1,7 @@
 """데이터베이스 연결 및 세션 관리"""
-from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.config import get_settings
-
-
-class Base(DeclarativeBase):
-    pass
-
 
 settings = get_settings()
 

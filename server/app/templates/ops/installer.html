@@ -1,0 +1,206 @@
+{% extends "ops/base.html" %}
+
+{% block title %}설치 파일 관리{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">설치 파일 관리</h1>
+    <p class="page-subtitle">포스 에이전트 설치 파일을 업로드하고 관리하세요</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">새 버전 업로드</h3>
+    </div>
+
+    <form id="upload-form" enctype="multipart/form-data">
+        <div style="display: grid; grid-template-columns: 200px 1fr auto; gap: 16px; align-items: end;">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">버전</label>
+                <input type="text" name="version" class="form-input" placeholder="1.0.1" pattern="[0-9]+\.[0-9]+\.[0-9]+" required>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">설치 파일 (.exe)</label>
+                <input type="file" name="file" class="form-input" accept=".exe" required
+                       style="padding: 10px;">
+            </div>
+
+            <button type="submit" class="btn btn-primary">업로드</button>
+        </div>
+    </form>
+
+    <div id="upload-progress" style="display: none; margin-top: 16px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;">
+                <div id="progress-bar" style="height: 100%; background: var(--primary); width: 0%; transition: width 0.3s;"></div>
+            </div>
+            <span id="progress-text">0%</span>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h3 class="card-title">버전 목록</h3>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>버전</th>
+                    <th>파일명</th>
+                    <th>SHA-256</th>
+                    <th>배포일</th>
+                    <th>다운로드</th>
+                    <th>상태</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="versions-tbody">
+                {% if versions %}
+                    {% for ver in versions %}
+                    <tr>
+                        <td>
+                            <strong>v{{ ver.version }}</strong>
+                            {% if ver.is_latest %}
+                            <span style="background: var(--primary); color: white; font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-left: 8px;">최신</span>
+                            {% endif %}
+                        </td>
+                        <td><code>{{ ver.filename }}</code></td>
+                        <td style="max-width: 200px;">
+                            <code style="font-size: 11px; word-break: break-all;">{{ ver.sha256[:32] }}...</code>
+                        </td>
+                        <td>{{ ver.release_date.strftime('%Y-%m-%d') if ver.release_date else '-' }}</td>
+                        <td>{{ ver.download_count }}</td>
+                        <td>
+                            {% if ver.is_latest %}
+                            <span class="status status-online"><span class="status-dot"></span> 배포 중</span>
+                            {% else %}
+                            <span style="color: var(--text-secondary);">이전 버전</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if not ver.is_latest %}
+                            <button onclick="setLatest('{{ ver.version }}')" class="btn btn-secondary btn-sm">최신으로 설정</button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="7" class="empty-state">
+                            <div class="icon">📦</div>
+                            <div>업로드된 설치 파일이 없습니다</div>
+                            <p style="margin-top: 8px; color: var(--text-secondary);">
+                                위에서 첫 번째 버전을 업로드하세요
+                            </p>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h3 class="card-title">자동 업데이트</h3>
+    </div>
+
+    <p style="color: var(--text-secondary); margin-bottom: 16px;">
+        설치된 에이전트는 6시간마다 새 버전을 확인하고 자동으로 업데이트됩니다.
+    </p>
+
+    <div style="background: var(--bg); padding: 16px; border-radius: 8px;">
+        <h4 style="margin-bottom: 12px;">API 엔드포인트</h4>
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <code style="flex: 1; padding: 12px; background: white; border-radius: 8px;">GET /agent/v1/latest</code>
+            <button onclick="testLatestApi()" class="btn btn-secondary btn-sm">테스트</button>
+        </div>
+
+        <div id="api-result" style="margin-top: 12px; display: none;">
+            <pre style="background: white; padding: 12px; border-radius: 8px; font-size: 13px; overflow-x: auto;"></pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.getElementById('upload-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(this);
+        const progressDiv = document.getElementById('upload-progress');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+
+        progressDiv.style.display = 'block';
+
+        try {
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', function(e) {
+                if (e.lengthComputable) {
+                    const pct = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = pct + '%';
+                    progressText.textContent = pct + '%';
+                }
+            });
+
+            xhr.addEventListener('load', function() {
+                if (xhr.status === 200) {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data.success) {
+                        showToast('업로드 완료: v' + data.version);
+                        location.reload();
+                    } else {
+                        showToast(data.error || '업로드 실패', 'error');
+                    }
+                } else {
+                    showToast('업로드 실패: ' + xhr.statusText, 'error');
+                }
+                progressDiv.style.display = 'none';
+            });
+
+            xhr.addEventListener('error', function() {
+                showToast('업로드 중 오류 발생', 'error');
+                progressDiv.style.display = 'none';
+            });
+
+            xhr.open('POST', '/ops/installer/upload');
+            xhr.send(formData);
+
+        } catch (e) {
+            showToast('업로드 실패: ' + e.message, 'error');
+            progressDiv.style.display = 'none';
+        }
+    });
+
+    async function setLatest(version) {
+        if (!confirm(`v${version}을 최신 버전으로 설정하시겠습니까?`)) return;
+
+        const data = await apiCall(`/ops/installer/${version}/set-latest`, { method: 'POST' });
+
+        if (data && data.success) {
+            showToast('최신 버전이 변경되었습니다');
+            location.reload();
+        }
+    }
+
+    async function testLatestApi() {
+        const resultDiv = document.getElementById('api-result');
+        resultDiv.style.display = 'block';
+
+        try {
+            const response = await fetch('/agent/v1/latest');
+            const data = await response.json();
+            resultDiv.querySelector('pre').textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+            resultDiv.querySelector('pre').textContent = 'Error: ' + e.message;
+        }
+    }
+</script>
+{% endblock %}

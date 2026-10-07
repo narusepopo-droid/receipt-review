@@ -1,0 +1,235 @@
+{% extends "ops/base.html" %}
+
+{% block title %}매장별 통계{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chart-container {
+        height: 300px;
+        position: relative;
+    }
+
+    .funnel {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .funnel-step {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .funnel-bar {
+        height: 32px;
+        background: linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%);
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding-right: 12px;
+        color: white;
+        font-weight: 600;
+        font-size: 14px;
+        min-width: 40px;
+    }
+
+    .funnel-label {
+        width: 120px;
+        font-size: 14px;
+        color: var(--text-secondary);
+    }
+
+    .funnel-rate {
+        font-size: 13px;
+        color: var(--primary);
+        min-width: 60px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">매장별 통계</h1>
+    <p class="page-subtitle">매장 운영 현황과 전환율을 분석하세요</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">매장 성과 요약</h3>
+        <div>
+            <select id="date-range" class="form-input" style="width: auto;">
+                <option value="today">오늘</option>
+                <option value="week" selected>최근 7일</option>
+                <option value="month">최근 30일</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>매장</th>
+                    <th style="text-align: right;">참여</th>
+                    <th style="text-align: right;">완료</th>
+                    <th style="text-align: right;">전환율</th>
+                    <th style="text-align: right;">가용 영수증</th>
+                    <th style="text-align: right;">고객 수</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="stats-tbody">
+                {% if stores_stats %}
+                    {% for stat in stores_stats %}
+                    <tr>
+                        <td><strong>{{ stat.store_name }}</strong></td>
+                        <td style="text-align: right;">{{ stat.total_sessions }}</td>
+                        <td style="text-align: right; color: var(--primary);">{{ stat.completed_sessions }}</td>
+                        <td style="text-align: right;">
+                            <span style="color: {{ 'var(--primary)' if stat.conversion_rate >= 50 else ('var(--warning)' if stat.conversion_rate >= 30 else 'var(--danger)') }}">
+                                {{ '%.1f' % stat.conversion_rate }}%
+                            </span>
+                        </td>
+                        <td style="text-align: right;">{{ stat.available_receipts }}</td>
+                        <td style="text-align: right;">{{ stat.total_customers }}</td>
+                        <td>
+                            <button onclick="showStoreDetail({{ stat.store_id }})" class="btn btn-secondary btn-sm">상세</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="7" class="empty-state">
+                            <div class="icon">📊</div>
+                            <div>통계 데이터가 없습니다</div>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 상세 모달 -->
+<div id="detail-modal" class="modal-overlay">
+    <div class="modal" style="max-width: 800px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+            <h3 class="modal-title" id="modal-store-name">매장 상세 통계</h3>
+            <button onclick="closeDetailModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">×</button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+            <div>
+                <h4 style="margin-bottom: 16px;">전환 퍼널</h4>
+                <div class="funnel" id="funnel-chart">
+                    <!-- JS로 채움 -->
+                </div>
+            </div>
+
+            <div>
+                <h4 style="margin-bottom: 16px;">시간대별 참여</h4>
+                <div id="hourly-chart" style="height: 200px;">
+                    <!-- 간단한 바 차트 -->
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 24px;">
+            <h4 style="margin-bottom: 16px;">일별 추이 (최근 7일)</h4>
+            <div id="daily-chart" style="height: 150px;">
+                <!-- 간단한 라인 차트 -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function showStoreDetail(storeId) {
+        const data = await apiCall(`/ops/api/stats/${storeId}`);
+        if (!data) return;
+
+        document.getElementById('modal-store-name').textContent = data.store_name || '매장 상세 통계';
+
+        // 퍼널 차트
+        const funnel = data.conversion_funnel || {};
+        const maxVal = Math.max(funnel.started || 1, 1);
+        const funnelSteps = [
+            { label: '참여 시작', key: 'started' },
+            { label: '영수증 배정', key: 'assigned' },
+            { label: '저장', key: 'downloaded' },
+            { label: '네이버 이동', key: 'redirected' },
+            { label: '완료', key: 'completed' },
+            { label: '혜택 지급', key: 'benefit_given' }
+        ];
+
+        const funnelHtml = funnelSteps.map((step, i) => {
+            const val = funnel[step.key] || 0;
+            const pct = maxVal > 0 ? (val / maxVal * 100) : 0;
+            const rate = i > 0 && funnel[funnelSteps[i-1].key] > 0
+                ? ((val / funnel[funnelSteps[i-1].key]) * 100).toFixed(0) + '%'
+                : '-';
+            return `
+                <div class="funnel-step">
+                    <div class="funnel-label">${step.label}</div>
+                    <div class="funnel-bar" style="width: ${Math.max(pct, 5)}%">${val}</div>
+                    <div class="funnel-rate">${rate}</div>
+                </div>
+            `;
+        }).join('');
+        document.getElementById('funnel-chart').innerHTML = funnelHtml;
+
+        // 시간대별 (간단 바 차트)
+        const hourly = data.hourly_distribution || [];
+        let hourlyHtml = '<div style="display: flex; align-items: flex-end; gap: 2px; height: 100%;">';
+        for (let h = 0; h < 24; h++) {
+            const count = hourly[h] || 0;
+            const maxH = Math.max(...(hourly.length ? hourly : [1]));
+            const barH = maxH > 0 ? (count / maxH * 100) : 0;
+            hourlyHtml += `
+                <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+                    <div style="width: 100%; height: ${barH}%; min-height: 2px; background: var(--primary); border-radius: 2px 2px 0 0;"></div>
+                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">${h}</div>
+                </div>
+            `;
+        }
+        hourlyHtml += '</div>';
+        document.getElementById('hourly-chart').innerHTML = hourlyHtml;
+
+        // 일별 추이
+        const daily = data.daily_sessions || [];
+        if (daily.length > 0) {
+            const maxD = Math.max(...daily.map(d => d.count || 0), 1);
+            let dailyHtml = '<div style="display: flex; align-items: flex-end; gap: 8px; height: 100%;">';
+            daily.forEach(d => {
+                const barH = maxD > 0 ? ((d.count || 0) / maxD * 100) : 0;
+                dailyHtml += `
+                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+                        <div style="font-size: 12px; margin-bottom: 4px;">${d.count || 0}</div>
+                        <div style="width: 100%; height: ${barH}%; min-height: 4px; background: var(--primary); border-radius: 4px 4px 0 0;"></div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">${d.date ? d.date.slice(5) : ''}</div>
+                    </div>
+                `;
+            });
+            dailyHtml += '</div>';
+            document.getElementById('daily-chart').innerHTML = dailyHtml;
+        } else {
+            document.getElementById('daily-chart').innerHTML = '<div class="empty-state" style="padding: 20px;">데이터 없음</div>';
+        }
+
+        document.getElementById('detail-modal').classList.add('active');
+    }
+
+    function closeDetailModal() {
+        document.getElementById('detail-modal').classList.remove('active');
+    }
+
+    document.getElementById('date-range').addEventListener('change', function() {
+        // TODO: 날짜 범위 변경 시 데이터 갱신
+        showToast('날짜 범위가 변경되었습니다');
+    });
+</script>
+{% endblock %}
