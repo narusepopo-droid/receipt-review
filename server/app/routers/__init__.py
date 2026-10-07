@@ -1,4 +1,8 @@
 """라우터 모듈"""
-from .admin import router as admin_router
+from . import agent
+from . import customer
+from . import admin
+from . import ops
+from . import download
 
-__all__ = ["admin_router"]
+__all__ = ["agent", "customer", "admin", "ops", "download"]
