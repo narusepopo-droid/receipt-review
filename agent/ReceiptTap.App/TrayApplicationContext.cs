@@ -13,11 +13,23 @@ namespace ReceiptTap.App
         private NotifyIcon _trayIcon;
         private AgentConfig _config;
         private ContextMenuStrip _menu;
+        private CaptureService _captureService;
 
         public TrayApplicationContext()
         {
             _config = AgentConfig.Load();
             InitializeTrayIcon();
+            StartCaptureService();
+        }
+
+        private void StartCaptureService()
+        {
+            if (!_config.Activated) return;
+
+            _captureService = new CaptureService(_config);
+            _captureService.StatusChanged += (s, status) => UpdateStatus(status);
+            _captureService.LogMessage += (s, msg) => System.Diagnostics.Debug.WriteLine(msg);
+            _captureService.Start();
         }
 
         private void InitializeTrayIcon()
@@ -117,6 +129,7 @@ namespace ReceiptTap.App
         {
             if (disposing)
             {
+                _captureService?.Dispose();
                 _trayIcon?.Dispose();
                 _menu?.Dispose();
             }
