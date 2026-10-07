@@ -311,9 +311,6 @@ store_settings  (store_id 1:1)
   templates JSON          -- 문구 레퍼토리 (5.5 참고)
   text_min_len, text_max_len
   benefit_text            -- "리뷰 작성 시 음료 1잔 서비스"
-  assignment_policy       -- "latest_same_day" (기본) | "oldest_same_day"
-  retention               -- "end_of_day" (기본) | "hours:N"
-  business_day_cutoff     -- 영업일 기준 시각, 기본 "05:00"
   daily_assign_limit, hourly_assign_limit
 
 agents
@@ -360,14 +357,14 @@ event_log
 ### 5.4 영수증 배정·폐기 엔진
 
 #### 배정 (`services/assignment.py`)
-1. 같은 매장·같은 휴대폰 번호로 **오늘(영업일 기준) 이미 배정받았는지** 확인 → 있으면 **기존 세션 재사용** (새 배정 없음, 기존 영수증·문구 다시 보기 허용)
+1. 같은 매장·같은 휴대폰 번호로 **최근 24시간 내 이미 배정받았는지** 확인 → 있으면 **기존 세션 재사용** (새 배정 없음, 기존 영수증·문구 다시 보기 허용)
 2. 매장 시간당/일일 상한 확인
 3. 트랜잭션 안에서:
    ```sql
    SELECT id FROM receipts
    WHERE store_id = :sid AND status = 'available' AND classification = 'normal'
-     AND paid_at >= :business_day_start
-   ORDER BY paid_at DESC          -- 정책 latest_same_day
+     AND created_at >= NOW() - INTERVAL '24 hours'
+   ORDER BY paid_at DESC          -- 미배정 중 최신순
    LIMIT 1
    FOR UPDATE SKIP LOCKED;
    ```
@@ -378,11 +375,10 @@ event_log
 #### 폐기 (`services/disposal.py`, APScheduler)
 | 시점 | 처리 |
 |---|---|
-| 배정 후 **24시간** 경과 | 이미지·원본 파일 삭제, `disposed` |
-| 미배정 영수증이 보관 기한(기본: 영업일 종료) 지남 | 삭제, `disposed` |
+| 생성 후 **24시간** 경과 (배정 여부 무관) | 이미지·원본 파일 삭제, `disposed` |
 | 취소 영수증 수신 | 같은 승인번호 영수증 즉시 폐기 |
 - **폐기 = 이미지 파일 + 원본 바이트 파일 삭제.** DB에는 통계용 최소 정보(매장, 일시, 금액, 상태)만 남김
-- 배정 후 24시간 동안은 같은 손님이 다시 다운로드할 수 있음
+- 배정된 영수증도 24시간 후 폐기 (같은 손님이 다시 다운로드하려면 24시간 내에)
 
 ### 5.5 리뷰 문구 생성기 (`review/text_generator.py`)
 
@@ -763,8 +759,8 @@ event_log
 | D1 | 손님 입력 번호 | ✅ 확정: 본인 휴대폰 번호 |
 | D2 | 휴대폰 번호 인증 | MVP 인증 없음, Phase 7 결과 보고 결정 |
 | D3 | 첫 테스트 매장 포스 기종 | Phase 0-4에서 확인 |
-| D4 | 영수증 배정 정책 | 당일 영수증 최신순 |
-| D5 | 미배정 영수증 보관 기한 | 영업일 종료 시 폐기 (영업일 기준 05:00) |
+| D4 | 영수증 배정 정책 | 미배정 영수증 중 최신순 |
+| D5 | 미배정 영수증 보관 기한 | ✅ 확정: 생성 후 24시간 경과 시 폐기 |
 | D6 | 리뷰 문구 글자수 | 30~150자 (네이버 입력 제한 확인 후 조정) |
 | D7 | 설치 파일 코드 서명 인증서 | MVP 서명 없음, 판매 시작 전 구매 결정 |
 | D8 | 손님 QR·서버 도메인 | `review.placemaster.co.kr` (보유 도메인의 서브도메인). 제품명은 "영수증리뷰" (가칭) |
