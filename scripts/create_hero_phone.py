@@ -5,30 +5,34 @@ import math
 OUTPUT = 'C:/Users/Administrator/Desktop/placemaster/hero-phone.png'
 
 def create_receipt_screen():
-    """영수증 화면 (컴팩트)"""
-    width, height = 320, 580
+    """영수증 화면 (컴팩트 + 버튼)"""
+    width, height = 320, 620
     img = Image.new('RGB', (width, height), '#03C75A')
     draw = ImageDraw.Draw(img)
 
     try:
-        font_title = ImageFont.truetype("C:/Windows/Fonts/malgunbd.ttf", 20)
+        font_header = ImageFont.truetype("C:/Windows/Fonts/malgunbd.ttf", 24)
+        font_benefit = ImageFont.truetype("C:/Windows/Fonts/malgunbd.ttf", 16)
+        font_title = ImageFont.truetype("C:/Windows/Fonts/malgunbd.ttf", 18)
         font_bold = ImageFont.truetype("C:/Windows/Fonts/malgunbd.ttf", 12)
         font_normal = ImageFont.truetype("C:/Windows/Fonts/malgun.ttf", 11)
         font_small = ImageFont.truetype("C:/Windows/Fonts/malgun.ttf", 9)
     except:
-        font_title = ImageFont.load_default()
-        font_bold = font_title
-        font_normal = font_title
-        font_small = font_title
+        font_header = ImageFont.load_default()
+        font_benefit = font_header
+        font_title = font_header
+        font_bold = font_header
+        font_normal = font_header
+        font_small = font_header
 
     cx = width // 2
 
-    # 상단 헤더
-    y = 20
-    draw.text((cx, y), "모아정육식당", font=font_title, fill='white', anchor='mm')
-    y += 28
-    draw.text((cx, y), "리뷰 작성 시 음료 1잔 서비스!", font=font_normal, fill='#e8f8ef', anchor='mm')
-    y += 32
+    # 상단 헤더 (더 크고 잘 보이게)
+    y = 22
+    draw.text((cx, y), "모아정육식당", font=font_header, fill='white', anchor='mm')
+    y += 34
+    draw.text((cx, y), "리뷰 작성 시 벌집껍데기 1인분 증정!", font=font_benefit, fill='white', anchor='mm')
+    y += 30
 
     # 영수증 카드
     card_top = y
@@ -113,6 +117,12 @@ def create_receipt_screen():
 
     # 발행일시
     draw.text((cx, y), "2026.10.07 오후 06:55", font=font_small, fill='#888', anchor='mm')
+    y += 25
+
+    # 버튼
+    btn_height = 38
+    draw.rounded_rectangle([25, y, width-25, y + btn_height], radius=10, fill='#03C75A')
+    draw.text((cx, y + btn_height//2), "네이버 리뷰 작성하기", font=font_bold, fill='white', anchor='mm')
 
     return img
 

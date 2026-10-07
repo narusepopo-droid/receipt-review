@@ -1,12 +1,12 @@
-"""3D 폰 목업 - 기울임 + 입체 그림자"""
+"""폰 목업 - 똑바로, 폰 모양 그림자"""
 from playwright.sync_api import sync_playwright
 from PIL import Image, ImageDraw, ImageFilter
 import os
 
 OUTPUT_DIR = 'C:/Users/Administrator/Desktop/placemaster'
 
-def create_3d_phone_mockup(screen_path, output_path, tilt_angle=-5):
-    """3D 기울임 폰 목업"""
+def create_phone_mockup(screen_path, output_path):
+    """폰 목업 (똑바로, 폰 라운드 그림자)"""
     screen = Image.open(screen_path).convert('RGBA')
 
     # 폰 크기
@@ -15,11 +15,27 @@ def create_3d_phone_mockup(screen_path, output_path, tilt_angle=-5):
     bezel = 4
     corner_radius = 28
 
-    # 폰 프레임 생성
+    # 캔버스 (그림자 공간 포함)
+    padding = 25
+    canvas_w = phone_width + padding * 2
+    canvas_h = phone_height + padding * 2
+    canvas = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
+
+    # 그림자 (폰 라운드 모양)
+    shadow = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
+    shadow_draw = ImageDraw.Draw(shadow)
+    shadow_offset = 8
+    shadow_draw.rounded_rectangle(
+        [padding + shadow_offset, padding + shadow_offset,
+         padding + phone_width + shadow_offset, padding + phone_height + shadow_offset],
+        radius=corner_radius, fill=(0, 0, 0, 50)
+    )
+    shadow = shadow.filter(ImageFilter.GaussianBlur(15))
+    canvas = Image.alpha_composite(canvas, shadow)
+
+    # 폰 프레임
     phone = Image.new('RGBA', (phone_width, phone_height), (0, 0, 0, 0))
     phone_draw = ImageDraw.Draw(phone)
-
-    # 폰 외부
     phone_draw.rounded_rectangle([0, 0, phone_width, phone_height],
                                   radius=corner_radius, fill=(25, 25, 25, 255))
 
@@ -30,16 +46,15 @@ def create_3d_phone_mockup(screen_path, output_path, tilt_angle=-5):
     phone_draw.rounded_rectangle([screen_x, screen_y, screen_x + screen_w, screen_y + screen_h],
                                   radius=corner_radius - bezel, fill=(20, 20, 20, 255))
 
-    # 스크린
-    screen_resized = screen.resize((screen_w, screen_h), Image.Resampling.LANCZOS)
-
+    # 스크린 (라운드 마스크로 흰 배경 제거)
+    screen_resized = screen.resize((screen_w, screen_h), Image.Resampling.LANCZOS).convert('RGBA')
     mask = Image.new('L', (screen_w, screen_h), 0)
     mask_draw = ImageDraw.Draw(mask)
     mask_draw.rounded_rectangle([0, 0, screen_w, screen_h], radius=corner_radius - bezel, fill=255)
 
-    screen_with_mask = Image.new('RGBA', (screen_w, screen_h), (0, 0, 0, 0))
-    screen_with_mask.paste(screen_resized, (0, 0), mask)
-    phone.paste(screen_with_mask, (screen_x, screen_y), screen_with_mask)
+    # 마스크 외부를 투명하게
+    screen_resized.putalpha(mask)
+    phone.paste(screen_resized, (screen_x, screen_y), screen_resized)
 
     # 카메라
     cam_x, cam_y = phone_width // 2, bezel + 10
@@ -56,34 +71,11 @@ def create_3d_phone_mockup(screen_path, output_path, tilt_angle=-5):
     nav_draw.rectangle([screen_w*3//4 - 6, 5, screen_w*3//4 + 6, 19], outline=(100, 100, 100, 200), width=2)
     phone.paste(nav_bar, (screen_x, screen_y + screen_h - nav_h), nav_bar)
 
-    # 폰 회전
-    phone_rotated = phone.rotate(tilt_angle, expand=True, resample=Image.Resampling.BICUBIC)
-
-    # 캔버스
-    canvas_w = phone_rotated.width + 50
-    canvas_h = phone_rotated.height + 50
-    canvas = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
-
-    # 그림자
-    shadow = Image.new('RGBA', (phone_width + 30, phone_height + 30), (0, 0, 0, 0))
-    shadow_draw = ImageDraw.Draw(shadow)
-    shadow_draw.rounded_rectangle([15, 15, phone_width + 15, phone_height + 15],
-                                   radius=corner_radius, fill=(0, 0, 0, 60))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(18))
-    shadow_rotated = shadow.rotate(tilt_angle, expand=True, resample=Image.Resampling.BICUBIC)
-
-    # 그림자 배치
-    shadow_x = (canvas_w - shadow_rotated.width) // 2 + 8
-    shadow_y = (canvas_h - shadow_rotated.height) // 2 + 8
-    canvas.paste(shadow_rotated, (shadow_x, shadow_y), shadow_rotated)
-
-    # 폰 배치
-    phone_x = (canvas_w - phone_rotated.width) // 2
-    phone_y = (canvas_h - phone_rotated.height) // 2
-    canvas.paste(phone_rotated, (phone_x, phone_y), phone_rotated)
+    # 폰을 캔버스에 배치
+    canvas.paste(phone, (padding, padding), phone)
 
     canvas.save(output_path, 'PNG')
-    print(f'3D 목업: {output_path}')
+    print(f'목업: {output_path}')
 
 def capture_screens():
     with sync_playwright() as p:
@@ -95,13 +87,13 @@ def capture_screens():
         page.wait_for_timeout(1000)
 
         screens = [
-            ('번호입력', 'raw1.png', -4),
-            ('키워드', 'raw2.png', -3),
-            ('결과', 'raw3.png', -2),
-            ('완료', 'raw5.png', -4),
+            ('번호입력', 'raw1.png'),
+            ('키워드', 'raw2.png'),
+            ('결과', 'raw3.png'),
+            ('완료', 'raw5.png'),
         ]
 
-        for btn_text, filename, angle in screens:
+        for btn_text, filename in screens:
             page.click(f'button:has-text("{btn_text}")')
             page.wait_for_timeout(500)
             page.evaluate('document.querySelector(".preview-nav").style.display = "none"')
@@ -181,12 +173,11 @@ def main():
     print("\n2. 네이버 화면...")
     create_naver_screen()
 
-    print("\n3. 3D 폰 목업...")
-    angles = [-4, -3, -2, -3, -4]
+    print("\n3. 폰 목업...")
     for i in [1, 2, 3, 4, 5]:
         raw_path = f'{OUTPUT_DIR}/raw{i}.png'
         if os.path.exists(raw_path):
-            create_3d_phone_mockup(raw_path, f'{OUTPUT_DIR}/screen{i}.png', angles[i-1])
+            create_phone_mockup(raw_path, f'{OUTPUT_DIR}/screen{i}.png')
             os.remove(raw_path)
 
     print("\n완료!")

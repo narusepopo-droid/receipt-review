@@ -18,6 +18,10 @@ namespace ReceiptTap.Core
 
         public string ServerUrl { get; set; } = "https://review.placemaster.co.kr";
         public string AgentKey { get; set; }
+        public string AuthToken { get; set; }
+        public int StoreId { get; set; }
+        public string StoreName { get; set; }
+        public string StoreCode { get; set; }
         public string CaptureMode { get; set; } = "serial";
         public string ComPort { get; set; }
         public string PrinterIp { get; set; }
@@ -36,10 +40,14 @@ namespace ReceiptTap.Core
                     var json = File.ReadAllText(ConfigPath);
                     var config = JsonConvert.DeserializeObject<AgentConfig>(json);
 
-                    // 에이전트 키 복호화 (DPAPI)
+                    // 민감 정보 복호화 (DPAPI)
                     if (!string.IsNullOrEmpty(config.AgentKey))
                     {
                         config.AgentKey = Decrypt(config.AgentKey);
+                    }
+                    if (!string.IsNullOrEmpty(config.AuthToken))
+                    {
+                        config.AuthToken = Decrypt(config.AuthToken);
                     }
 
                     return config;
@@ -61,11 +69,15 @@ namespace ReceiptTap.Core
             var dir = Path.GetDirectoryName(ConfigPath);
             Directory.CreateDirectory(dir);
 
-            // 에이전트 키 암호화 (DPAPI)
+            // 민감 정보 암호화 (DPAPI)
             var configToSave = new AgentConfig
             {
                 ServerUrl = this.ServerUrl,
                 AgentKey = !string.IsNullOrEmpty(this.AgentKey) ? Encrypt(this.AgentKey) : null,
+                AuthToken = !string.IsNullOrEmpty(this.AuthToken) ? Encrypt(this.AuthToken) : null,
+                StoreId = this.StoreId,
+                StoreName = this.StoreName,
+                StoreCode = this.StoreCode,
                 CaptureMode = this.CaptureMode,
                 ComPort = this.ComPort,
                 PrinterIp = this.PrinterIp,

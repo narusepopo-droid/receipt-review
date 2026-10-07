@@ -19,6 +19,7 @@ from app.receipt.escpos_parser import parse_escpos
 from app.receipt.classifier import classify_receipt, ReceiptType
 from app.receipt.masking import mask_parsed_receipt
 from app.receipt.renderer import render_receipt
+from app.routers.auth import verify_token
 
 router = APIRouter(prefix="/agent/v1", tags=["agent"])
 settings = get_settings()
@@ -58,20 +59,45 @@ def hash_key(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
 
 
-async def verify_agent_key(
-    x_agent_key: str = Header(...),
+async def verify_auth_token(
+    authorization: str = Header(None),
+    x_agent_key: str = Header(None),
     db: AsyncSession = Depends(get_db)
-) -> Agent:
-    key_hash = hash_key(x_agent_key)
+) -> Store:
+    """Bearer 토큰 또는 기존 Agent Key로 인증"""
 
-    stmt = select(Agent).where(Agent.agent_key_hash == key_hash)
-    result = await db.execute(stmt)
-    agent = result.scalar_one_or_none()
+    # Bearer 토큰 방식 (신규)
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.replace("Bearer ", "")
+        store_id = verify_token(token)
 
-    if not agent:
-        raise HTTPException(status_code=401, detail="Invalid agent key")
+        if not store_id:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    return agent
+        stmt = select(Store).where(Store.id == store_id)
+        result = await db.execute(stmt)
+        store = result.scalar_one_or_none()
+
+        if not store:
+            raise HTTPException(status_code=401, detail="Store not found")
+
+        return store
+
+    # 기존 Agent Key 방식 (호환성)
+    if x_agent_key:
+        key_hash = hash_key(x_agent_key)
+        stmt = select(Agent).where(Agent.agent_key_hash == key_hash)
+        result = await db.execute(stmt)
+        agent = result.scalar_one_or_none()
+
+        if not agent:
+            raise HTTPException(status_code=401, detail="Invalid agent key")
+
+        stmt = select(Store).where(Store.id == agent.store_id)
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    raise HTTPException(status_code=401, detail="Authentication required")
 
 
 @router.post("/activate", response_model=ActivateResponse)
@@ -114,9 +140,18 @@ async def activate_agent(
 @router.post("/heartbeat", response_model=HeartbeatResponse)
 async def heartbeat(
     request: HeartbeatRequest,
-    agent: Agent = Depends(verify_agent_key),
+    store: Store = Depends(verify_auth_token),
     db: AsyncSession = Depends(get_db)
 ):
+    # 해당 매장의 에이전트 찾기 또는 생성
+    stmt = select(Agent).where(Agent.store_id == store.id)
+    result = await db.execute(stmt)
+    agent = result.scalar_one_or_none()
+
+    if not agent:
+        agent = Agent(store_id=store.id)
+        db.add(agent)
+
     agent.version = request.version
     agent.capture_mode = request.capture_mode
     agent.last_heartbeat_at = datetime.now(timezone.utc)
@@ -137,7 +172,7 @@ async def upload_receipt(
     captured_at: datetime = Form(...),
     capture_mode: str = Form("serial"),
     agent_version: str = Form("1.0.0"),
-    agent: Agent = Depends(verify_agent_key),
+    store: Store = Depends(verify_auth_token),
     db: AsyncSession = Depends(get_db)
 ):
     raw_bytes = await file.read()
@@ -148,15 +183,11 @@ async def upload_receipt(
             message="빈 파일"
         )
 
-    agent.last_capture_at = captured_at
-    agent.version = agent_version
-    agent.capture_mode = capture_mode
-
     parsed = parse_escpos(raw_bytes)
 
     if parsed.approval_no:
         stmt = select(Receipt.approval_no).where(
-            Receipt.store_id == agent.store_id,
+            Receipt.store_id == store.id,
             Receipt.status != ReceiptStatus.DISPOSED
         )
         result = await db.execute(stmt)
@@ -168,7 +199,7 @@ async def upload_receipt(
 
     if classification.should_dispose_existing and classification.existing_approval_no:
         stmt = select(Receipt).where(
-            Receipt.store_id == agent.store_id,
+            Receipt.store_id == store.id,
             Receipt.approval_no == classification.existing_approval_no,
             Receipt.status != ReceiptStatus.DISPOSED
         )
@@ -203,9 +234,7 @@ async def upload_receipt(
     with open(raw_path, "wb") as f:
         f.write(raw_bytes)
 
-    stmt = select(Store.paper_width).where(Store.id == agent.store_id)
-    result = await db.execute(stmt)
-    paper_width = result.scalar() or 576
+    paper_width = store.paper_width or 576
 
     render_receipt(masked, img_path, paper_width)
 
@@ -219,7 +248,7 @@ async def upload_receipt(
 
     receipt = Receipt(
         id=receipt_id,
-        store_id=agent.store_id,
+        store_id=store.id,
         approval_no=parsed.approval_no,
         paid_at=paid_at or captured_at,
         amount=parsed.amount,

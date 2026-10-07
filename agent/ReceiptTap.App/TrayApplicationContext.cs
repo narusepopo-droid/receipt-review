@@ -52,10 +52,10 @@ namespace ReceiptTap.App
 
             _trayIcon.DoubleClick += OnSettings;
 
-            // 활성화 안 됐으면 설정 창 열기
-            if (!_config.Activated)
+            // 로그인 안 됐으면 로그인 창 열기
+            if (!_config.Activated || string.IsNullOrEmpty(_config.AuthToken))
             {
-                ShowActivationDialog();
+                ShowLoginDialog();
             }
         }
 
@@ -66,14 +66,25 @@ namespace ReceiptTap.App
             return SystemIcons.Application;
         }
 
-        private void ShowActivationDialog()
+        private void ShowLoginDialog()
         {
-            using (var dialog = new ActivationForm())
+            using (var dialog = new LoginForm())
             {
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
                     _config = AgentConfig.Load();
+                    _config.Activated = true;
+                    _config.Save();
                     UpdateStatus(AgentStatus.Connected);
+                    StartCaptureService();
+
+                    // 환영 메시지
+                    _trayIcon.ShowBalloonTip(
+                        3000,
+                        "영수증리뷰",
+                        $"{_config.StoreName}에 연결되었습니다!",
+                        ToolTipIcon.Info
+                    );
                 }
             }
         }

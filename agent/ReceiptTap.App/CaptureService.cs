@@ -33,20 +33,34 @@ namespace ReceiptTap.App
         public void Start()
         {
             if (_isRunning) return;
-            if (!_config.Activated || string.IsNullOrEmpty(_config.AgentKey))
+            if (!_config.Activated || string.IsNullOrEmpty(_config.AuthToken))
             {
-                Log("활성화가 필요합니다.");
+                Log("로그인이 필요합니다.");
                 return;
             }
 
             try
             {
-                _uploader = new ReceiptUploader(_config.ServerUrl, _config.AgentKey);
+                _uploader = new ReceiptUploader(_config.ServerUrl, _config.AuthToken);
+
+                // COM 포트 자동 감지
+                string comPort = _config.ComPort;
+                if (string.IsNullOrEmpty(comPort))
+                {
+                    comPort = AutoDetectComPort();
+                    if (!string.IsNullOrEmpty(comPort))
+                    {
+                        _config.ComPort = comPort;
+                        _config.CaptureMode = "serial";
+                        _config.Save();
+                        Log($"COM 포트 자동 감지: {comPort}");
+                    }
+                }
 
                 // 캡처 방식에 따라 생성
-                if (_config.CaptureMode == "serial" && !string.IsNullOrEmpty(_config.ComPort))
+                if (_config.CaptureMode == "serial" && !string.IsNullOrEmpty(comPort))
                 {
-                    _capture = new SpmcCapture(_config.ComPort);
+                    _capture = new SpmcCapture(comPort);
                 }
                 else if (_config.CaptureMode == "network" && !string.IsNullOrEmpty(_config.PrinterIp))
                 {
@@ -56,7 +70,7 @@ namespace ReceiptTap.App
                 }
                 else
                 {
-                    Log("캡처 설정이 필요합니다.");
+                    Log("프린터를 찾을 수 없습니다. 설정에서 직접 선택해주세요.");
                     return;
                 }
 
@@ -208,6 +222,59 @@ namespace ReceiptTap.App
                 System.IO.File.AppendAllText(logFile, $"{DateTime.Now:HH:mm:ss} {message}\n");
             }
             catch { }
+        }
+
+        /// <summary>
+        /// COM 포트 자동 감지 - 영수증 프린터 찾기
+        /// </summary>
+        private string AutoDetectComPort()
+        {
+            try
+            {
+                var ports = System.IO.Ports.SerialPort.GetPortNames();
+                Log($"사용 가능한 COM 포트: {string.Join(", ", ports)}");
+
+                // 1. 레지스트리에서 프린터 COM 포트 찾기
+                using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"HARDWARE\DEVICEMAP\SERIALCOMM"))
+                {
+                    if (key != null)
+                    {
+                        foreach (var valueName in key.GetValueNames())
+                        {
+                            var portName = key.GetValue(valueName)?.ToString();
+                            if (!string.IsNullOrEmpty(portName))
+                            {
+                                Log($"발견: {valueName} -> {portName}");
+
+                                // USB-Serial 또는 프린터 관련 포트 찾기
+                                if (valueName.Contains("USB") || valueName.Contains("Serial") ||
+                                    valueName.Contains("Prolific") || valueName.Contains("FTDI") ||
+                                    valueName.Contains("CH34") || valueName.Contains("POS"))
+                                {
+                                    return portName;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2. 첫 번째 사용 가능한 COM 포트 반환 (COM1 제외)
+                foreach (var port in ports)
+                {
+                    if (port != "COM1")
+                    {
+                        return port;
+                    }
+                }
+
+                // 3. COM 포트가 없으면 null
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Log($"COM 포트 감지 오류: {ex.Message}");
+                return null;
+            }
         }
 
         public void Dispose()

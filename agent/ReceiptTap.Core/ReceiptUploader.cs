@@ -13,12 +13,12 @@ namespace ReceiptTap.Core
     public class ReceiptUploader
     {
         private readonly string _serverUrl;
-        private readonly string _agentKey;
+        private readonly string _authToken;
 
-        public ReceiptUploader(string serverUrl, string agentKey)
+        public ReceiptUploader(string serverUrl, string authToken)
         {
             _serverUrl = serverUrl.TrimEnd('/');
-            _agentKey = agentKey;
+            _authToken = authToken;
 
             // TLS 1.2 강제
             ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
@@ -34,7 +34,7 @@ namespace ReceiptTap.Core
                 var url = $"{_serverUrl}/agent/v1/receipts";
                 var request = (HttpWebRequest)WebRequest.Create(url);
                 request.Method = "POST";
-                request.Headers.Add("X-Agent-Key", _agentKey);
+                request.Headers.Add("Authorization", $"Bearer {_authToken}");
 
                 var boundary = "----" + Guid.NewGuid().ToString("N");
                 request.ContentType = "multipart/form-data; boundary=" + boundary;
@@ -102,7 +102,7 @@ namespace ReceiptTap.Core
                 var url = $"{_serverUrl}/agent/v1/heartbeat";
                 var request = (HttpWebRequest)WebRequest.Create(url);
                 request.Method = "POST";
-                request.Headers.Add("X-Agent-Key", _agentKey);
+                request.Headers.Add("Authorization", $"Bearer {_authToken}");
                 request.ContentType = "application/json";
 
                 var payload = JsonConvert.SerializeObject(new
