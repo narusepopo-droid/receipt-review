@@ -215,105 +215,117 @@ class ReceiptRenderer:
         return img
 
     def render_from_data(self, data: ReceiptData) -> Image.Image:
-        """ReceiptData를 PNG로 렌더링"""
-        lines = []
+        """ReceiptData를 PNG로 렌더링 (실제 영수증 형태)"""
+        width = self.paper_width
+        line_height = 22
+        padding = 20
 
-        # 매장명 (크게, 중앙)
-        lines.append(ReceiptLine(
-            text=data.store_name,
-            alignment=Alignment.CENTER,
-            style=TextStyle(bold=True, double_height=True, double_width=True)
-        ))
-        lines.append(ReceiptLine(text=""))  # 빈 줄
+        # 컬럼 위치 (픽셀)
+        COL_NAME = 20
+        COL_PRICE = int(width * 0.45)
+        COL_QTY = int(width * 0.66)
+        COL_TOTAL = width - 20
+
+        # 높이 계산 (대략)
+        height = 700
+        img = Image.new("RGB", (width, height), "#FAFAFA")
+        draw = ImageDraw.Draw(img)
+
+        y = padding
+
+        # [ 영 수 증 ] 타이틀
+        draw.text((width // 2, y), "[ 영 수 증 ]", font=self.font_bold, fill="black", anchor="mm")
+        y += line_height * 2
+
+        # 매장명
+        draw.text((width // 2, y), data.store_name, font=self.font_bold, fill="black", anchor="mm")
+        y += line_height
 
         # 사업자 정보
         if data.biz_no:
-            lines.append(ReceiptLine(
-                text=f"사업자번호: {data.biz_no}",
-                alignment=Alignment.CENTER
-            ))
+            biz_line = f"사업자번호 : {data.biz_no}"
+            if data.phone:
+                biz_line = f"{data.biz_no} TEL: {data.phone}"
+            draw.text((COL_NAME, y), biz_line, font=self.font, fill="black")
+            y += line_height
+
         if data.owner_name:
-            lines.append(ReceiptLine(
-                text=f"대표자: {data.owner_name}",
-                alignment=Alignment.CENTER
-            ))
+            draw.text((COL_NAME, y), f"대표자: {data.owner_name}", font=self.font, fill="black")
+            y += line_height
+
         if data.address:
-            lines.append(ReceiptLine(
-                text=data.address,
-                alignment=Alignment.CENTER
-            ))
-        if data.phone:
-            lines.append(ReceiptLine(
-                text=f"TEL: {data.phone}",
-                alignment=Alignment.CENTER
-            ))
+            draw.text((COL_NAME, y), data.address, font=self.font, fill="black")
+            y += line_height
 
-        lines.append(ReceiptLine(text=""))
-        lines.append(ReceiptLine(text="-" * 48, alignment=Alignment.CENTER))
+        y += line_height
 
-        # 품목
-        if data.items:
-            lines.append(ReceiptLine(
-                text="품목명              수량      금액",
-                alignment=Alignment.LEFT,
-                style=TextStyle(bold=True)
-            ))
-            lines.append(ReceiptLine(text="-" * 48, alignment=Alignment.CENTER))
-
-            for item in data.items:
-                name = item.get("name", "")[:16].ljust(16)
-                qty = str(item.get("qty", 1)).rjust(4)
-                price = f"{item.get('price', 0):,}".rjust(10)
-                lines.append(ReceiptLine(text=f"{name}  {qty}  {price}"))
-
-        lines.append(ReceiptLine(text="-" * 48, alignment=Alignment.CENTER))
-
-        # 금액
-        if data.supply_amount is not None:
-            lines.append(ReceiptLine(
-                text=f"공급가액:                {data.supply_amount:>12,}원",
-                alignment=Alignment.LEFT
-            ))
-        if data.vat is not None:
-            lines.append(ReceiptLine(
-                text=f"부가세:                  {data.vat:>12,}원",
-                alignment=Alignment.LEFT
-            ))
-
-        lines.append(ReceiptLine(
-            text=f"합    계:                {data.total_amount:>12,}원",
-            alignment=Alignment.LEFT,
-            style=TextStyle(bold=True)
-        ))
-
-        lines.append(ReceiptLine(text="=" * 48, alignment=Alignment.CENTER))
-
-        # 결제 정보
-        if data.card_issuer:
-            lines.append(ReceiptLine(text=f"카드사: {data.card_issuer}"))
-        if data.card_no:
-            lines.append(ReceiptLine(text=f"카드번호: {data.card_no}"))
-        if data.installment:
-            lines.append(ReceiptLine(text=f"할부: {data.installment}"))
-        if data.approval_no:
-            lines.append(ReceiptLine(
-                text=f"승인번호: {data.approval_no}",
-                style=TextStyle(bold=True)
-            ))
+        # 거래일시
         if data.paid_at:
-            lines.append(ReceiptLine(text=f"거래일시: {data.paid_at}"))
+            draw.text((COL_NAME, y), f"판매시간: {data.paid_at}", font=self.font, fill="black")
+            y += line_height
 
-        lines.append(ReceiptLine(text=""))
-        lines.append(ReceiptLine(text="-" * 48, alignment=Alignment.CENTER))
-        lines.append(ReceiptLine(text=""))
-        lines.append(ReceiptLine(
-            text="감사합니다",
-            alignment=Alignment.CENTER,
-            style=TextStyle(bold=True)
-        ))
-        lines.append(ReceiptLine(text=""))
+        y += 5
+        draw.line([(COL_NAME, y), (width - COL_NAME, y)], fill="black", width=1)
+        y += 10
 
-        return self.render_from_lines(lines)
+        # 품목 헤더
+        draw.text((COL_NAME, y), "상품", font=self.font, fill="black")
+        draw.text((COL_PRICE, y), "단가", font=self.font, fill="black", anchor="rm")
+        draw.text((COL_QTY, y), "수량", font=self.font, fill="black", anchor="rm")
+        draw.text((COL_TOTAL, y), "금액", font=self.font, fill="black", anchor="rm")
+        y += line_height
+
+        draw.line([(COL_NAME, y), (width - COL_NAME, y)], fill="black", width=1)
+        y += 10
+
+        # 품목들
+        for item in data.items:
+            name = item.get("name", "")
+            qty = item.get("qty", 1)
+            price = item.get("price", 0)
+            total = price  # qty가 이미 반영된 금액일 수 있음
+
+            draw.text((COL_NAME, y), name, font=self.font, fill="black")
+            draw.text((COL_PRICE, y), f"{price:,}", font=self.font, fill="black", anchor="rm")
+            draw.text((COL_QTY, y), str(qty), font=self.font, fill="black", anchor="rm")
+            draw.text((COL_TOTAL, y), f"{total:,}", font=self.font, fill="black", anchor="rm")
+            y += line_height
+
+        y += 5
+        draw.line([(COL_NAME, y), (width - COL_NAME, y)], fill="black", width=1)
+        y += 15
+
+        # 합계
+        draw.text((COL_NAME, y), "합    계::", font=self.font_bold, fill="black")
+        draw.text((COL_TOTAL, y), f"{data.total_amount:,}", font=self.font_bold, fill="black", anchor="rm")
+        y += line_height + 3
+
+        draw.text((COL_NAME, y), "받은금액::", font=self.font_bold, fill="black")
+        draw.text((COL_TOTAL, y), f"{data.total_amount:,}", font=self.font_bold, fill="black", anchor="rm")
+        y += line_height + 3
+
+        # 카드 정보
+        if data.card_issuer:
+            draw.text((COL_NAME, y), f"카드: {data.card_issuer}", font=self.font, fill="black")
+            y += line_height
+
+        if data.card_no:
+            draw.text((COL_NAME, y), f"카드번호: {data.card_no}", font=self.font, fill="black")
+            y += line_height
+
+        if data.approval_no:
+            draw.text((COL_NAME, y), f"승인번호: {data.approval_no}", font=self.font_bold, fill="black")
+            y += line_height
+
+        y += line_height
+
+        # 발행일시
+        if data.paid_at:
+            draw.text((width // 2, y), f"발행일시 : {data.paid_at}", font=self.font, fill="black", anchor="mm")
+
+        # 이미지 크롭
+        img = img.crop((0, 0, width, y + padding + 10))
+        return img
 
     def render_from_json(self, json_path: str) -> Image.Image:
         """JSON 파일에서 영수증 렌더링"""
