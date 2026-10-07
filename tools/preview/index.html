@@ -225,6 +225,14 @@
             box-shadow: 0 4px 16px rgba(3, 199, 90, 0.3);
         }
 
+        .btn--secondary {
+            background: var(--color-white);
+            color: var(--color-text);
+            border: 2px solid var(--color-border);
+            flex-direction: row;
+            gap: 8px;
+        }
+
         .btn--large {
             min-height: 64px;
             font-size: 18px;
@@ -233,6 +241,18 @@
 
         .btn span { font-size: 14px; opacity: 0.9; }
         .btn strong { font-size: 18px; }
+
+        .action-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .action-buttons .btn {
+            min-height: 52px;
+            font-size: 14px;
+        }
 
         /* 키워드 칩 */
         .keywords {
@@ -536,6 +556,18 @@
                 </div>
             </div>
 
+            <!-- 액션 버튼들 -->
+            <div class="action-buttons">
+                <button class="btn btn--secondary" onclick="alert('영수증이 앨범에 저장되었습니다!')">
+                    <span style="font-size: 20px;">📥</span>
+                    영수증 다운로드
+                </button>
+                <button class="btn btn--secondary" onclick="alert('리뷰 문구가 복사되었습니다!')">
+                    <span style="font-size: 20px;">📋</span>
+                    리뷰 문구 복사
+                </button>
+            </div>
+
             <div class="steps">
                 <div class="steps__title">네이버에서 이렇게 하세요</div>
                 <div class="step">
@@ -552,9 +584,8 @@
                 </div>
             </div>
 
-            <button class="btn btn--primary btn--large">
-                <span>영수증 저장 + 문구 복사하고</span>
-                <strong>네이버로 이동</strong>
+            <button class="btn btn--primary btn--large" onclick="alert('네이버 리뷰 페이지로 이동합니다!')">
+                <strong>리뷰 작성하기</strong>
             </button>
         </div>
 
@@ -563,7 +594,7 @@
             <div class="completion">
                 <div class="completion__icon">✓</div>
                 <div class="completion__title">리뷰 감사합니다!</div>
-                <p style="color: var(--color-text-secondary); margin-bottom: 32px;">직원에게 이 화면을 보여주세요</p>
+                <p style="color: var(--color-text-secondary); margin-bottom: 32px;">혜택을 받으시려면 직원에게<br>이 화면을 보여주세요</p>
             </div>
 
             <div class="live-clock">
@@ -575,7 +606,9 @@
                 <div class="completion-code__value">A3F7K2</div>
             </div>
 
-            <button class="btn btn--primary btn--large">혜택 받기 (직원 확인)</button>
+            <p style="text-align: center; font-size: 13px; color: var(--color-text-muted);">
+                ※ 실시간 시계와 코드로 캡처 재사용 방지
+            </p>
         </div>
     </div>
 
