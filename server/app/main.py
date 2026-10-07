@@ -11,7 +11,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from app.config import get_settings
 from app.db import engine, async_session_factory
 from app.models.base import Base
-from app.routers import agent
+from app.routers import agent, customer, admin, ops, download
 from app.services.disposal import dispose_expired_receipts
 
 logging.basicConfig(
@@ -57,6 +57,10 @@ app = FastAPI(
 )
 
 app.include_router(agent.router)
+app.include_router(customer.router)
+app.include_router(admin.router)
+app.include_router(ops.router)
+app.include_router(download.router)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
