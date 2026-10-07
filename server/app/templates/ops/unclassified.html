@@ -1,0 +1,164 @@
+{% extends "ops/base.html" %}
+
+{% block title %}미분류 영수증{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">미분류 영수증</h1>
+    <p class="page-subtitle">자동 분류되지 않은 영수증을 확인하고 수동으로 분류하세요</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">분류 대기 ({{ receipts|length if receipts else 0 }}건)</h3>
+    </div>
+
+    {% if receipts %}
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;">
+        {% for receipt in receipts %}
+        <div class="receipt-card" style="border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
+            <div style="background: var(--bg); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong>{{ receipt.store_name }}</strong>
+                    <div style="font-size: 13px; color: var(--text-secondary);">
+                        {{ receipt.created_at.strftime('%Y-%m-%d %H:%M') if receipt.created_at else '-' }}
+                    </div>
+                </div>
+                <span class="status status-warning">미분류</span>
+            </div>
+
+            <div style="padding: 16px;">
+                {% if receipt.image_path %}
+                <img src="/api/v1/receipt-image/{{ receipt.id }}" alt="영수증"
+                     style="width: 100%; max-height: 300px; object-fit: contain; background: #f9f9f9; border-radius: 8px; margin-bottom: 16px;">
+                {% endif %}
+
+                <div style="font-size: 14px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="color: var(--text-secondary);">금액</span>
+                        <strong>{{ '{:,}'.format(receipt.amount) if receipt.amount else '-' }}원</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="color: var(--text-secondary);">승인번호</span>
+                        <code>{{ receipt.approval_no or '-' }}</code>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: var(--text-secondary);">카드사</span>
+                        <span>{{ receipt.card_issuer or '-' }}</span>
+                    </div>
+                </div>
+
+                <div style="background: var(--bg); padding: 12px; border-radius: 8px; font-size: 13px; max-height: 120px; overflow-y: auto; margin-bottom: 16px;">
+                    <pre style="white-space: pre-wrap; word-break: break-all; margin: 0;">{{ receipt.raw_text or '(원본 텍스트 없음)' }}</pre>
+                </div>
+
+                <form onsubmit="classifyReceipt(event, '{{ receipt.id }}')" style="display: flex; gap: 8px;">
+                    <select name="classification" class="form-input" style="flex: 1;">
+                        <option value="">분류 선택</option>
+                        <option value="normal">✅ 정상 결제</option>
+                        <option value="cancel">❌ 취소 영수증</option>
+                        <option value="kitchen">🍳 주방 주문서</option>
+                        <option value="reprint">🔄 재출력</option>
+                        <option value="cash">💵 현금 (사용 불가)</option>
+                        <option value="discard">🗑️ 폐기</option>
+                    </select>
+                    <button type="submit" class="btn btn-primary btn-sm">분류</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="icon">✅</div>
+        <div>모든 영수증이 분류되었습니다</div>
+        <p style="margin-top: 8px; color: var(--text-secondary);">
+            미분류 영수증이 들어오면 여기에 표시됩니다
+        </p>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h3 class="card-title">분류 기준</h3>
+    </div>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>분류</th>
+                    <th>판별 기준</th>
+                    <th>처리</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>✅ 정상 결제</strong></td>
+                    <td>승인번호 있음 + 결제금액 > 0 + 취소 표기 없음</td>
+                    <td>사용 가능 (available)</td>
+                </tr>
+                <tr>
+                    <td><strong>❌ 취소 영수증</strong></td>
+                    <td>"취소", "승인취소", "반품" 등 표기 또는 음수 금액</td>
+                    <td>저장 안 함 + 해당 승인번호 기존 영수증도 폐기</td>
+                </tr>
+                <tr>
+                    <td><strong>🍳 주방 주문서</strong></td>
+                    <td>승인번호·결제금액 없음, "주문서" 표기</td>
+                    <td>저장 안 함</td>
+                </tr>
+                <tr>
+                    <td><strong>🔄 재출력</strong></td>
+                    <td>같은 매장·같은 승인번호 이미 존재</td>
+                    <td>저장 안 함</td>
+                </tr>
+                <tr>
+                    <td><strong>💵 현금</strong></td>
+                    <td>승인번호 없는 현금영수증</td>
+                    <td>저장 안 함 (네이버 인증 실패 가능성)</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function classifyReceipt(event, receiptId) {
+        event.preventDefault();
+        const form = event.target;
+        const classification = form.classification.value;
+
+        if (!classification) {
+            showToast('분류를 선택하세요', 'error');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('classification', classification);
+
+        const response = await fetch(`/ops/receipts/${receiptId}/classify`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('분류 완료');
+            // 카드 제거
+            form.closest('.receipt-card').remove();
+
+            // 모두 분류됐으면 empty state 표시
+            const remaining = document.querySelectorAll('.receipt-card');
+            if (remaining.length === 0) {
+                location.reload();
+            }
+        } else {
+            showToast(data.error || '오류가 발생했습니다', 'error');
+        }
+    }
+</script>
+{% endblock %}

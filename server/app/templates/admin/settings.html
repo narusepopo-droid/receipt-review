@@ -1,0 +1,242 @@
+{% extends "admin/base.html" %}
+
+{% block title %}매장 설정{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">매장 설정</h1>
+        <p class="page-subtitle">매장 기본 정보와 리뷰 설정을 관리합니다</p>
+    </div>
+    <button class="btn btn-primary" onclick="saveSettings()">
+        <i data-feather="save" style="width: 18px; height: 18px;"></i>
+        저장하기
+    </button>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+    <!-- Basic Info -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">기본 정보</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="form-label">매장명</label>
+                <input type="text" id="store-name" class="form-input"
+                       value="{{ store.name | default('') }}" readonly
+                       style="background: var(--gray-100);">
+                <p class="form-hint">매장명 변경은 운영자에게 문의하세요</p>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">사업자번호</label>
+                <input type="text" id="biz-no" class="form-input"
+                       value="{{ store.biz_no | default('') }}" readonly
+                       style="background: var(--gray-100);">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">매장 코드</label>
+                <input type="text" id="store-code" class="form-input"
+                       value="{{ store.store_code | default('') }}" readonly
+                       style="background: var(--gray-100);">
+                <p class="form-hint">QR 코드 URL에 사용됩니다</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Naver Settings -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">네이버 설정</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="form-label">네이버 영수증 리뷰 URL</label>
+                <input type="url" id="naver-url" class="form-input"
+                       value="{{ store.naver_review_url | default('') }}"
+                       placeholder="https://naver.me/...">
+                <p class="form-hint">스마트플레이스에서 발급받은 영수증 리뷰 QR 링크</p>
+            </div>
+
+            <div style="margin-top: 20px; padding: 16px; background: var(--primary-light); border-radius: 8px;">
+                <div style="font-size: 13px; color: var(--primary-dark);">
+                    <strong>💡 URL 확인 방법</strong><br>
+                    스마트플레이스 → 영수증 리뷰 → QR 다운로드 → QR 스캔해서 나오는 URL
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Benefit Settings -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">혜택 설정</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="form-label">혜택 안내 문구</label>
+                <input type="text" id="benefit-text" class="form-input"
+                       value="{{ settings.benefit_text | default('리뷰 작성 시 음료 1잔 서비스') }}"
+                       placeholder="리뷰 작성 시 음료 1잔 서비스">
+                <p class="form-hint">손님 화면과 테이블 안내판에 표시됩니다</p>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">직원 PIN (4자리)</label>
+                <input type="password" id="staff-pin" class="form-input"
+                       value="{{ store.staff_pin | default('') }}"
+                       placeholder="****" maxlength="4" pattern="[0-9]{4}">
+                <p class="form-hint">혜택 지급 확인 시 직원이 입력합니다</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Display Settings -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">화면 설정</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="form-label">포인트 색상</label>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <input type="color" id="primary-color"
+                           value="{{ settings.primary_color | default('#03C75A') }}"
+                           style="width: 60px; height: 40px; border: none; border-radius: 8px; cursor: pointer;">
+                    <input type="text" class="form-input" id="primary-color-hex"
+                           value="{{ settings.primary_color | default('#03C75A') }}"
+                           style="width: 120px;" readonly>
+                </div>
+                <p class="form-hint">손님 화면의 메인 색상입니다</p>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">영수증 용지 폭</label>
+                <select id="paper-width" class="form-input">
+                    <option value="576" {{ 'selected' if store.paper_width == 576 else '' }}>80mm (576px)</option>
+                    <option value="384" {{ 'selected' if store.paper_width == 384 else '' }}>58mm (384px)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Policy Settings -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">정책 설정</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="form-label">영수증 배정 정책</label>
+                <select id="assignment-policy" class="form-input">
+                    <option value="latest_same_day" {{ 'selected' if settings.assignment_policy == 'latest_same_day' else '' }}>
+                        당일 최신 영수증 우선
+                    </option>
+                    <option value="oldest_same_day" {{ 'selected' if settings.assignment_policy == 'oldest_same_day' else '' }}>
+                        당일 오래된 영수증 우선
+                    </option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">영업일 기준 시각</label>
+                <input type="time" id="business-cutoff" class="form-input"
+                       value="{{ settings.business_day_cutoff | default('05:00') }}">
+                <p class="form-hint">이 시각 이전 영수증은 전날 영업분으로 처리됩니다</p>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">시간당 배정 제한</label>
+                <input type="number" id="hourly-limit" class="form-input"
+                       value="{{ settings.hourly_assign_limit | default(50) }}" min="0">
+                <p class="form-hint">0 = 제한 없음</p>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">일일 배정 제한</label>
+                <input type="number" id="daily-limit" class="form-input"
+                       value="{{ settings.daily_assign_limit | default(200) }}" min="0">
+                <p class="form-hint">0 = 제한 없음</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Settings -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">계정 설정</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="form-label">아이디</label>
+                <input type="text" class="form-input"
+                       value="{{ store.admin_login_id | default('') }}" readonly
+                       style="background: var(--gray-100);">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">새 비밀번호</label>
+                <input type="password" id="new-password" class="form-input"
+                       placeholder="변경 시에만 입력">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">비밀번호 확인</label>
+                <input type="password" id="confirm-password" class="form-input"
+                       placeholder="비밀번호 확인">
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Color picker sync
+document.getElementById('primary-color').addEventListener('input', function() {
+    document.getElementById('primary-color-hex').value = this.value;
+});
+
+function saveSettings() {
+    const newPw = document.getElementById('new-password').value;
+    const confirmPw = document.getElementById('confirm-password').value;
+
+    if (newPw && newPw !== confirmPw) {
+        alert('비밀번호가 일치하지 않습니다.');
+        return;
+    }
+
+    const data = {
+        naver_review_url: document.getElementById('naver-url').value,
+        benefit_text: document.getElementById('benefit-text').value,
+        staff_pin: document.getElementById('staff-pin').value,
+        primary_color: document.getElementById('primary-color').value,
+        paper_width: parseInt(document.getElementById('paper-width').value),
+        assignment_policy: document.getElementById('assignment-policy').value,
+        business_day_cutoff: document.getElementById('business-cutoff').value,
+        hourly_assign_limit: parseInt(document.getElementById('hourly-limit').value) || 0,
+        daily_assign_limit: parseInt(document.getElementById('daily-limit').value) || 0,
+        new_password: newPw || null
+    };
+
+    fetch('{{ url_for("admin_save_settings") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert('저장되었습니다.');
+            document.getElementById('new-password').value = '';
+            document.getElementById('confirm-password').value = '';
+        } else {
+            alert('저장 실패: ' + data.error);
+        }
+    })
+    .catch(err => alert('오류가 발생했습니다.'));
+}
+</script>
+{% endblock %}

@@ -1,0 +1,100 @@
+{% extends "customer/base.html" %}
+
+{% block title %}영수증 준비 완료{% endblock %}
+
+{% block content %}
+<!-- 진행 상태 -->
+<div class="progress-bar">
+    <div class="progress-bar__step completed"></div>
+    <div class="progress-bar__step completed"></div>
+    <div class="progress-bar__step active"></div>
+</div>
+
+<!-- 사진 확인 알림 -->
+<div class="photo-reminder">
+    <span class="photo-reminder__icon">📷</span>
+    <span class="photo-reminder__text">음식·매장 사진 2장 찍어두셨나요?</span>
+</div>
+
+<!-- 영수증 미리보기 -->
+<div class="card">
+    <h2 class="card__title">영수증</h2>
+    <div class="receipt-preview">
+        <img
+            id="receiptImage"
+            src="{{ receipt_image_url }}"
+            alt="영수증"
+            class="receipt-preview__image"
+            crossorigin="anonymous"
+        >
+    </div>
+    <p class="receipt-preview__label">이 영수증이 폰에 저장됩니다</p>
+</div>
+
+<!-- 문구 미리보기 -->
+<div class="card">
+    <h2 class="card__title">리뷰 문구</h2>
+    <div class="text-preview">
+        <p id="reviewText" class="text-preview__content">{{ review_text }}</p>
+    </div>
+    <div class="text-center">
+        <button type="button" id="regenerateText" class="text-preview__regenerate">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/>
+                <path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/>
+            </svg>
+            다른 문구
+        </button>
+    </div>
+</div>
+
+<!-- 단계 안내 -->
+<div class="steps">
+    <p class="steps__title">네이버에서 이렇게 하세요</p>
+    <div class="step">
+        <span class="step__number">1</span>
+        <div class="step__content">
+            <p class="step__text">앨범에서 <strong>영수증</strong> 선택</p>
+        </div>
+    </div>
+    <div class="step">
+        <span class="step__number">2</span>
+        <div class="step__content">
+            <p class="step__text">미리 찍어둔 <strong>사진 2장</strong> 첨부</p>
+        </div>
+    </div>
+    <div class="step">
+        <span class="step__number">3</span>
+        <div class="step__content">
+            <p class="step__text">글 입력칸에 <strong>붙여넣기</strong> → 등록</p>
+        </div>
+    </div>
+</div>
+
+<!-- 메인 액션 버튼 -->
+<button type="button" id="mainAction" class="btn btn--primary btn--large btn--full">
+    <span>영수증 저장 + 문구 복사하고</span>
+    <strong>네이버로 이동</strong>
+</button>
+
+<div class="footer">
+    <p class="footer__text">리뷰 등록 후 돌아와서 혜택을 받으세요!</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 영수증 이미지 미리 로드
+(async function() {
+    const img = document.getElementById('receiptImage');
+    if (img && img.src) {
+        try {
+            const response = await fetch(img.src);
+            window.preloadedReceiptBlob = await response.blob();
+        } catch (e) {
+            console.log('Preload failed:', e);
+        }
+    }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,172 @@
+{% extends "admin/base.html" %}
+
+{% block title %}대시보드{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">대시보드</h1>
+        <p class="page-subtitle">오늘의 리뷰 현황을 확인하세요</p>
+    </div>
+    <div>
+        <span style="font-size: 14px; color: var(--gray-600);">
+            {{ today.strftime('%Y년 %m월 %d일') if today else '2026년 10월 7일' }}
+        </span>
+    </div>
+</div>
+
+<!-- Stats Grid -->
+<div class="stats-grid">
+    <div class="stat-card primary">
+        <div class="stat-label">오늘 참여</div>
+        <div class="stat-value">{{ stats.today_sessions | default(0) }}명</div>
+        <div class="stat-change up">
+            <i data-feather="trending-up" style="width: 14px; height: 14px;"></i>
+            어제 대비 +{{ stats.sessions_change | default(12) }}%
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">사용 가능 영수증</div>
+        <div class="stat-value">{{ stats.available_receipts | default(15) }}장</div>
+        {% if stats.available_receipts and stats.available_receipts < 5 %}
+        <div class="stat-change down">
+            <i data-feather="alert-circle" style="width: 14px; height: 14px;"></i>
+            부족 주의
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">리뷰 완료</div>
+        <div class="stat-value">{{ stats.completed | default(0) }}건</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">혜택 지급</div>
+        <div class="stat-value">{{ stats.benefits_given | default(0) }}건</div>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+    <!-- Funnel Chart -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">단계별 전환율</h3>
+        </div>
+        <div class="card-body">
+            <div class="funnel-chart">
+                {% set funnel = [
+                    ('번호 입력', stats.step_phone | default(100), 100),
+                    ('키워드 선택', stats.step_keyword | default(95), 95),
+                    ('영수증 배정', stats.step_assign | default(90), 90),
+                    ('이미지 저장', stats.step_download | default(85), 85),
+                    ('네이버 이동', stats.step_redirect | default(80), 80),
+                    ('리뷰 완료', stats.step_complete | default(70), 70),
+                    ('혜택 지급', stats.step_benefit | default(65), 65)
+                ] %}
+                {% for name, value, width in funnel %}
+                <div class="funnel-step">
+                    <div class="funnel-bar-container">
+                        <div class="funnel-bar" style="width: {{ width }}%; opacity: {{ 0.4 + (loop.revindex / 10) }};">
+                            {{ name }}
+                        </div>
+                    </div>
+                    <div class="funnel-value">{{ value }}명</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Agent Status -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">에이전트 상태</h3>
+        </div>
+        <div class="card-body">
+            <div class="agent-status" style="margin-bottom: 24px;">
+                <div class="status-indicator {{ 'online' if agent_online else 'offline' }}"></div>
+                <div>
+                    <div style="font-weight: 600; font-size: 15px;">
+                        {{ '연결됨' if agent_online else '연결 안 됨' }}
+                    </div>
+                    <div style="font-size: 13px; color: var(--gray-600);">
+                        마지막 수신: {{ last_heartbeat | default('방금 전') }}
+                    </div>
+                </div>
+            </div>
+
+            <div style="padding: 16px; background: var(--gray-100); border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                    <span style="color: var(--gray-600); font-size: 13px;">버전</span>
+                    <span style="font-weight: 600; font-size: 13px;">{{ agent_version | default('1.0.0') }}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                    <span style="color: var(--gray-600); font-size: 13px;">캡처 방식</span>
+                    <span style="font-weight: 600; font-size: 13px;">{{ capture_mode | default('시리얼(COM)') }}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                    <span style="color: var(--gray-600); font-size: 13px;">대기 큐</span>
+                    <span style="font-weight: 600; font-size: 13px;">{{ queue_length | default(0) }}건</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: var(--gray-600); font-size: 13px;">오늘 수신</span>
+                    <span style="font-weight: 600; font-size: 13px;">{{ today_receipts | default(0) }}건</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h3 class="card-title">최근 활동</h3>
+        <a href="#" class="btn btn-sm btn-outline">전체 보기</a>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>시간</th>
+                        <th>고객</th>
+                        <th>금액</th>
+                        <th>상태</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for activity in recent_activities | default([]) %}
+                    <tr>
+                        <td>{{ activity.time }}</td>
+                        <td>{{ activity.phone_masked }}</td>
+                        <td>{{ "{:,}".format(activity.amount) }}원</td>
+                        <td>
+                            <span class="badge badge-{{ activity.status_class }}">
+                                {{ activity.status_text }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" style="text-align: center; color: var(--gray-500); padding: 32px;">
+                            오늘 활동이 없습니다
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Auto-refresh every 30 seconds
+    setTimeout(() => {
+        location.reload();
+    }, 30000);
+</script>
+{% endblock %}

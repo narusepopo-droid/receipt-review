@@ -1,0 +1,167 @@
+{% extends "ops/base.html" %}
+
+{% block title %}대시보드{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">대시보드</h1>
+    <p class="page-subtitle">영수증리뷰 운영 현황을 한눈에 확인하세요</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">전체 매장</div>
+        <div class="stat-value">{{ stats.total_stores }}</div>
+        <div class="stat-change up">+2 이번 주</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">운영 중</div>
+        <div class="stat-value primary">{{ stats.active_stores }}</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">에이전트 정상</div>
+        <div class="stat-value primary">{{ stats.online_agents }}</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">에이전트 오프라인</div>
+        <div class="stat-value danger">{{ stats.offline_agents }}</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">오늘 참여</div>
+        <div class="stat-value">{{ stats.today_sessions }}</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">오늘 완료</div>
+        <div class="stat-value primary">{{ stats.today_completed }}</div>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">에이전트 상태</h3>
+            <a href="/ops/agents" class="btn btn-secondary btn-sm">전체 보기</a>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>매장</th>
+                        <th>상태</th>
+                        <th>마지막 하트비트</th>
+                        <th>큐</th>
+                    </tr>
+                </thead>
+                <tbody id="agents-table">
+                    <tr>
+                        <td colspan="4" class="empty-state" style="padding: 40px;">
+                            <div class="icon">📡</div>
+                            <div>연결된 에이전트가 없습니다</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">미분류 영수증</h3>
+            <a href="/ops/receipts/unclassified" class="btn btn-secondary btn-sm">확인하기</a>
+        </div>
+
+        <div style="text-align: center; padding: 40px;">
+            {% if stats.unclassified_count > 0 %}
+            <div style="font-size: 48px; font-weight: 700; color: var(--warning);">
+                {{ stats.unclassified_count }}
+            </div>
+            <div style="color: var(--text-secondary); margin-top: 8px;">
+                분류 대기 중
+            </div>
+            {% else %}
+            <div class="icon" style="font-size: 48px; opacity: 0.3;">✓</div>
+            <div style="color: var(--text-secondary); margin-top: 8px;">
+                모든 영수증이 분류되었습니다
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h3 class="card-title">최근 활동</h3>
+    </div>
+
+    <div id="recent-activity">
+        <div class="empty-state">
+            <div class="icon">📝</div>
+            <div>최근 활동이 없습니다</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 실시간 에이전트 상태 갱신
+    async function refreshAgentStatus() {
+        const data = await apiCall('/ops/api/agents/status');
+        if (data && data.agents) {
+            updateAgentsTable(data.agents);
+        }
+    }
+
+    function updateAgentsTable(agents) {
+        const tbody = document.getElementById('agents-table');
+
+        if (agents.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="4" class="empty-state" style="padding: 40px;">
+                        <div class="icon">📡</div>
+                        <div>연결된 에이전트가 없습니다</div>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = agents.slice(0, 5).map(agent => `
+            <tr>
+                <td><strong>${agent.store_name}</strong></td>
+                <td>
+                    <span class="status status-${agent.status}">
+                        <span class="status-dot"></span>
+                        ${agent.status === 'online' ? '정상' : agent.status === 'warning' ? '주의' : '오프라인'}
+                    </span>
+                </td>
+                <td>${formatTime(agent.last_heartbeat_at)}</td>
+                <td>${agent.queue_length}</td>
+            </tr>
+        `).join('');
+    }
+
+    function formatTime(isoString) {
+        if (!isoString) return '-';
+        const date = new Date(isoString);
+        const diff = Date.now() - date.getTime();
+        const mins = Math.floor(diff / 60000);
+        if (mins < 1) return '방금';
+        if (mins < 60) return `${mins}분 전`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `${hours}시간 전`;
+        return `${Math.floor(hours / 24)}일 전`;
+    }
+
+    // 30초마다 갱신
+    setInterval(refreshAgentStatus, 30000);
+    refreshAgentStatus();
+</script>
+{% endblock %}

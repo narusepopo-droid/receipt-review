@@ -1,0 +1,139 @@
+{% extends "ops/base.html" %}
+
+{% block title %}{{ '매장 수정' if mode == 'edit' else '새 매장 등록' }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">{{ '매장 수정' if mode == 'edit' else '새 매장 등록' }}</h1>
+    <p class="page-subtitle">{{ '매장 정보를 수정합니다' if mode == 'edit' else '새로운 매장을 등록합니다' }}</p>
+</div>
+
+<div class="card" style="max-width: 800px;">
+    <form method="POST" action="{{ '/ops/stores/' ~ store.id if mode == 'edit' else '/ops/stores/new' }}">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="form-group">
+                <label class="form-label">매장명 *</label>
+                <input type="text" name="name" class="form-input" required
+                       value="{{ store.name if store else '' }}" placeholder="맛있는 식당">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">사업자번호 *</label>
+                <input type="text" name="biz_no" class="form-input" required
+                       value="{{ store.biz_no if store else '' }}" placeholder="123-45-67890">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">네이버 리뷰 URL *</label>
+            <input type="url" name="naver_review_url" class="form-input" required
+                   value="{{ store.naver_review_url if store else '' }}"
+                   placeholder="https://naver.me/xxxxx">
+            <small style="color: var(--text-secondary); font-size: 13px; margin-top: 4px; display: block;">
+                스마트플레이스에서 발급받은 영수증 리뷰 QR 링크
+            </small>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="form-group">
+                <label class="form-label">용지 폭</label>
+                <select name="paper_width" class="form-input">
+                    <option value="576" {{ 'selected' if store and store.paper_width == 576 else '' }}>80mm (576px)</option>
+                    <option value="384" {{ 'selected' if store and store.paper_width == 384 else '' }}>58mm (384px)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">직원 PIN (4자리)</label>
+                <input type="text" name="staff_pin" class="form-input" maxlength="4" pattern="[0-9]{4}"
+                       value="{{ store.staff_pin if store else '' }}" placeholder="1234">
+            </div>
+        </div>
+
+        {% if mode == 'create' %}
+        <hr style="border: none; border-top: 1px solid var(--border); margin: 32px 0;">
+        <h4 style="margin-bottom: 20px;">점주 관리자 계정</h4>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="form-group">
+                <label class="form-label">관리자 아이디 *</label>
+                <input type="text" name="admin_login_id" class="form-input" required placeholder="admin">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">관리자 비밀번호 *</label>
+                <input type="password" name="admin_password" class="form-input" required placeholder="••••••••">
+            </div>
+        </div>
+        {% endif %}
+
+        {% if mode == 'edit' %}
+        <hr style="border: none; border-top: 1px solid var(--border); margin: 32px 0;">
+
+        <div class="form-group">
+            <label class="form-label">상태</label>
+            <select name="status" class="form-input">
+                <option value="active" {{ 'selected' if store and store.status == 'active' else '' }}>운영중</option>
+                <option value="paused" {{ 'selected' if store and store.status == 'paused' else '' }}>일시정지</option>
+            </select>
+        </div>
+
+        <div class="card" style="background: var(--bg); padding: 20px; margin-top: 24px;">
+            <h4 style="margin-bottom: 16px;">에이전트 활성화 코드</h4>
+            <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 16px;">
+                포스에 에이전트를 설치할 때 필요한 8자리 코드입니다. 24시간 유효합니다.
+            </p>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <code id="activation-code" style="font-size: 24px; letter-spacing: 2px; padding: 12px 20px; background: white; border-radius: 8px;">--------</code>
+                <button type="button" onclick="generateCode()" class="btn btn-primary">코드 발급</button>
+            </div>
+        </div>
+        {% endif %}
+
+        <div style="display: flex; gap: 12px; margin-top: 32px;">
+            <button type="submit" class="btn btn-primary">
+                {{ '저장' if mode == 'edit' else '등록' }}
+            </button>
+            <a href="/ops/stores" class="btn btn-secondary">취소</a>
+        </div>
+    </form>
+</div>
+
+{% if mode == 'edit' %}
+<div id="code-modal" class="modal-overlay">
+    <div class="modal">
+        <h3 class="modal-title">활성화 코드 발급 완료</h3>
+        <p style="margin-bottom: 24px; color: var(--text-secondary);">
+            이 코드를 포스 에이전트 설치 시 입력하세요.
+        </p>
+        <div style="text-align: center; margin-bottom: 24px;">
+            <code id="modal-code" style="font-size: 32px; letter-spacing: 4px; display: block; padding: 20px; background: var(--bg); border-radius: 12px;"></code>
+        </div>
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 24px;">
+            ⏰ 유효기간: <span id="modal-expires"></span>까지
+        </p>
+        <button onclick="closeModal()" class="btn btn-primary" style="width: 100%;">확인</button>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function generateCode() {
+        const storeId = {{ store.id if store else 0 }};
+        const data = await apiCall(`/ops/stores/${storeId}/activation-code`, { method: 'POST' });
+
+        if (data && data.code) {
+            document.getElementById('activation-code').textContent = data.code;
+            document.getElementById('modal-code').textContent = data.code;
+            document.getElementById('modal-expires').textContent = new Date(data.expires_at).toLocaleString('ko-KR');
+            document.getElementById('code-modal').classList.add('active');
+        }
+    }
+
+    function closeModal() {
+        document.getElementById('code-modal').classList.remove('active');
+    }
+</script>
+{% endblock %}

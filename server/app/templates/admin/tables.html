@@ -1,0 +1,248 @@
+{% extends "admin/base.html" %}
+
+{% block title %}테이블 안내판{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">테이블 안내판</h1>
+        <p class="page-subtitle">테이블별 QR 안내판을 생성하고 인쇄합니다</p>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px;">
+    <!-- Settings -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">안내판 설정</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="form-label">테이블 수</label>
+                <input type="number" id="table-count" class="form-input"
+                       value="{{ table_count | default(10) }}" min="1" max="100">
+                <p class="form-hint">생성할 테이블 안내판 수</p>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">시작 번호</label>
+                <input type="number" id="start-number" class="form-input"
+                       value="{{ start_number | default(1) }}" min="1">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">용지 크기</label>
+                <select id="paper-size" class="form-input">
+                    <option value="A6">A6 (세로, 추천)</option>
+                    <option value="A5">A5 (세로)</option>
+                    <option value="A4">A4 (세로)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">혜택 문구</label>
+                <input type="text" id="benefit-text" class="form-input"
+                       value="{{ benefit_text | default('리뷰 작성 시 음료 1잔 서비스') }}">
+            </div>
+
+            <div style="margin-top: 24px; display: flex; gap: 12px;">
+                <button class="btn btn-primary" onclick="generatePreview()" style="flex: 1;">
+                    <i data-feather="eye" style="width: 18px; height: 18px;"></i>
+                    미리보기
+                </button>
+            </div>
+
+            <div style="margin-top: 12px; display: flex; gap: 12px;">
+                <button class="btn btn-secondary" onclick="downloadPNG()" style="flex: 1;">
+                    <i data-feather="image" style="width: 18px; height: 18px;"></i>
+                    PNG 다운로드
+                </button>
+                <button class="btn btn-secondary" onclick="downloadPDF()" style="flex: 1;">
+                    <i data-feather="file-text" style="width: 18px; height: 18px;"></i>
+                    PDF 다운로드
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">미리보기</h3>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm btn-outline" onclick="prevTable()" id="prev-btn" disabled>
+                    <i data-feather="chevron-left" style="width: 14px; height: 14px;"></i>
+                </button>
+                <span id="current-table" style="min-width: 80px; text-align: center; line-height: 32px;">
+                    테이블 1
+                </span>
+                <button class="btn btn-sm btn-outline" onclick="nextTable()" id="next-btn">
+                    <i data-feather="chevron-right" style="width: 14px; height: 14px;"></i>
+                </button>
+            </div>
+        </div>
+        <div class="card-body" style="background: var(--gray-200); padding: 32px; display: flex; justify-content: center;">
+            <div id="preview-container" style="background: white; border-radius: 8px; box-shadow: var(--shadow-lg); overflow: hidden;">
+                <!-- Preview will be generated here -->
+                <div id="table-card" style="width: 297px; padding: 24px; text-align: center;">
+                    <div style="margin-bottom: 16px;">
+                        <div style="font-size: 24px; font-weight: 700; color: #1a1a1a;">
+                            {{ store.name | default('맛있는 식당') }}
+                        </div>
+                    </div>
+
+                    <div style="background: #03C75A; color: white; padding: 12px 16px; border-radius: 8px; font-size: 15px; font-weight: 600; margin-bottom: 20px;">
+                        🎁 리뷰 작성 시 음료 1잔 서비스
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <div id="qr-code" style="width: 160px; height: 160px; background: #f5f5f5; margin: 0 auto; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                            <svg viewBox="0 0 100 100" width="140" height="140">
+                                <rect fill="#000" x="10" y="10" width="25" height="25"/>
+                                <rect fill="#000" x="65" y="10" width="25" height="25"/>
+                                <rect fill="#000" x="10" y="65" width="25" height="25"/>
+                                <rect fill="#000" x="40" y="40" width="20" height="20"/>
+                                <rect fill="#fff" x="15" y="15" width="15" height="15"/>
+                                <rect fill="#fff" x="70" y="15" width="15" height="15"/>
+                                <rect fill="#fff" x="15" y="70" width="15" height="15"/>
+                                <rect fill="#000" x="18" y="18" width="9" height="9"/>
+                                <rect fill="#000" x="73" y="18" width="9" height="9"/>
+                                <rect fill="#000" x="18" y="73" width="9" height="9"/>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div style="font-size: 12px; color: #666; line-height: 1.8; text-align: left; margin-bottom: 16px; padding: 12px; background: #f8f9fa; border-radius: 8px;">
+                        <div style="margin-bottom: 8px; font-weight: 600; color: #333;">리뷰 작성 방법</div>
+                        <div>1️⃣ 음식·매장 사진 2장 먼저 찍기</div>
+                        <div>2️⃣ QR 찍고 휴대폰 번호 입력</div>
+                        <div>3️⃣ [영수증 저장] 버튼 탭</div>
+                        <div>4️⃣ 영수증 선택 → 사진 첨부 → 붙여넣기</div>
+                        <div>5️⃣ 직원에게 완료 화면 보여주기</div>
+                    </div>
+
+                    <div style="font-size: 20px; font-weight: 700; color: #03C75A;" id="table-number">
+                        테이블 1
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Instructions -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h3 class="card-title">인쇄 안내</h3>
+    </div>
+    <div class="card-body">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;">
+            <div style="text-align: center; padding: 20px;">
+                <div style="width: 60px; height: 60px; background: var(--primary-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                    <i data-feather="download" style="width: 28px; height: 28px; color: var(--primary);"></i>
+                </div>
+                <div style="font-weight: 600; margin-bottom: 8px;">1. 다운로드</div>
+                <div style="font-size: 14px; color: var(--gray-600);">
+                    PNG 또는 PDF로 안내판을 다운로드합니다
+                </div>
+            </div>
+            <div style="text-align: center; padding: 20px;">
+                <div style="width: 60px; height: 60px; background: var(--primary-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                    <i data-feather="printer" style="width: 28px; height: 28px; color: var(--primary);"></i>
+                </div>
+                <div style="font-weight: 600; margin-bottom: 8px;">2. 인쇄</div>
+                <div style="font-size: 14px; color: var(--gray-600);">
+                    A6 또는 A5 용지에 컬러로 인쇄합니다
+                </div>
+            </div>
+            <div style="text-align: center; padding: 20px;">
+                <div style="width: 60px; height: 60px; background: var(--primary-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                    <i data-feather="check-circle" style="width: 28px; height: 28px; color: var(--primary);"></i>
+                </div>
+                <div style="font-weight: 600; margin-bottom: 8px;">3. 테이블 배치</div>
+                <div style="font-size: 14px; color: var(--gray-600);">
+                    각 테이블에 해당 번호의 안내판을 배치합니다
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentTable = 1;
+let tableCount = parseInt(document.getElementById('table-count').value);
+
+function updatePreview() {
+    const startNum = parseInt(document.getElementById('start-number').value);
+    const tableNum = startNum + currentTable - 1;
+    document.getElementById('table-number').textContent = '테이블 ' + tableNum;
+    document.getElementById('current-table').textContent = '테이블 ' + tableNum;
+
+    // Update button states
+    document.getElementById('prev-btn').disabled = currentTable <= 1;
+    document.getElementById('next-btn').disabled = currentTable >= tableCount;
+
+    // Update benefit text
+    document.getElementById('table-card').querySelector('[style*="background: #03C75A"]').textContent =
+        '🎁 ' + document.getElementById('benefit-text').value;
+}
+
+function prevTable() {
+    if (currentTable > 1) {
+        currentTable--;
+        updatePreview();
+    }
+}
+
+function nextTable() {
+    tableCount = parseInt(document.getElementById('table-count').value);
+    if (currentTable < tableCount) {
+        currentTable++;
+        updatePreview();
+    }
+}
+
+function generatePreview() {
+    tableCount = parseInt(document.getElementById('table-count').value);
+    currentTable = 1;
+    updatePreview();
+    alert('미리보기가 생성되었습니다. ' + tableCount + '개의 테이블 안내판을 확인하세요.');
+}
+
+function downloadPNG() {
+    const tableCount = parseInt(document.getElementById('table-count').value);
+    const startNum = parseInt(document.getElementById('start-number').value);
+
+    // In production, this would call the server to generate PNG files
+    alert('테이블 ' + startNum + '~' + (startNum + tableCount - 1) + ' 안내판 PNG를 다운로드합니다.');
+
+    // Redirect to download endpoint
+    window.location.href = '{{ url_for("admin_download_tables") }}?format=png&count=' + tableCount + '&start=' + startNum;
+}
+
+function downloadPDF() {
+    const tableCount = parseInt(document.getElementById('table-count').value);
+    const startNum = parseInt(document.getElementById('start-number').value);
+
+    alert('테이블 ' + startNum + '~' + (startNum + tableCount - 1) + ' 안내판 PDF를 다운로드합니다.');
+
+    window.location.href = '{{ url_for("admin_download_tables") }}?format=pdf&count=' + tableCount + '&start=' + startNum;
+}
+
+// Initialize
+document.getElementById('table-count').addEventListener('change', function() {
+    tableCount = parseInt(this.value);
+    if (currentTable > tableCount) {
+        currentTable = tableCount;
+    }
+    updatePreview();
+});
+
+document.getElementById('start-number').addEventListener('change', updatePreview);
+document.getElementById('benefit-text').addEventListener('input', updatePreview);
+
+updatePreview();
+</script>
+{% endblock %}

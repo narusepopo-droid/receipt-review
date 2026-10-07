@@ -329,7 +329,7 @@ async def start_session(
     )
 
 
-@router.post("/session/{session_id}/keywords")
+@router.post("/api/v1/session/{session_id}/keywords")
 async def save_keywords(
     session_id: UUID,
     request: KeywordsRequest,
@@ -350,7 +350,7 @@ async def save_keywords(
     return {"status": "ok", "keywords": request.keywords}
 
 
-@router.post("/session/{session_id}/assign", response_model=AssignResponse)
+@router.post("/api/v1/session/{session_id}/assign", response_model=AssignResponse)
 async def assign_receipt(
     session_id: UUID,
     db: AsyncSession = Depends(get_db)
@@ -398,7 +398,7 @@ async def assign_receipt(
     )
 
 
-@router.post("/session/{session_id}/regenerate", response_model=RegenerateResponse)
+@router.post("/api/v1/session/{session_id}/regenerate", response_model=RegenerateResponse)
 async def regenerate_text(
     session_id: UUID,
     db: AsyncSession = Depends(get_db)
@@ -437,7 +437,7 @@ async def regenerate_text(
     )
 
 
-@router.post("/session/{session_id}/event")
+@router.post("/api/v1/session/{session_id}/event")
 async def record_event(
     session_id: UUID,
     request: EventRequest,
@@ -468,7 +468,7 @@ async def record_event(
     return {"status": "ok", "event": request.event}
 
 
-@router.post("/session/{session_id}/benefit")
+@router.post("/api/v1/session/{session_id}/benefit")
 async def confirm_benefit(
     session_id: UUID,
     request: BenefitRequest,
@@ -494,7 +494,7 @@ async def confirm_benefit(
     return {"status": "ok", "benefit_given": True}
 
 
-@router.get("/receipt-image/{token}")
+@router.get("/api/v1/receipt-image/{token}")
 async def get_receipt_image(
     token: str,
     session_id: UUID = Query(...),

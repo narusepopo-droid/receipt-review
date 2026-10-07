@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}관리자{% endblock %} - 영수증리뷰</title>
+
+    <!-- Pretendard Font -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+
+    <!-- Feather Icons -->
+    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
+
+    <!-- Admin Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', path='admin/css/admin.css') }}">
+
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <a href="{{ url_for('admin_dashboard') }}" class="sidebar-logo">
+                    <span>영수증</span>리뷰
+                </a>
+                <div class="store-name">{{ store.name if store else '매장명' }}</div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-item {% if active_menu == 'dashboard' %}active{% endif %}">
+                    <i data-feather="home"></i>
+                    <span>대시보드</span>
+                </a>
+                <a href="{{ url_for('admin_phrases') }}" class="nav-item {% if active_menu == 'phrases' %}active{% endif %}">
+                    <i data-feather="edit-3"></i>
+                    <span>문구 설정</span>
+                </a>
+                <a href="{{ url_for('admin_settings') }}" class="nav-item {% if active_menu == 'settings' %}active{% endif %}">
+                    <i data-feather="settings"></i>
+                    <span>매장 설정</span>
+                </a>
+                <a href="{{ url_for('admin_customers') }}" class="nav-item {% if active_menu == 'customers' %}active{% endif %}">
+                    <i data-feather="users"></i>
+                    <span>고객 관리</span>
+                </a>
+                <a href="{{ url_for('admin_tables') }}" class="nav-item {% if active_menu == 'tables' %}active{% endif %}">
+                    <i data-feather="grid"></i>
+                    <span>테이블 안내판</span>
+                </a>
+                <a href="{{ url_for('admin_logout') }}" class="nav-item">
+                    <i data-feather="log-out"></i>
+                    <span>로그아웃</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script>
+        // Initialize Feather Icons
+        feather.replace();
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,80 @@
+{% extends "ops/base.html" %}
+
+{% block title %}매장 관리{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">매장 관리</h1>
+    <p class="page-subtitle">등록된 매장을 관리하고 새 매장을 추가하세요</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">매장 목록</h3>
+        <a href="/ops/stores/new" class="btn btn-primary">
+            ➕ 새 매장 등록
+        </a>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>매장명</th>
+                    <th>사업자번호</th>
+                    <th>매장코드</th>
+                    <th>상태</th>
+                    <th>에이전트</th>
+                    <th>등록일</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if stores %}
+                    {% for store in stores %}
+                    <tr>
+                        <td><strong>{{ store.name }}</strong></td>
+                        <td>{{ store.biz_no }}</td>
+                        <td><code>{{ store.store_code }}</code></td>
+                        <td>
+                            {% if store.status == 'active' %}
+                            <span class="status status-online">
+                                <span class="status-dot"></span> 운영중
+                            </span>
+                            {% else %}
+                            <span class="status status-offline">
+                                <span class="status-dot"></span> 일시정지
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if store.agent_connected %}
+                            <span class="status status-online">
+                                <span class="status-dot"></span> 연결됨
+                            </span>
+                            {% else %}
+                            <span class="status status-offline">
+                                <span class="status-dot"></span> 미연결
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>{{ store.created_at.strftime('%Y-%m-%d') if store.created_at else '-' }}</td>
+                        <td>
+                            <a href="/ops/stores/{{ store.id }}" class="btn btn-secondary btn-sm">관리</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="7" class="empty-state">
+                            <div class="icon">🏪</div>
+                            <div>등록된 매장이 없습니다</div>
+                            <a href="/ops/stores/new" class="btn btn-primary" style="margin-top: 16px;">첫 매장 등록하기</a>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

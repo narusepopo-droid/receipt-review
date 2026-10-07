@@ -1,0 +1,303 @@
+{% extends "admin/base.html" %}
+
+{% block title %}문구 설정{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">문구 설정</h1>
+        <p class="page-subtitle">리뷰 문구에 사용될 키워드와 템플릿을 관리합니다</p>
+    </div>
+    <button class="btn btn-primary" onclick="saveSettings()">
+        <i data-feather="save" style="width: 18px; height: 18px;"></i>
+        저장하기
+    </button>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+    <!-- Keywords Section -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">키워드 목록</h3>
+            <button class="btn btn-sm btn-outline" onclick="addKeyword()">
+                <i data-feather="plus" style="width: 14px; height: 14px;"></i>
+                추가
+            </button>
+        </div>
+        <div class="card-body">
+            <p style="font-size: 13px; color: var(--gray-600); margin-bottom: 16px;">
+                손님이 선택할 키워드입니다. 체크된 항목은 기본 선택됩니다.
+            </p>
+
+            <div id="keywords-container" class="chips-container">
+                {% for keyword in keywords | default([
+                    {'label': '맛있어요', 'default': true},
+                    {'label': '친절해요', 'default': true},
+                    {'label': '분위기 좋아요', 'default': false},
+                    {'label': '가성비 좋아요', 'default': false},
+                    {'label': '재방문 의사 있어요', 'default': false}
+                ]) %}
+                <div class="chip {{ 'active' if keyword.default else '' }}" data-keyword="{{ keyword.label }}">
+                    <input type="checkbox" {{ 'checked' if keyword.default else '' }} style="display: none;">
+                    {{ keyword.label }}
+                    <span class="remove" onclick="removeKeyword(this)">×</span>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div style="margin-top: 20px;">
+                <div class="form-group">
+                    <label class="form-label">새 키워드</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="new-keyword" class="form-input" placeholder="키워드 입력">
+                        <button class="btn btn-secondary" onclick="addKeyword()">추가</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Signature Menus Section -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">대표 메뉴</h3>
+        </div>
+        <div class="card-body">
+            <p style="font-size: 13px; color: var(--gray-600); margin-bottom: 16px;">
+                문구에 랜덤으로 들어갈 대표 메뉴입니다. (영수증 품목과 별개)
+            </p>
+
+            <div id="menus-container">
+                {% for menu in signature_menus | default(['돼지김치찌개', '계란말이', '된장찌개']) %}
+                <div class="template-item">
+                    <span style="color: var(--gray-400);">☰</span>
+                    <input type="text" class="form-input" value="{{ menu }}" style="flex: 1;">
+                    <button class="btn btn-sm btn-outline" onclick="removeMenu(this)" style="color: var(--danger);">
+                        <i data-feather="trash-2" style="width: 14px; height: 14px;"></i>
+                    </button>
+                </div>
+                {% endfor %}
+            </div>
+
+            <button class="btn btn-secondary" style="margin-top: 12px;" onclick="addMenu()">
+                <i data-feather="plus" style="width: 14px; height: 14px;"></i>
+                메뉴 추가
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Templates Section -->
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h3 class="card-title">문구 템플릿</h3>
+        <button class="btn btn-sm btn-outline" onclick="addTemplate()">
+            <i data-feather="plus" style="width: 14px; height: 14px;"></i>
+            추가
+        </button>
+    </div>
+    <div class="card-body">
+        <p style="font-size: 13px; color: var(--gray-600); margin-bottom: 16px;">
+            <code>{메뉴}</code>는 대표메뉴로, <code>{키워드1}</code> <code>{키워드2}</code>는 선택된 키워드의 문장형으로 치환됩니다.
+        </p>
+
+        <div id="templates-container">
+            {% for template in templates | default([
+                '{메뉴} 정말 맛있었어요! {키워드1} 다음에 또 올게요.',
+                '오늘 {메뉴} 먹었는데 {키워드1} {키워드2} 추천합니다.',
+                '{키워드1} 분위기도 좋고 {메뉴}도 최고였어요.'
+            ]) %}
+            <div class="template-item">
+                <span class="drag-handle" style="color: var(--gray-400);">☰</span>
+                <input type="text" class="form-input template-text" value="{{ template }}" style="flex: 1;">
+                <div class="actions">
+                    <button class="btn btn-sm btn-outline" onclick="removeTemplate(this)" style="color: var(--danger);">
+                        <i data-feather="trash-2" style="width: 14px; height: 14px;"></i>
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Character Limit & Preview -->
+<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px; margin-top: 24px;">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">글자수 제한</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="form-label">최소 글자수</label>
+                <input type="number" id="text-min-len" class="form-input" value="{{ text_min_len | default(30) }}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">최대 글자수</label>
+                <input type="number" id="text-max-len" class="form-input" value="{{ text_max_len | default(150) }}">
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">미리보기</h3>
+            <button class="btn btn-sm btn-primary" onclick="generatePreview()">
+                <i data-feather="refresh-cw" style="width: 14px; height: 14px;"></i>
+                새로 생성
+            </button>
+        </div>
+        <div class="card-body">
+            <div id="preview-container">
+                {% for i in range(5) %}
+                <div class="preview-box" style="margin-bottom: 12px;">
+                    <div class="preview-content" id="preview-{{ i }}">
+                        {{ sample_texts[i] if sample_texts else '돼지김치찌개 정말 맛있었어요! 직원분들이 친절하셔서 기분 좋게 식사했습니다. 다음에 또 올게요.' }}
+                    </div>
+                    <div style="text-align: right; margin-top: 8px; font-size: 12px; color: var(--gray-500);">
+                        <span id="preview-len-{{ i }}">47</span>자
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function addKeyword() {
+    const input = document.getElementById('new-keyword');
+    const value = input.value.trim();
+    if (!value) return;
+
+    const container = document.getElementById('keywords-container');
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.dataset.keyword = value;
+    chip.innerHTML = `
+        <input type="checkbox" style="display: none;">
+        ${value}
+        <span class="remove" onclick="removeKeyword(this)">×</span>
+    `;
+    chip.onclick = function(e) {
+        if (e.target.classList.contains('remove')) return;
+        this.classList.toggle('active');
+        this.querySelector('input').checked = this.classList.contains('active');
+    };
+    container.appendChild(chip);
+    input.value = '';
+}
+
+function removeKeyword(btn) {
+    btn.parentElement.remove();
+}
+
+function addMenu() {
+    const container = document.getElementById('menus-container');
+    const item = document.createElement('div');
+    item.className = 'template-item';
+    item.innerHTML = `
+        <span style="color: var(--gray-400);">☰</span>
+        <input type="text" class="form-input" placeholder="메뉴명 입력" style="flex: 1;">
+        <button class="btn btn-sm btn-outline" onclick="removeMenu(this)" style="color: var(--danger);">
+            <i data-feather="trash-2" style="width: 14px; height: 14px;"></i>
+        </button>
+    `;
+    container.appendChild(item);
+    feather.replace();
+}
+
+function removeMenu(btn) {
+    btn.closest('.template-item').remove();
+}
+
+function addTemplate() {
+    const container = document.getElementById('templates-container');
+    const item = document.createElement('div');
+    item.className = 'template-item';
+    item.innerHTML = `
+        <span class="drag-handle" style="color: var(--gray-400);">☰</span>
+        <input type="text" class="form-input template-text" placeholder="{메뉴} {키워드1} ..." style="flex: 1;">
+        <div class="actions">
+            <button class="btn btn-sm btn-outline" onclick="removeTemplate(this)" style="color: var(--danger);">
+                <i data-feather="trash-2" style="width: 14px; height: 14px;"></i>
+            </button>
+        </div>
+    `;
+    container.appendChild(item);
+    feather.replace();
+}
+
+function removeTemplate(btn) {
+    btn.closest('.template-item').remove();
+}
+
+function generatePreview() {
+    const templates = Array.from(document.querySelectorAll('.template-text')).map(el => el.value);
+    const menus = Array.from(document.querySelectorAll('#menus-container input')).map(el => el.value);
+    const keywords = Array.from(document.querySelectorAll('#keywords-container .chip')).map(el => el.dataset.keyword);
+
+    const keywordPhrases = {
+        '맛있어요': ['정말 맛있었어요', '맛이 최고예요'],
+        '친절해요': ['직원분들이 친절하셔서 기분 좋게 식사했습니다', '응대가 정말 친절해요'],
+        '분위기 좋아요': ['분위기가 좋아서 대화하기 좋았어요', '인테리어가 예뻐요'],
+        '가성비 좋아요': ['가격 대비 양이 푸짐해요', '가성비 최고'],
+        '재방문 의사 있어요': ['다음에 또 올게요', '또 방문하고 싶어요']
+    };
+
+    for (let i = 0; i < 5; i++) {
+        const template = templates[Math.floor(Math.random() * templates.length)] || '{메뉴} {키워드1}';
+        const menu = menus[Math.floor(Math.random() * menus.length)] || '대표메뉴';
+        const kw1 = keywords[Math.floor(Math.random() * keywords.length)] || '맛있어요';
+        const kw2 = keywords[Math.floor(Math.random() * keywords.length)] || '친절해요';
+
+        let text = template
+            .replace('{메뉴}', menu)
+            .replace('{키워드1}', keywordPhrases[kw1]?.[0] || kw1)
+            .replace('{키워드2}', keywordPhrases[kw2]?.[0] || kw2);
+
+        document.getElementById('preview-' + i).textContent = text;
+        document.getElementById('preview-len-' + i).textContent = text.length;
+    }
+}
+
+function saveSettings() {
+    const data = {
+        keywords: Array.from(document.querySelectorAll('#keywords-container .chip')).map(el => ({
+            label: el.dataset.keyword,
+            default: el.classList.contains('active')
+        })),
+        signature_menus: Array.from(document.querySelectorAll('#menus-container input')).map(el => el.value).filter(v => v),
+        templates: Array.from(document.querySelectorAll('.template-text')).map(el => el.value).filter(v => v),
+        text_min_len: parseInt(document.getElementById('text-min-len').value),
+        text_max_len: parseInt(document.getElementById('text-max-len').value)
+    };
+
+    fetch('{{ url_for("admin_save_phrases") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert('저장되었습니다.');
+        } else {
+            alert('저장 실패: ' + data.error);
+        }
+    })
+    .catch(err => alert('오류가 발생했습니다.'));
+}
+
+// Initialize chip click handlers
+document.querySelectorAll('#keywords-container .chip').forEach(chip => {
+    chip.onclick = function(e) {
+        if (e.target.classList.contains('remove')) return;
+        this.classList.toggle('active');
+        this.querySelector('input').checked = this.classList.contains('active');
+    };
+});
+</script>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "customer/base.html" %}
+
+{% block title %}키워드 선택{% endblock %}
+
+{% block content %}
+<!-- 진행 상태 -->
+<div class="progress-bar">
+    <div class="progress-bar__step completed"></div>
+    <div class="progress-bar__step active"></div>
+    <div class="progress-bar__step"></div>
+</div>
+
+<!-- 헤더 -->
+<div class="header">
+    <h1 class="header__store-name">어떤 점이 좋았나요?</h1>
+    <p class="header__subtitle">해당하는 키워드를 선택해주세요</p>
+</div>
+
+<!-- 키워드 선택 -->
+<div class="card card--elevated">
+    <div class="keywords">
+        {% for keyword in keywords %}
+        <button
+            type="button"
+            class="keyword-chip {{ 'active' if keyword.default else '' }}"
+            data-keyword="{{ keyword.label }}"
+        >
+            <svg class="keyword-chip__check" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
+            </svg>
+            {{ keyword.label }}
+        </button>
+        {% endfor %}
+    </div>
+
+    <p class="text-center" style="color: var(--color-text-muted); font-size: 14px;">
+        선택하지 않고 넘어가셔도 됩니다
+    </p>
+</div>
+
+<!-- 제출 버튼 -->
+<button type="button" id="submitKeywords" class="btn btn--primary btn--large btn--full">
+    다음
+</button>
+
+<div class="footer">
+    <p class="footer__text">선택한 키워드로 리뷰 문구가 생성됩니다</p>
+</div>
+{% endblock %}

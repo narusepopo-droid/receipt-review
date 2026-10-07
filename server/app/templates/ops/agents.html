@@ -1,0 +1,183 @@
+{% extends "ops/base.html" %}
+
+{% block title %}에이전트 상태{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">에이전트 상태</h1>
+    <p class="page-subtitle">전체 매장의 포스 에이전트 연결 상태를 확인하세요</p>
+</div>
+
+<div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="stat-card">
+        <div class="stat-label">정상 작동</div>
+        <div class="stat-value primary" id="stat-online">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">주의 필요</div>
+        <div class="stat-value warning" id="stat-warning">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">오프라인</div>
+        <div class="stat-value danger" id="stat-offline">0</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">에이전트 목록</h3>
+        <div style="display: flex; gap: 8px;">
+            <select id="filter-status" class="form-input" style="width: auto; padding: 8px 12px;">
+                <option value="all">전체</option>
+                <option value="online">정상</option>
+                <option value="warning">주의</option>
+                <option value="offline">오프라인</option>
+            </select>
+            <button onclick="refreshAgents()" class="btn btn-secondary btn-sm">🔄 새로고침</button>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>매장</th>
+                    <th>상태</th>
+                    <th>버전</th>
+                    <th>캡처 방식</th>
+                    <th>마지막 하트비트</th>
+                    <th>마지막 캡처</th>
+                    <th>큐 길이</th>
+                    <th>경고</th>
+                </tr>
+            </thead>
+            <tbody id="agents-tbody">
+                {% if agents %}
+                    {% for agent in agents %}
+                    <tr data-status="{{ agent.status }}">
+                        <td><strong>{{ agent.store_name }}</strong></td>
+                        <td>
+                            <span class="status status-{{ agent.status }}">
+                                <span class="status-dot"></span>
+                                {{ '정상' if agent.status == 'online' else ('주의' if agent.status == 'warning' else '오프라인') }}
+                            </span>
+                        </td>
+                        <td>{{ agent.version or '-' }}</td>
+                        <td>{{ agent.capture_mode or '-' }}</td>
+                        <td>{{ agent.last_heartbeat_at.strftime('%H:%M:%S') if agent.last_heartbeat_at else '-' }}</td>
+                        <td>{{ agent.last_capture_at.strftime('%H:%M:%S') if agent.last_capture_at else '-' }}</td>
+                        <td>{{ agent.queue_length }}</td>
+                        <td style="color: var(--warning);">{{ agent.warning_message or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="8" class="empty-state">
+                            <div class="icon">📡</div>
+                            <div>연결된 에이전트가 없습니다</div>
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 24px;">
+    <div class="card-header">
+        <h3 class="card-title">상태 판별 기준</h3>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+        <div style="padding: 16px; background: var(--primary-light); border-radius: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span class="status status-online"><span class="status-dot"></span> 정상</span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-secondary);">
+                마지막 하트비트 5분 이내
+            </p>
+        </div>
+        <div style="padding: 16px; background: var(--warning-light); border-radius: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span class="status status-warning"><span class="status-dot"></span> 주의</span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-secondary);">
+                하트비트 5~30분 또는<br>
+                캡처 0건 또는 큐 100건 초과
+            </p>
+        </div>
+        <div style="padding: 16px; background: var(--danger-light); border-radius: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span class="status status-offline"><span class="status-dot"></span> 오프라인</span>
+            </div>
+            <p style="font-size: 13px; color: var(--text-secondary);">
+                마지막 하트비트 30분 초과
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function refreshAgents() {
+        const data = await apiCall('/ops/api/agents/status');
+        if (data && data.agents) {
+            updateAgentsTable(data.agents);
+            updateStats(data.agents);
+        }
+    }
+
+    function updateAgentsTable(agents) {
+        const tbody = document.getElementById('agents-tbody');
+        const filter = document.getElementById('filter-status').value;
+
+        const filtered = filter === 'all' ? agents : agents.filter(a => a.status === filter);
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="empty-state">
+                        <div class="icon">📡</div>
+                        <div>해당하는 에이전트가 없습니다</div>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = filtered.map(agent => `
+            <tr data-status="${agent.status}">
+                <td><strong>${agent.store_name}</strong></td>
+                <td>
+                    <span class="status status-${agent.status}">
+                        <span class="status-dot"></span>
+                        ${agent.status === 'online' ? '정상' : agent.status === 'warning' ? '주의' : '오프라인'}
+                    </span>
+                </td>
+                <td>${agent.version || '-'}</td>
+                <td>${agent.capture_mode || '-'}</td>
+                <td>${formatTime(agent.last_heartbeat_at)}</td>
+                <td>${formatTime(agent.last_capture_at)}</td>
+                <td>${agent.queue_length}</td>
+                <td style="color: var(--warning);">${agent.warning_message || '-'}</td>
+            </tr>
+        `).join('');
+    }
+
+    function updateStats(agents) {
+        document.getElementById('stat-online').textContent = agents.filter(a => a.status === 'online').length;
+        document.getElementById('stat-warning').textContent = agents.filter(a => a.status === 'warning').length;
+        document.getElementById('stat-offline').textContent = agents.filter(a => a.status === 'offline').length;
+    }
+
+    function formatTime(isoString) {
+        if (!isoString) return '-';
+        return new Date(isoString).toLocaleTimeString('ko-KR');
+    }
+
+    document.getElementById('filter-status').addEventListener('change', refreshAgents);
+
+    // 30초마다 자동 갱신
+    setInterval(refreshAgents, 30000);
+</script>
+{% endblock %}

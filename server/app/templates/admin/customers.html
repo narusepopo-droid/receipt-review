@@ -1,0 +1,163 @@
+{% extends "admin/base.html" %}
+
+{% block title %}고객 관리{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">고객 관리</h1>
+        <p class="page-subtitle">참여 고객 정보를 확인합니다</p>
+    </div>
+    <div style="display: flex; gap: 12px;">
+        <div style="position: relative;">
+            <input type="text" id="search-input" class="form-input"
+                   placeholder="전화번호 검색" style="padding-left: 40px; width: 250px;">
+            <i data-feather="search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--gray-500);"></i>
+        </div>
+        <select id="filter-consent" class="form-input" style="width: 150px;">
+            <option value="">전체</option>
+            <option value="1">수신동의</option>
+            <option value="0">수신거부</option>
+        </select>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-grid" style="grid-template-columns: repeat(4, 1fr);">
+    <div class="stat-card">
+        <div class="stat-label">전체 고객</div>
+        <div class="stat-value">{{ stats.total | default(0) }}명</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">수신동의</div>
+        <div class="stat-value">{{ stats.opted_in | default(0) }}명</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">재방문</div>
+        <div class="stat-value">{{ stats.returning | default(0) }}명</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">이번 달 신규</div>
+        <div class="stat-value">{{ stats.new_this_month | default(0) }}명</div>
+    </div>
+</div>
+
+<!-- Customer Table -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">고객 목록</h3>
+        <div style="font-size: 13px; color: var(--gray-600);">
+            총 {{ customers | length if customers else 0 }}명
+        </div>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>전화번호</th>
+                        <th>첫 방문</th>
+                        <th>마지막 방문</th>
+                        <th>방문 횟수</th>
+                        <th>수신동의</th>
+                        <th>상태</th>
+                    </tr>
+                </thead>
+                <tbody id="customer-table-body">
+                    {% for customer in customers | default([]) %}
+                    <tr>
+                        <td>
+                            <span style="font-family: monospace; font-weight: 500;">
+                                {{ customer.phone_masked }}
+                            </span>
+                        </td>
+                        <td>{{ customer.first_visit_at.strftime('%Y-%m-%d') if customer.first_visit_at else '-' }}</td>
+                        <td>{{ customer.last_visit_at.strftime('%Y-%m-%d') if customer.last_visit_at else '-' }}</td>
+                        <td>
+                            <span style="font-weight: 600;">{{ customer.visit_count }}회</span>
+                        </td>
+                        <td>
+                            {% if customer.marketing_opt_in %}
+                            <span class="badge badge-success">동의</span>
+                            {% else %}
+                            <span class="badge badge-warning">거부</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if customer.visit_count > 1 %}
+                            <span class="badge badge-info">재방문</span>
+                            {% else %}
+                            <span class="badge" style="background: var(--gray-200); color: var(--gray-700);">신규</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: var(--gray-500); padding: 48px;">
+                            <div style="margin-bottom: 8px;">
+                                <i data-feather="users" style="width: 48px; height: 48px; color: var(--gray-300);"></i>
+                            </div>
+                            아직 참여한 고객이 없습니다
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages and total_pages > 1 %}
+    <div style="padding: 16px 24px; border-top: 1px solid var(--gray-200); display: flex; justify-content: center; gap: 8px;">
+        {% for p in range(1, total_pages + 1) %}
+        <a href="?page={{ p }}" class="btn btn-sm {{ 'btn-primary' if p == current_page else 'btn-outline' }}">
+            {{ p }}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- Info Notice -->
+<div style="margin-top: 24px; padding: 20px; background: var(--gray-100); border-radius: 12px; display: flex; align-items: start; gap: 16px;">
+    <div style="width: 40px; height: 40px; background: var(--primary-light); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        <i data-feather="shield" style="width: 20px; height: 20px; color: var(--primary);"></i>
+    </div>
+    <div>
+        <div style="font-weight: 600; margin-bottom: 4px;">개인정보 보호 안내</div>
+        <div style="font-size: 14px; color: var(--gray-600); line-height: 1.6;">
+            고객의 실제 전화번호는 보안을 위해 마스킹 처리되어 표시됩니다.<br>
+            수신동의 고객에게만 마케팅 문자를 발송할 수 있으며, 발송은 시스템 내에서만 가능합니다.
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Search functionality
+document.getElementById('search-input').addEventListener('input', function() {
+    filterTable();
+});
+
+document.getElementById('filter-consent').addEventListener('change', function() {
+    filterTable();
+});
+
+function filterTable() {
+    const search = document.getElementById('search-input').value.toLowerCase();
+    const consent = document.getElementById('filter-consent').value;
+    const rows = document.querySelectorAll('#customer-table-body tr');
+
+    rows.forEach(row => {
+        const phone = row.cells[0]?.textContent.toLowerCase() || '';
+        const hasConsent = row.querySelector('.badge-success') ? '1' : '0';
+
+        const matchSearch = !search || phone.includes(search);
+        const matchConsent = !consent || hasConsent === consent;
+
+        row.style.display = matchSearch && matchConsent ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

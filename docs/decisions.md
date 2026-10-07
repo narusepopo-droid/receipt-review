@@ -8,10 +8,11 @@
 - 독립된 새 Git 저장소로 시작
 - 기본값: D1~D13 (CLAUDE.md 12장 참조)
 
-### HHD SPMC 파일 복사
+### HHD SPMC 파일 복사 + 라이선스 확정 (D12 해결)
 - `C:\PosAssist\`에서 HHD 관련 파일만 `agent/lib/hhdspmc/`로 복사
 - 이후 PosAssist 폴더에 접근하지 않음
 - 복사된 파일: hhdspmc.dll, Interop.hhdspmcLib.dll, 드라이버, 라이선스
+- **SPMC 라이선스 있음** — 영수증리뷰에도 사용 가능 (D12 확정)
 
 ### 고객 DB 및 문자 발송 범위 확정
 **우리가 하는 것:**
