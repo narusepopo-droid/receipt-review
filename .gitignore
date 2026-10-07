@@ -1,0 +1,74 @@
+# 환경 설정 및 비밀값
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Node (혹시 사용 시)
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# 영수증 원본 바이너리 (민감 데이터)
+samples/receipts-bin/*
+!samples/receipts-bin/.gitkeep
+
+# 서버 업로드/생성 파일
+server/uploads/
+server/receipts/
+server/static/generated/
+
+# 로그
+*.log
+logs/
+
+# 테스트 출력
+out/
+*.png
+!server/static/**/*.png
+!docs/**/*.png
+
+# DB 덤프
+*.sql
+*.dump
+
+# 빌드 결과물
+agent/ReceiptTap.App/bin/
+agent/ReceiptTap.App/obj/
+agent/ReceiptTap.Core/bin/
+agent/ReceiptTap.Core/obj/
+agent/ReceiptTap.Tests/bin/
+agent/ReceiptTap.Tests/obj/
+agent/installer/Output/
+
+# 설치 파일
+*.exe
+*.msi
+
+# 인증서, 키
+*.pfx
+*.snk
