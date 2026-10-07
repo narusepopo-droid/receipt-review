@@ -369,3 +369,36 @@ class ReceiptRenderer:
         """이미지 저장"""
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         image.save(output_path, "PNG")
+
+
+def render_receipt(parsed_data, output_path: str, paper_width: int = 576):
+    """
+    파싱된 영수증 데이터를 PNG로 렌더링하는 헬퍼 함수
+
+    Args:
+        parsed_data: ParsedReceipt 객체
+        output_path: 저장할 파일 경로
+        paper_width: 용지 폭 (576=80mm, 384=58mm)
+    """
+    renderer = ReceiptRenderer(paper_width=paper_width)
+
+    # ParsedReceipt -> ReceiptData 변환
+    data = ReceiptData(
+        store_name=parsed_data.store_name or "매장명",
+        biz_no=parsed_data.biz_no,
+        owner_name=parsed_data.owner_name,
+        address=parsed_data.address,
+        phone=parsed_data.phone,
+        paid_at=parsed_data.paid_at,
+        approval_no=parsed_data.approval_no,
+        card_issuer=parsed_data.card_issuer,
+        card_no=parsed_data.card_no,
+        installment=parsed_data.installment,
+        total_amount=parsed_data.amount or 0,
+        vat=parsed_data.vat,
+        supply_amount=parsed_data.supply_amount,
+        items=parsed_data.items or []
+    )
+
+    image = renderer.render_from_data(data)
+    renderer.save(image, output_path)
