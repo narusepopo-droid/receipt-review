@@ -12,8 +12,8 @@ def create_thin_bezel_mockup(screen_path, output_path):
     # 폰 크기
     phone_width = 260
     phone_height = 520
-    bezel = 6  # 얇은 베젤
-    corner_radius = 32
+    bezel = 3  # 매우 얇은 베젤
+    corner_radius = 28
 
     # 캔버스
     canvas_width = phone_width + 40
@@ -46,8 +46,14 @@ def create_thin_bezel_mockup(screen_path, output_path):
     screen_w = phone_width - (bezel * 2)
     screen_h = phone_height - (bezel * 2)
 
+    # 화면 영역 배경 (검정)
+    draw.rounded_rectangle(
+        [screen_x, screen_y, screen_x + screen_w, screen_y + screen_h],
+        radius=corner_radius - bezel, fill=(20, 20, 20, 255)
+    )
+
     # 스크린 리사이즈
-    screen_resized = screen.resize((screen_w, screen_h), Image.Resampling.LANCZOS)
+    screen_resized = screen.resize((screen_w, screen_h), Image.Resampling.LANCZOS).convert('RGBA')
 
     # 라운드 마스크
     mask = Image.new('L', (screen_w, screen_h), 0)
@@ -58,13 +64,13 @@ def create_thin_bezel_mockup(screen_path, output_path):
     screen_with_corners.paste(screen_resized, (0, 0), mask)
     canvas.paste(screen_with_corners, (screen_x, screen_y), screen_with_corners)
 
-    # 카메라 구멍 (펀치홀)
-    camera_size = 10
+    # 카메라 구멍 (펀치홀) - 작게
+    camera_size = 8
     camera_x = phone_x + phone_width // 2
-    camera_y = phone_y + bezel + 12
+    camera_y = phone_y + bezel + 10
     draw.ellipse([camera_x - camera_size//2, camera_y - camera_size//2,
                   camera_x + camera_size//2, camera_y + camera_size//2],
-                 fill=(15, 15, 15, 255))
+                 fill=(10, 10, 10, 255))
 
     # 하단 네비게이션 바 (투명)
     nav_bar = Image.new('RGBA', (screen_w, 28), (0, 0, 0, 0))
