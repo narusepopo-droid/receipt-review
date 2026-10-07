@@ -193,7 +193,7 @@ async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
         return LoginResponse(success=False, message="비밀번호가 올바르지 않습니다")
 
     if store.status == StoreStatus.PAUSED:
-        return LoginResponse(success=False, message="결제가 완료되지 않았습니다. 결제를 먼저 진행해주세요.")
+        return LoginResponse(success=False, message="승인 대기 중입니다. 담당자 승인 후 로그인 가능합니다.")
 
     token = generate_token(store.id)
 

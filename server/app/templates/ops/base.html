@@ -440,6 +440,11 @@
 
                 <div class="nav-section">
                     <div class="nav-section-title">관리</div>
+                    <a href="/ops/signups" class="nav-item {% if '/ops/signups' in request.url.path %}active{% endif %}">
+                        <span class="icon">📝</span>
+                        가입 신청
+                        <span class="badge" id="signup-badge"></span>
+                    </a>
                     <a href="/ops/stores" class="nav-item {% if '/ops/stores' in request.url.path %}active{% endif %}">
                         <span class="icon">🏪</span>
                         매장 관리
@@ -512,6 +517,25 @@
                 return null;
             }
         }
+
+        // 가입 신청 대기 건수 업데이트
+        async function updateSignupBadge() {
+            try {
+                const res = await fetch('/ops/api/signups/pending-count');
+                const data = await res.json();
+                const badge = document.getElementById('signup-badge');
+                if (badge && data.pending_count > 0) {
+                    badge.textContent = data.pending_count;
+                    badge.style.display = 'inline-flex';
+                } else if (badge) {
+                    badge.style.display = 'none';
+                }
+            } catch (e) {}
+        }
+
+        // 페이지 로드 시 + 30초마다 업데이트
+        updateSignupBadge();
+        setInterval(updateSignupBadge, 30000);
     </script>
     {% block extra_js %}{% endblock %}
 </body>

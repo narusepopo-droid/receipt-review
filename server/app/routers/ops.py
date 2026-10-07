@@ -10,8 +10,12 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Form, Up
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, and_, select
 from pydantic import BaseModel
+
+from app.db import get_db
+from app.models.store import Store, StoreStatus
 
 router = APIRouter(prefix="/ops", tags=["operations"])
 
@@ -465,3 +469,92 @@ async def set_latest_version(request: Request, version: str):
     # TODO: DB에서 latest 플래그 업데이트
 
     return JSONResponse({"success": True, "latest_version": version})
+
+
+# ============ 가입 신청 관리 ============
+
+@router.get("/signups", response_class=HTMLResponse)
+async def signups_list(request: Request, db: AsyncSession = Depends(get_db)):
+    """가입 신청 목록 (승인 대기)"""
+    if not verify_ops_session(request):
+        return RedirectResponse(url="/ops/login", status_code=303)
+
+    # 승인 대기 중인 매장 (status=paused)
+    stmt = select(Store).where(Store.status == StoreStatus.PAUSED).order_by(Store.created_at.desc())
+    result = await db.execute(stmt)
+    pending_stores = result.scalars().all()
+
+    # 승인 완료된 매장 (status=active) - 최근 20개
+    stmt = select(Store).where(Store.status == StoreStatus.ACTIVE).order_by(Store.created_at.desc()).limit(20)
+    result = await db.execute(stmt)
+    approved_stores = result.scalars().all()
+
+    return templates.TemplateResponse("ops/signups.html", {
+        "request": request,
+        "pending_stores": pending_stores,
+        "approved_stores": approved_stores
+    })
+
+
+@router.post("/signups/{store_id}/approve")
+async def approve_signup(request: Request, store_id: int, db: AsyncSession = Depends(get_db)):
+    """가입 승인"""
+    if not verify_ops_session(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+    stmt = select(Store).where(Store.id == store_id)
+    result = await db.execute(stmt)
+    store = result.scalar_one_or_none()
+
+    if not store:
+        return JSONResponse({"error": "매장을 찾을 수 없습니다"}, status_code=404)
+
+    store.status = StoreStatus.ACTIVE
+    await db.commit()
+
+    # TODO: 승인 알림 문자 발송 (알리고 연동 후)
+    # sms_message = f"[영수증리뷰] {store.name} 가입이 승인되었습니다. 로그인하여 프로그램을 다운로드하세요."
+    # send_sms(store.phone, sms_message)
+
+    return JSONResponse({
+        "success": True,
+        "store_id": store_id,
+        "store_name": store.name,
+        "message": "승인 완료"
+    })
+
+
+@router.post("/signups/{store_id}/reject")
+async def reject_signup(request: Request, store_id: int, db: AsyncSession = Depends(get_db)):
+    """가입 거절 (삭제)"""
+    if not verify_ops_session(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+    stmt = select(Store).where(Store.id == store_id)
+    result = await db.execute(stmt)
+    store = result.scalar_one_or_none()
+
+    if not store:
+        return JSONResponse({"error": "매장을 찾을 수 없습니다"}, status_code=404)
+
+    await db.delete(store)
+    await db.commit()
+
+    return JSONResponse({
+        "success": True,
+        "store_id": store_id,
+        "message": "삭제 완료"
+    })
+
+
+@router.get("/api/signups/pending-count")
+async def pending_count_api(request: Request, db: AsyncSession = Depends(get_db)):
+    """승인 대기 건수 API (대시보드 실시간 갱신용)"""
+    if not verify_ops_session(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+    stmt = select(func.count(Store.id)).where(Store.status == StoreStatus.PAUSED)
+    result = await db.execute(stmt)
+    count = result.scalar() or 0
+
+    return JSONResponse({"pending_count": count})
