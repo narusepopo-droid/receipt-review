@@ -320,33 +320,39 @@ async def download_tables(
     request: Request,
     format: str = "pdf",
     count: int = 10,
-    start: int = 1
+    start: int = 1,
+    size: str = "A6"
 ):
     """테이블 안내판 다운로드"""
     store = get_current_store(request)
     if not store:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다")
 
-    # TODO: 실제 PDF/PNG 생성 로직
-    # 지금은 플레이스홀더 응답
+    from app.services.signage import SignageConfig, generate_signage_pdf, generate_signage_png
+
+    config = SignageConfig(
+        store_name=store.get("name", "매장명"),
+        store_code=store.get("store_code", "TEST"),
+        benefit_text=store.get("benefit_text", "리뷰 작성 시 음료 1잔 서비스"),
+        table_count=count,
+        size=size
+    )
 
     if format == "pdf":
-        # PDF 생성 (추후 구현)
-        content = b"PDF placeholder"
+        pdf_bytes = generate_signage_pdf(config)
         return Response(
-            content=content,
+            content=pdf_bytes,
             media_type="application/pdf",
             headers={
                 "Content-Disposition": f"attachment; filename=tables_{start}-{start+count-1}.pdf"
             }
         )
     else:
-        # PNG ZIP 생성
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
             for i in range(start, start + count):
-                # 플레이스홀더 PNG
-                zip_file.writestr(f"table_{i}.png", b"PNG placeholder")
+                png_bytes = generate_signage_png(config, i)
+                zip_file.writestr(f"table_{i}.png", png_bytes)
 
         zip_buffer.seek(0)
         return StreamingResponse(
