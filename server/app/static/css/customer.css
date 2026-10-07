@@ -500,46 +500,64 @@ body {
 /* 단계 안내 */
 .steps {
     margin-bottom: var(--spacing-lg);
+    background: var(--color-white);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    box-shadow: var(--shadow-sm);
 }
 
 .steps__title {
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    color: var(--color-text-secondary);
-    margin-bottom: var(--spacing-md);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-lg);
+    text-align: center;
 }
 
 .step {
     display: flex;
-    gap: var(--spacing-md);
-    margin-bottom: var(--spacing-md);
+    align-items: center;
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-lg);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.step:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
 }
 
 .step__number {
-    width: 28px;
-    height: 28px;
+    width: 48px;
+    height: 48px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: var(--font-size-sm);
-    font-weight: 700;
+    font-size: var(--font-size-xl);
+    font-weight: 800;
     color: white;
-    background: var(--color-primary);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
     border-radius: 50%;
+    box-shadow: 0 4px 12px rgba(3, 199, 90, 0.3);
 }
 
 .step__content {
     flex: 1;
-    padding-top: 2px;
 }
 
 .step__text {
-    font-size: var(--font-size-base);
+    font-size: var(--font-size-lg);
+    font-weight: 500;
     color: var(--color-text);
     line-height: 1.5;
+}
+
+.step__text strong {
+    color: var(--color-primary);
+    font-weight: 700;
 }
 
 /* 완료 화면 */
