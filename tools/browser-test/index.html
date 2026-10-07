@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>영수증리뷰 브라우저 테스트</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Noto Sans KR', sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            padding: 16px;
+            padding-bottom: 100px;
+        }
+
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 20px;
+            text-align: center;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+
+        .section {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 12px;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 8px;
+            transition: transform 0.1s, opacity 0.1s;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+            opacity: 0.9;
+        }
+
+        .btn-primary {
+            background: #03C75A;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #e8e8e8;
+            color: #333;
+        }
+
+        .btn-main {
+            background: linear-gradient(135deg, #03C75A 0%, #00a648 100%);
+            color: white;
+            padding: 20px;
+            font-size: 17px;
+        }
+
+        .result {
+            margin-top: 8px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .result.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            display: block;
+        }
+
+        .result.error {
+            background: #ffebee;
+            color: #c62828;
+            display: block;
+        }
+
+        .result.info {
+            background: #e3f2fd;
+            color: #1565c0;
+            display: block;
+        }
+
+        .input-group {
+            margin-bottom: 12px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .receipt-preview {
+            background: #fafafa;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+
+        .receipt-preview img {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 4px;
+        }
+
+        .text-preview {
+            background: #fff9e6;
+            border: 1px solid #ffe082;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .browser-info {
+            background: #f0f0f0;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 16px;
+            word-break: break-all;
+        }
+
+        .test-log {
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 16px;
+        }
+
+        .test-log div {
+            margin-bottom: 4px;
+        }
+
+        .test-log .time {
+            color: #888;
+        }
+
+        .test-log .success {
+            color: #4caf50;
+        }
+
+        .test-log .error {
+            color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>영수증리뷰 브라우저 테스트</h1>
+        <p class="subtitle">복사·저장·이동 기능 테스트</p>
+
+        <div class="browser-info" id="browserInfo"></div>
+
+        <!-- 1. 문구 복사 테스트 -->
+        <div class="section">
+            <div class="section-title">1. 문구 복사 테스트</div>
+            <div class="text-preview" id="reviewText">
+                돼지김치찌개 정말 맛있었어요! 직원분들이 친절하셔서 기분 좋게 식사했습니다. 다음에 또 올게요.
+            </div>
+            <button class="btn btn-secondary" onclick="testCopy()">문구 복사</button>
+            <div class="result" id="copyResult"></div>
+        </div>
+
+        <!-- 2. 이미지 저장 테스트 -->
+        <div class="section">
+            <div class="section-title">2. 이미지 저장 테스트</div>
+            <div class="receipt-preview">
+                <canvas id="receiptCanvas" width="288" height="200"></canvas>
+            </div>
+            <button class="btn btn-secondary" onclick="testImageSave()">이미지 저장</button>
+            <div class="result" id="saveResult"></div>
+        </div>
+
+        <!-- 3. 네이버 URL 열기 -->
+        <div class="section">
+            <div class="section-title">3. 네이버 URL 열기</div>
+            <div class="input-group">
+                <label>테스트할 네이버 리뷰 URL (없으면 기본값 사용)</label>
+                <input type="url" id="naverUrl" placeholder="https://m.place.naver.com/...">
+            </div>
+            <button class="btn btn-secondary" onclick="testNaverOpen()">네이버 열기</button>
+            <div class="result" id="naverResult"></div>
+        </div>
+
+        <!-- 4. 한 번에 전부 (핵심 테스트) -->
+        <div class="section">
+            <div class="section-title">4. 복사 + 저장 + 이동 (한 번에)</div>
+            <p style="font-size: 13px; color: #666; margin-bottom: 12px;">
+                이 버튼이 가장 중요합니다. 한 번 탭으로 세 가지가 모두 되어야 합니다.
+            </p>
+            <button class="btn btn-main" onclick="testAll()">
+                영수증 저장 + 문구 복사하고<br>네이버로 이동
+            </button>
+            <div class="result" id="allResult"></div>
+        </div>
+
+        <!-- 테스트 로그 -->
+        <div class="section">
+            <div class="section-title">테스트 로그</div>
+            <div class="test-log" id="testLog"></div>
+        </div>
+    </div>
+
+    <script>
+        // 브라우저 정보 표시
+        function detectBrowser() {
+            const ua = navigator.userAgent;
+            let browser = '알 수 없음';
+            let inApp = false;
+
+            if (ua.includes('KAKAOTALK')) {
+                browser = '카카오톡 인앱';
+                inApp = true;
+            } else if (ua.includes('NAVER(inapp')) {
+                browser = '네이버앱 인앱';
+                inApp = true;
+            } else if (ua.includes('Instagram')) {
+                browser = '인스타그램 인앱';
+                inApp = true;
+            } else if (ua.includes('FBAN') || ua.includes('FBAV')) {
+                browser = '페이스북 인앱';
+                inApp = true;
+            } else if (ua.includes('Line')) {
+                browser = '라인 인앱';
+                inApp = true;
+            } else if (ua.includes('SamsungBrowser')) {
+                browser = '삼성인터넷';
+            } else if (ua.includes('Chrome') && !ua.includes('Edg')) {
+                browser = 'Chrome';
+            } else if (ua.includes('Safari') && !ua.includes('Chrome')) {
+                browser = 'Safari';
+            } else if (ua.includes('Firefox')) {
+                browser = 'Firefox';
+            }
+
+            const isIOS = /iPad|iPhone|iPod/.test(ua);
+            const isAndroid = /Android/.test(ua);
+            const platform = isIOS ? 'iOS' : (isAndroid ? 'Android' : 'Desktop');
+
+            document.getElementById('browserInfo').innerHTML =
+                `<strong>플랫폼:</strong> ${platform}<br>` +
+                `<strong>브라우저:</strong> ${browser}${inApp ? ' (인앱)' : ''}<br>` +
+                `<strong>UA:</strong> ${ua.substring(0, 100)}...`;
+
+            return { browser, platform, inApp };
+        }
+
+        const browserInfo = detectBrowser();
+
+        // 로그 기록
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('testLog');
+            const time = new Date().toLocaleTimeString();
+            logEl.innerHTML += `<div><span class="time">[${time}]</span> <span class="${type}">${message}</span></div>`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        // 결과 표시
+        function showResult(id, message, type) {
+            const el = document.getElementById(id);
+            el.className = 'result ' + type;
+            el.textContent = message;
+        }
+
+        // 테스트용 영수증 이미지 생성
+        function createReceiptImage() {
+            const canvas = document.getElementById('receiptCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // 배경
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 텍스트
+            ctx.fillStyle = 'black';
+            ctx.font = 'bold 16px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('맛있는 식당', canvas.width/2, 30);
+
+            ctx.font = '12px monospace';
+            ctx.fillText('사업자번호: 123-45-67890', canvas.width/2, 50);
+            ctx.fillText('─'.repeat(24), canvas.width/2, 70);
+
+            ctx.textAlign = 'left';
+            ctx.fillText('돼지김치찌개 x2   18,000', 20, 95);
+            ctx.fillText('계란말이 x1        8,000', 20, 115);
+            ctx.fillText('공기밥 x2          2,000', 20, 135);
+
+            ctx.textAlign = 'center';
+            ctx.fillText('─'.repeat(24), canvas.width/2, 155);
+            ctx.font = 'bold 14px monospace';
+            ctx.fillText('합계: 28,000원', canvas.width/2, 180);
+
+            return canvas;
+        }
+
+        createReceiptImage();
+
+        // 1. 문구 복사 테스트
+        async function testCopy() {
+            const text = document.getElementById('reviewText').textContent.trim();
+            log('문구 복사 시도...');
+
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    log('✓ Clipboard API로 복사 성공', 'success');
+                    showResult('copyResult', '✓ 복사 성공! 다른 앱에서 붙여넣기 해보세요.', 'success');
+                } else {
+                    throw new Error('Clipboard API 없음');
+                }
+            } catch (e) {
+                log('Clipboard API 실패, execCommand 시도...', 'error');
+
+                // 폴백: execCommand
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.select();
+
+                try {
+                    const success = document.execCommand('copy');
+                    document.body.removeChild(textarea);
+
+                    if (success) {
+                        log('✓ execCommand로 복사 성공', 'success');
+                        showResult('copyResult', '✓ 복사 성공! 다른 앱에서 붙여넣기 해보세요.', 'success');
+                    } else {
+                        throw new Error('execCommand 실패');
+                    }
+                } catch (e2) {
+                    document.body.removeChild(textarea);
+                    log('✗ 복사 실패: ' + e2.message, 'error');
+                    showResult('copyResult', '✗ 복사 실패. 문구를 길게 눌러 직접 복사해주세요.', 'error');
+                }
+            }
+        }
+
+        // 2. 이미지 저장 테스트
+        async function testImageSave() {
+            const canvas = document.getElementById('receiptCanvas');
+            log('이미지 저장 시도...');
+
+            try {
+                // Canvas를 Blob으로 변환
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                const file = new File([blob], 'receipt.png', { type: 'image/png' });
+
+                // iOS: Web Share API 사용
+                if (browserInfo.platform === 'iOS' && navigator.share && navigator.canShare) {
+                    if (navigator.canShare({ files: [file] })) {
+                        log('iOS: Web Share API 사용', 'info');
+                        await navigator.share({
+                            files: [file],
+                            title: '영수증',
+                        });
+                        log('✓ 공유 완료 (이미지 저장 선택 필요)', 'success');
+                        showResult('saveResult', '✓ 공유 창이 열렸습니다. "이미지 저장"을 선택하세요.', 'success');
+                        return;
+                    }
+                }
+
+                // Android / Desktop: 다운로드 링크
+                log('다운로드 링크 방식 사용', 'info');
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'receipt_' + Date.now() + '.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                log('✓ 다운로드 시작됨', 'success');
+                showResult('saveResult', '✓ 다운로드가 시작되었습니다. 갤러리/다운로드 폴더를 확인하세요.', 'success');
+
+            } catch (e) {
+                log('✗ 이미지 저장 실패: ' + e.message, 'error');
+                showResult('saveResult', '✗ 저장 실패. 이미지를 길게 눌러 직접 저장해주세요.', 'error');
+            }
+        }
+
+        // 3. 네이버 URL 열기
+        function testNaverOpen() {
+            let url = document.getElementById('naverUrl').value.trim();
+            if (!url) {
+                url = 'https://m.place.naver.com/restaurant/1234567890/review/visitor';
+            }
+
+            log('네이버 URL 열기: ' + url);
+
+            try {
+                window.location.href = url;
+                // 이동하므로 여기까지 오지 않음
+            } catch (e) {
+                log('✗ URL 열기 실패: ' + e.message, 'error');
+                showResult('naverResult', '✗ 이동 실패: ' + e.message, 'error');
+            }
+        }
+
+        // 4. 한 번에 전부 테스트
+        async function testAll() {
+            log('=== 복사 + 저장 + 이동 테스트 시작 ===');
+
+            const text = document.getElementById('reviewText').textContent.trim();
+            const canvas = document.getElementById('receiptCanvas');
+            let url = document.getElementById('naverUrl').value.trim();
+            if (!url) {
+                url = 'https://m.place.naver.com/restaurant/1234567890/review/visitor';
+            }
+
+            let copyOk = false;
+            let saveOk = false;
+
+            // 1. 복사
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    copyOk = true;
+                } else {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.style.position = 'fixed';
+                    textarea.style.left = '-9999px';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    copyOk = document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                }
+                log(copyOk ? '✓ 복사 성공' : '✗ 복사 실패', copyOk ? 'success' : 'error');
+            } catch (e) {
+                log('✗ 복사 실패: ' + e.message, 'error');
+            }
+
+            // 2. 이미지 저장
+            try {
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                const file = new File([blob], 'receipt.png', { type: 'image/png' });
+
+                if (browserInfo.platform === 'iOS' && navigator.share && navigator.canShare) {
+                    if (navigator.canShare({ files: [file] })) {
+                        log('iOS: Web Share API로 공유 시도');
+                        await navigator.share({ files: [file], title: '영수증' });
+                        saveOk = true;
+                        log('✓ 공유 완료', 'success');
+
+                        // iOS에서는 공유 후 자동 이동이 안 될 수 있음
+                        showResult('allResult',
+                            '공유 창에서 이미지를 저장하셨다면, 아래 버튼을 눌러 네이버로 이동하세요.',
+                            'info');
+
+                        // 네이버로 이동 버튼 추가
+                        const btn = document.createElement('button');
+                        btn.className = 'btn btn-primary';
+                        btn.textContent = '네이버로 이동';
+                        btn.style.marginTop = '8px';
+                        btn.onclick = () => { window.location.href = url; };
+                        document.getElementById('allResult').after(btn);
+                        return;
+                    }
+                }
+
+                // Android
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = 'receipt_' + Date.now() + '.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(blobUrl);
+                saveOk = true;
+                log('✓ 다운로드 시작', 'success');
+
+            } catch (e) {
+                log('✗ 이미지 저장 실패: ' + e.message, 'error');
+            }
+
+            // 3. 1초 후 네이버로 이동 (Android)
+            if (browserInfo.platform !== 'iOS') {
+                log('1초 후 네이버로 이동...');
+                showResult('allResult',
+                    `복사: ${copyOk ? '✓' : '✗'} | 저장: ${saveOk ? '✓' : '✗'} | 1초 후 네이버로 이동합니다.`,
+                    copyOk && saveOk ? 'success' : 'info');
+
+                setTimeout(() => {
+                    window.location.href = url;
+                }, 1000);
+            }
+        }
+
+        log('테스트 페이지 로드 완료');
+        log('브라우저: ' + browserInfo.browser + ' (' + browserInfo.platform + ')');
+    </script>
+</body>
+</html>
