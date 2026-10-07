@@ -1,0 +1,23 @@
+{
+  "store_name": "맛있는 식당",
+  "biz_no": "123-45-67890",
+  "owner_name": "홍길동",
+  "address": "서울시 강남구 테헤란로 123",
+  "phone": "02-1234-5678",
+
+  "items": [
+    {"name": "돼지김치찌개", "qty": 2, "price": 18000},
+    {"name": "계란말이", "qty": 1, "price": 8000},
+    {"name": "공기밥", "qty": 2, "price": 2000}
+  ],
+
+  "supply_amount": 25455,
+  "vat": 2545,
+  "total_amount": 28000,
+
+  "card_issuer": "신한카드",
+  "card_no": "5412-34**-****-1234",
+  "installment": "일시불",
+  "approval_no": "12345678",
+  "paid_at": "2026-10-07 12:34:56"
+}
