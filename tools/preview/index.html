@@ -552,7 +552,7 @@
             <div class="card">
                 <div class="card__title">영수증</div>
                 <div class="receipt-preview">
-                    <canvas id="receiptCanvas" width="260" height="300"></canvas>
+                    <canvas id="receiptCanvas" width="320" height="500"></canvas>
                 </div>
             </div>
 
@@ -630,51 +630,104 @@
             event.target.classList.add('active');
         }
 
-        // 영수증 그리기 (실제 완료 영수증 형태)
+        // 영수증 그리기 (실제 완료 영수증 형태 - 픽셀 정렬)
         const canvas = document.getElementById('receiptCanvas');
         const ctx = canvas.getContext('2d');
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const w = canvas.width;
+        const lh = 18;
+        const pad = 15;
+        const COL_NAME = pad;
+        const COL_PRICE = w * 0.45;
+        const COL_QTY = w * 0.7;
+        const COL_TOTAL = w - pad;
+
+        ctx.fillStyle = '#FAFAFA';
+        ctx.fillRect(0, 0, w, canvas.height);
         ctx.fillStyle = 'black';
 
-        let y = 18;
-        const lh = 14;
-        const cx = canvas.width / 2;
+        let y = 20;
 
-        ctx.font = '10px monospace';
+        // 타이틀
+        ctx.font = 'bold 14px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('[ 영 수 증 ]', cx, y); y += lh + 3;
+        ctx.fillText('[ 영 수 증 ]', w/2, y); y += lh * 1.5;
 
-        ctx.font = 'bold 12px monospace';
-        ctx.fillText('노은뜨랑한우(식당)', cx, y); y += lh;
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillText('다산식육식당', w/2, y); y += lh;
 
-        ctx.font = '9px monospace';
-        ctx.fillText('461-88-02818 TEL:042)822-8566', cx, y); y += lh;
-        ctx.fillText('대전 유성구 노은동로75번길 48', cx, y); y += lh + 3;
+        ctx.font = '10px sans-serif';
+        ctx.fillText('607-19-41861 TEL: 051-525-7737', w/2, y); y += lh;
+        ctx.fillText('부산광역시 동래구 명장로20번길 23', w/2, y); y += lh * 1.5;
 
-        ctx.fillText('2026-10-07 15:57(월) POS:01', cx, y); y += lh + 3;
-        ctx.fillText('─'.repeat(26), cx, y); y += lh;
+        const now = new Date();
+        const dateStr = now.toLocaleString('ko-KR').replace(/\./g, '-');
+        ctx.fillText(dateStr, w/2, y); y += lh;
 
+        // 구분선
+        ctx.beginPath();
+        ctx.moveTo(pad, y); ctx.lineTo(w - pad, y);
+        ctx.stroke(); y += lh * 0.8;
+
+        // 테이블 헤더
+        ctx.font = '10px sans-serif';
         ctx.textAlign = 'left';
-        ctx.font = '9px monospace';
-        ctx.fillText('한우천국스페셜    192,150', 12, y); y += lh;
-        ctx.fillText('소주 x4            20,000', 12, y); y += lh;
-        ctx.fillText('상차림 x3          12,000', 12, y); y += lh;
-        ctx.fillText('육회150g           25,000', 12, y); y += lh + 3;
+        ctx.fillText('상품', COL_NAME, y);
+        ctx.textAlign = 'right';
+        ctx.fillText('단가', COL_PRICE, y);
+        ctx.fillText('수량', COL_QTY, y);
+        ctx.fillText('금액', COL_TOTAL, y); y += lh * 0.8;
 
+        ctx.beginPath();
+        ctx.moveTo(pad, y); ctx.lineTo(w - pad, y);
+        ctx.stroke(); y += lh * 0.8;
+
+        // 품목
+        const items = [
+            ['모듬6', '60,000', '1', '60,000'],
+            ['모듬3', '30,000', '1', '30,000'],
+            ['양념갈비(1인)', '3,000', '3', '9,000'],
+            ['된장+밥', '3,000', '1', '3,000'],
+            ['냉면', '4,000', '1', '4,000'],
+        ];
+        ctx.font = '10px sans-serif';
+        items.forEach(([name, price, qty, total]) => {
+            ctx.textAlign = 'left';
+            ctx.fillText(name, COL_NAME, y);
+            ctx.textAlign = 'right';
+            ctx.fillText(price, COL_PRICE, y);
+            ctx.fillText(qty, COL_QTY, y);
+            ctx.fillText(total, COL_TOTAL, y);
+            y += lh;
+        });
+
+        y += 5;
+        ctx.beginPath();
+        ctx.moveTo(pad, y); ctx.lineTo(w - pad, y);
+        ctx.stroke(); y += lh;
+
+        // 합계
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('합    계::', COL_NAME, y);
+        ctx.textAlign = 'right';
+        ctx.fillText('106,000', COL_TOTAL, y); y += lh;
+
+        ctx.fillText('받은금액::', COL_NAME, y);
+        ctx.textAlign = 'right';
+        ctx.fillText('106,000', COL_TOTAL, y); y += lh * 1.5;
+
+        // 카드 정보
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('NH체크카드 9441-16**-****-546*', COL_NAME, y); y += lh;
+        ctx.font = 'bold 10px sans-serif';
+        ctx.fillText('승인번호: 75966773', COL_NAME, y); y += lh * 1.5;
+
+        // 발행일시
+        ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('─'.repeat(26), cx, y); y += lh;
-
-        ctx.font = 'bold 10px monospace';
-        ctx.fillText('합  계: 249,150원', cx, y); y += lh;
-        ctx.fillText('받은금액: 249,150원', cx, y); y += lh + 3;
-
-        ctx.font = '9px monospace';
-        ctx.fillText('─'.repeat(26), cx, y); y += lh;
-        ctx.fillText('신용카드 매출전표 [고객용]', cx, y); y += lh;
-        ctx.fillText('NH체크카드 9441-16**-****-546*', cx, y); y += lh;
-        ctx.fillText('[승인번호] 75966773', cx, y); y += lh;
-        ctx.fillText('[금액] 249,150원 일시불', cx, y);
+        const issueDate = now.toLocaleDateString('ko-KR') + ' ' + now.toLocaleTimeString('ko-KR');
+        ctx.fillText('발행일시 : ' + issueDate, w/2, y);
 
         // 실시간 시계
         function updateClock() {
