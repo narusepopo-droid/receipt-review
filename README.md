@@ -70,12 +70,40 @@ uvicorn app.main:app --reload --port 8000
 **요구사항**
 - .NET Framework 4.6.2+
 - Visual Studio 2019+ 또는 dotnet CLI
+- HHD SPMC (Serial Port Monitoring Control) 라이선스
 
 **빌드**
 
 ```bash
 cd agent
+dotnet restore
 dotnet build -c Release
+```
+
+**설치 파일 생성 (Inno Setup)**
+
+```bash
+# Inno Setup 6 설치 후
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer/ReceiptTap.iss
+```
+
+**프로젝트 구조**
+
+```
+agent/
+├── ReceiptTap.sln           # 솔루션 파일
+├── ReceiptTap.Core/         # 핵심 라이브러리 (카솔 연동 대비)
+│   ├── IReceiptCapture.cs   # 캡처 인터페이스
+│   ├── ReceiptUploader.cs   # 서버 업로드
+│   ├── LocalQueue.cs        # 로컬 큐 (실패 시 재시도)
+│   └── AgentConfig.cs       # 설정 (DPAPI 암호화)
+├── ReceiptTap.App/          # 트레이 앱
+│   ├── Program.cs           # 진입점
+│   ├── TrayApplicationContext.cs
+│   ├── ActivationForm.cs    # 활성화 코드 입력
+│   └── SettingsForm.cs      # 프린터 설정
+└── installer/
+    └── ReceiptTap.iss       # Inno Setup 스크립트
 ```
 
 ## 환경변수 (.env)
