@@ -1,0 +1,61 @@
+# Receipt Review Server - Requirements
+# Python 3.11+
+
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+uvloop>=0.19.0
+httptools>=0.6.0
+
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9
+alembic>=1.12.0
+asyncpg>=0.29.0
+
+# Validation & Serialization
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+email-validator>=2.1.0
+
+# Templating
+jinja2>=3.1.2
+
+# Image Processing
+pillow>=10.1.0
+qrcode>=7.4.0
+
+# Security
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+cryptography>=41.0.0
+
+# Scheduler
+apscheduler>=3.10.0
+
+# HTTP Client (for external APIs)
+httpx>=0.25.0
+
+# File handling
+python-multipart>=0.0.6
+aiofiles>=23.2.0
+
+# Environment
+python-dotenv>=1.0.0
+
+# Logging
+structlog>=23.2.0
+
+# Date/Time
+python-dateutil>=2.8.0
+
+# Development
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+black>=23.11.0
+ruff>=0.1.0
+mypy>=1.7.0
+
+# SMS (Phase 8)
+# aligo-sdk>=1.0.0

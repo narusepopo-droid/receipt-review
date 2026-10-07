@@ -1,0 +1,53 @@
+[Unit]
+Description=Receipt Review API Server
+Documentation=https://github.com/narusepopo-droid/receipt-review
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=exec
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/receipt-review/server
+
+# Environment
+EnvironmentFile=/var/www/receipt-review/server/.env
+
+# Python virtual environment
+Environment="PATH=/var/www/receipt-review/server/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+
+# Start command
+ExecStart=/var/www/receipt-review/server/.venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 4 \
+    --loop uvloop \
+    --http httptools \
+    --access-log \
+    --log-level info
+
+# Restart policy
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Resource limits
+LimitNOFILE=65535
+LimitNPROC=4096
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/www/receipt-review/server/uploads
+ReadWritePaths=/var/www/receipt-review/server/logs
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=receipt-review
+
+[Install]
+WantedBy=multi-user.target
