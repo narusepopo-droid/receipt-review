@@ -21,6 +21,11 @@ class NoReceiptAvailableError(Exception):
     pass
 
 
+class AssignLimitExceededError(NoReceiptAvailableError):
+    """매장 시간당/일일 배정 상한 도달"""
+    pass
+
+
 class AlreadyParticipatedError(Exception):
     """오늘 이미 참여함"""
     def __init__(self, session: ReviewSession):
@@ -74,6 +79,21 @@ class AssignmentService:
         now = datetime.now(timezone.utc)
         cutoff = store_settings.business_day_cutoff if store_settings else "05:00"
         business_day_start = self.get_business_day_start(cutoff)
+
+        # 매장 상한 (시간당 / 영업일) - 지시서 5.4-2
+        from sqlalchemy import func as _func
+        if store_settings and store_settings.hourly_assign_limit:
+            n = (await self.db.execute(select(_func.count(ReviewSession.id)).where(
+                ReviewSession.store_id == session.store_id,
+                ReviewSession.assigned_at >= now - timedelta(hours=1)))).scalar() or 0
+            if n >= store_settings.hourly_assign_limit:
+                raise AssignLimitExceededError("시간당 배정 상한에 도달했습니다")
+        if store_settings and store_settings.daily_assign_limit:
+            n = (await self.db.execute(select(_func.count(ReviewSession.id)).where(
+                ReviewSession.store_id == session.store_id,
+                ReviewSession.assigned_at >= business_day_start))).scalar() or 0
+            if n >= store_settings.daily_assign_limit:
+                raise AssignLimitExceededError("오늘 배정 상한에 도달했습니다")
 
         policy = store_settings.assignment_policy if store_settings else "latest_same_day"
 

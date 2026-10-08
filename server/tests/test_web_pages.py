@@ -338,3 +338,50 @@ async def test_table_sign_pdf_and_png(web):
     assert r.status_code == 200 and r.content[:4] == b"%PDF"
     r = await web.get("/admin/tables/download?format=png&count=2")
     assert r.status_code == 200 and r.content[:2] == b"PK"
+
+
+@pytest.mark.asyncio
+async def test_phone_validation_withdraw_and_assign_limit(web, tmp_path, monkeypatch):
+    import sys
+    from pathlib import Path
+    from datetime import timezone
+    from sqlalchemy import select
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import make_sample_escpos as samples
+    from app.routers.auth import generate_token
+    from app.db import get_db
+    from app.main import app
+    from app.models.store import StoreSettings
+    from app.models.customer import StoreCustomer, ConsentLog
+
+    # 번호 형식
+    assert (await web.post("/api/v1/session/start?store_code=WEB01", json={"phone": "abc"})).status_code == 422
+    assert (await web.post("/api/v1/session/start?store_code=WEB01", json={"phone": "02-123-4567"})).status_code == 422
+
+    # 수신동의 → 수신거부
+    r = await web.post("/api/v1/session/start?store_code=WEB01", json={"phone": "010-2222-3333", "marketing_opt_in": True})
+    assert r.status_code == 200
+    assert (await web.get("/optout/WEB01")).status_code == 200
+    r = await web.post("/api/v1/consent/withdraw", json={"phone": "01022223333", "store_code": "WEB01"})
+    assert r.status_code == 200
+    async for s in app.dependency_overrides[get_db]():
+        sc = (await s.execute(select(StoreCustomer))).scalars().all()
+        assert sc and not sc[0].marketing_opt_in and sc[0].opt_out_at
+        logs = (await s.execute(select(ConsentLog))).scalars().all()
+        assert any(l.action.value == "withdraw" for l in logs)
+        # 시간당 상한 1
+        st = (await s.execute(select(StoreSettings))).scalar_one()
+        st.hourly_assign_limit = 1
+        await s.commit()
+
+    monkeypatch.setattr(settings, "RECEIPT_IMAGE_DIR", str(tmp_path / "img"))
+    monkeypatch.setattr(settings, "RECEIPT_RAW_DIR", str(tmp_path / "raw"))
+    auth = {"Authorization": f"Bearer {generate_token(1)}"}
+    for no in (b"30012345", b"30012346"):
+        await web.post("/agent/v1/receipts", headers=auth,
+                       files={"file": ("r.bin", samples.card_receipt().replace(b"30012345", no), "application/octet-stream")},
+                       data={"captured_at": datetime.now(timezone.utc).isoformat()})
+    s1 = (await web.post("/api/v1/session/start?store_code=WEB01", json={"phone": "010-4444-0001"})).json()["session_id"]
+    s2 = (await web.post("/api/v1/session/start?store_code=WEB01", json={"phone": "010-4444-0002"})).json()["session_id"]
+    assert (await web.post(f"/api/v1/session/{s1}/assign")).status_code == 200
+    assert (await web.post(f"/api/v1/session/{s2}/assign")).status_code == 503   # 상한 도달

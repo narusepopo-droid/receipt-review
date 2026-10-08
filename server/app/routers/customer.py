@@ -9,7 +9,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, Response
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+import re
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -226,6 +227,19 @@ class SessionStartRequest(BaseModel):
     marketing_opt_in: bool = False
     table_no: Optional[str] = None
     device_id: Optional[str] = None
+
+    @field_validator("phone")
+    @classmethod
+    def _valid_phone(cls, v: str) -> str:
+        digits = re.sub(r"\D", "", v or "")
+        if not re.fullmatch(r"01[016789]\d{7,8}", digits):
+            raise ValueError("휴대폰 번호를 정확히 입력해주세요")
+        return digits
+
+
+class ConsentWithdrawRequest(BaseModel):
+    phone: str
+    store_code: str
 
 
 class SessionStartResponse(BaseModel):
@@ -621,3 +635,45 @@ async def get_receipt_image(
         media_type="image/png",
         filename=f"receipt_{receipt_id}.png"
     )
+
+
+
+# ============================================================
+# 수신거부 (광고 문자 하단 안내 링크 → 이 화면)
+# ============================================================
+
+@router.post("/api/v1/consent/withdraw")
+async def withdraw_consent(request: ConsentWithdrawRequest, req: Request, db: AsyncSession = Depends(get_db)):
+    """매장 혜택 문자 수신거부 (해당 매장만)"""
+    from app.security import rate_limiter, client_ip
+    from ..models.customer import Customer, StoreCustomer
+    from ..services.customers import hash_phone
+
+    ip = client_ip(req)
+    if not rate_limiter.allow(f"withdraw:{ip}", 20, 3600):
+        raise HTTPException(status_code=429, detail="요청이 너무 많습니다. 잠시 후 다시 시도해주세요.")
+
+    store = await get_store_by_code(request.store_code, db)
+    customer = (await db.execute(select(Customer).where(Customer.phone_hash == hash_phone(request.phone)))).scalar_one_or_none()
+    # 등록 여부를 알려주지 않음 (번호 존재 여부 노출 방지) → 항상 같은 응답
+    if customer:
+        sc = (await db.execute(select(StoreCustomer).where(
+            StoreCustomer.store_id == store.id, StoreCustomer.customer_id == customer.id))).scalar_one_or_none()
+        if sc and sc.marketing_opt_in:
+            sc.marketing_opt_in = False
+            sc.opt_out_at = datetime.now(timezone.utc)
+            await CustomerService(db).record_consent(
+                customer.id, store.id, ConsentType.MARKETING, ConsentAction.WITHDRAW,
+                ip=ip, user_agent=req.headers.get("user-agent"))
+        await db.commit()
+    return {"status": "ok", "message": f"{store.name}의 혜택 문자 수신이 거부되었습니다."}
+
+
+@router.get("/optout/{store_code}", response_class=HTMLResponse)
+async def optout_page(request: Request, store_code: str, db: AsyncSession = Depends(get_db)):
+    """수신거부 화면"""
+    store = await get_store_by_code(store_code, db)
+    return templates.TemplateResponse(
+        request=request, name="customer/optout.html",
+        context={"store": {"name": store.name, "store_code": store.store_code, "naver_review_url": None},
+                 "table_no": ""})

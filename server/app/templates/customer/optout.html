@@ -1,0 +1,53 @@
+{% extends "customer/base.html" %}
+
+{% block title %}문자 수신거부{% endblock %}
+
+{% block content %}
+<div class="card" style="padding: 32px 24px;">
+    <h1 class="card__title" style="font-size: 22px; margin-bottom: 8px;">혜택 문자 수신거부</h1>
+    <p style="font-size: 16px; color: var(--color-text-secondary); line-height: 1.6; margin-bottom: 24px;">
+        <strong>{{ store.name }}</strong>에서 보내는 이벤트·혜택 문자를 더 이상 받지 않습니다.
+    </p>
+
+    <label for="optoutPhone" style="display:block; font-weight:600; margin-bottom:8px;">휴대폰 번호</label>
+    <input id="optoutPhone" type="tel" inputmode="numeric" class="input" placeholder="010-0000-0000"
+           style="width:100%; height:56px; font-size:18px; padding:0 16px; border:1px solid #ddd; border-radius:12px; margin-bottom:16px;">
+
+    <button type="button" id="optoutBtn" class="btn btn--primary btn--large btn--full">수신거부</button>
+    <p id="optoutResult" style="margin-top: 16px; font-size: 16px; text-align: center;"></p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const input = document.getElementById('optoutPhone');
+    const btn = document.getElementById('optoutBtn');
+    const result = document.getElementById('optoutResult');
+    input.addEventListener('input', () => { input.value = window.ReviewApp.PhoneFormatter.format(input.value); });
+    btn.addEventListener('click', async () => {
+        if (!window.ReviewApp.PhoneFormatter.validate(input.value)) {
+            result.textContent = '휴대폰 번호를 정확히 입력해주세요';
+            result.style.color = '#ff4757';
+            return;
+        }
+        btn.disabled = true;
+        try {
+            const r = await fetch('/api/v1/consent/withdraw', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: input.value, store_code: window.STORE_CODE })
+            });
+            const data = await r.json();
+            result.textContent = r.ok ? '✓ ' + data.message : (data.detail || '처리하지 못했습니다');
+            result.style.color = r.ok ? '#03C75A' : '#ff4757';
+        } catch (e) {
+            result.textContent = '네트워크 오류가 발생했습니다';
+            result.style.color = '#ff4757';
+        } finally {
+            btn.disabled = false;
+        }
+    });
+})();
+</script>
+{% endblock %}
