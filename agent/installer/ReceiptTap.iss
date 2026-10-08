@@ -16,8 +16,8 @@ AppPublisherURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
-OutputDir=output
-OutputBaseFilename=ReceiptTap_Setup_{#MyAppVersion}
+OutputDir=Output
+OutputBaseFilename=ReceiptTap_Setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -45,18 +45,8 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-; Install SPMC if needed
-; Filename: "{tmp}\spmc_redist.exe"; Parameters: "/S"; StatusMsg: "SPMC 드라이버 설치 중..."; Check: not IsSPMCInstalled
-
-; Register Windows Service
-Filename: "{app}\{#MyAppExeName}"; Parameters: "--install-service"; StatusMsg: "서비스 등록 중..."; Flags: runhidden waituntilterminated
-
-; Start the application
+; Start the application after install
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
-
-[UninstallRun]
-; Unregister Windows Service
-Filename: "{app}\{#MyAppExeName}"; Parameters: "--uninstall-service"; Flags: runhidden waituntilterminated
 
 [Registry]
 ; Auto-start tray app
