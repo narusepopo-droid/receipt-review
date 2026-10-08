@@ -40,6 +40,7 @@ async def download_page():
     version_info = {
         "version": CURRENT_VERSION,
         "release_date": "2026-10-08",
+        "sha256": "파일 다운로드 후 확인",
     }
 
     html = f"""
