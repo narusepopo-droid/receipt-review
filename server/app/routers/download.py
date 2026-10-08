@@ -1,6 +1,5 @@
-"""
-다운로드 라우터
-설치 파일 다운로드 및 버전 정보 제공
+﻿"""
+?ㅼ슫濡쒕뱶 ?쇱슦???ㅼ튂 ?뚯씪 ?ㅼ슫濡쒕뱶 諛?踰꾩쟾 ?뺣낫 ?쒓났
 """
 import os
 import hashlib
@@ -24,23 +23,23 @@ class VersionInfo(BaseModel):
     release_notes: Optional[str] = None
 
 
-# ============ 설정 ============
+# ============ ?ㅼ젙 ============
 
 INSTALLER_DIR = "app/static/downloads"
-CURRENT_VERSION = "1.0.2"
-CURRENT_FILENAME = "ReceiptTap_v1.0.2.zip"
+CURRENT_VERSION = "1.0.3"
+CURRENT_FILENAME = "ReceiptTap_v1.0.3.zip"
 
 
-# ============ 다운로드 페이지 ============
+# ============ ?ㅼ슫濡쒕뱶 ?섏씠吏 ============
 
 @router.get("/download", response_class=HTMLResponse)
 async def download_page():
-    """설치 파일 다운로드 페이지 - 로그인 필수"""
+    """?ㅼ튂 ?뚯씪 ?ㅼ슫濡쒕뱶 ?섏씠吏 - 濡쒓렇???꾩닔"""
 
     version_info = {
         "version": CURRENT_VERSION,
         "release_date": "2026-10-08",
-        "sha256": "파일 다운로드 후 확인",
+        "sha256": "?뚯씪 ?ㅼ슫濡쒕뱶 ???뺤씤",
     }
 
     html = f"""
@@ -49,7 +48,7 @@ async def download_page():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>영수증리뷰 - 포스 에이전트 다운로드</title>
+        <title>?곸닔利앸━酉?- ?ъ뒪 ?먯씠?꾪듃 ?ㅼ슫濡쒕뱶</title>
         <link rel="preconnect" href="https://cdn.jsdelivr.net">
         <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
         <style>
@@ -202,7 +201,7 @@ async def download_page():
             }}
 
             .requirements li::before {{
-                content: "✓";
+                content: "??;
                 position: absolute;
                 left: 0;
                 color: var(--primary);
@@ -234,22 +233,22 @@ async def download_page():
     <body>
         <div class="container">
             <div class="header">
-                <div class="logo">영수증리뷰</div>
-                <p class="subtitle">포스 에이전트 설치 프로그램</p>
+                <div class="logo">?곸닔利앸━酉?/div>
+                <p class="subtitle">?ъ뒪 ?먯씠?꾪듃 ?ㅼ튂 ?꾨줈洹몃옩</p>
             </div>
 
             <div class="card">
                 <a href="/download/latest" class="download-btn">
-                    📥 최신 버전 다운로드 (v{version_info['version']})
+                    ?뱿 理쒖떊 踰꾩쟾 ?ㅼ슫濡쒕뱶 (v{version_info['version']})
                 </a>
 
                 <div class="version-info">
                     <div class="info-item">
-                        <div class="info-label">버전</div>
+                        <div class="info-label">踰꾩쟾</div>
                         <div class="info-value">{version_info['version']}</div>
                     </div>
                     <div class="info-item">
-                        <div class="info-label">배포일</div>
+                        <div class="info-label">諛고룷??/div>
                         <div class="info-value">{version_info['release_date']}</div>
                     </div>
                 </div>
@@ -260,41 +259,41 @@ async def download_page():
             </div>
 
             <div class="card">
-                <div class="card-title">📋 설치 방법</div>
+                <div class="card-title">?뱥 ?ㅼ튂 諛⑸쾿</div>
                 <div class="steps">
                     <div class="step">
                         <div class="step-number">1</div>
                         <div class="step-content">
-                            <h4>다운로드</h4>
-                            <p>위 버튼을 클릭하여 설치 파일을 다운로드합니다.</p>
+                            <h4>?ㅼ슫濡쒕뱶</h4>
+                            <p>??踰꾪듉???대┃?섏뿬 ?ㅼ튂 ?뚯씪???ㅼ슫濡쒕뱶?⑸땲??</p>
                         </div>
                     </div>
                     <div class="step">
                         <div class="step-number">2</div>
                         <div class="step-content">
-                            <h4>압축 풀기</h4>
-                            <p>다운로드한 ZIP 파일의 압축을 풉니다.</p>
+                            <h4>?뺤텞 ?湲?/h4>
+                            <p>?ㅼ슫濡쒕뱶??ZIP ?뚯씪???뺤텞???됰땲??</p>
                         </div>
                     </div>
                     <div class="step">
                         <div class="step-number">3</div>
                         <div class="step-content">
-                            <h4>실행 및 로그인</h4>
-                            <p>ReceiptTap.exe를 실행하고 발급받은 계정으로 로그인합니다.</p>
+                            <h4>?ㅽ뻾 諛?濡쒓렇??/h4>
+                            <p>ReceiptTap.exe瑜??ㅽ뻾?섍퀬 諛쒓툒諛쏆? 怨꾩젙?쇰줈 濡쒓렇?명빀?덈떎.</p>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div class="card">
-                <div class="card-title">💻 시스템 요구사항</div>
+                <div class="card-title">?뮲 ?쒖뒪???붽뎄?ы빆</div>
                 <ul class="requirements">
                     {"".join(f'<li>{req}</li>' for req in version_info['requirements'])}
                 </ul>
             </div>
 
             <div class="contact">
-                문의: 광고토대왕 | <a href="mailto:support@placemaster.co.kr">support@placemaster.co.kr</a>
+                臾몄쓽: 愿묎퀬?좊???| <a href="mailto:support@placemaster.co.kr">support@placemaster.co.kr</a>
             </div>
         </div>
     </body>
@@ -306,14 +305,14 @@ async def download_page():
 
 @router.get("/download/latest")
 async def download_latest():
-    """최신 설치 파일 다운로드"""
+    """理쒖떊 ?ㅼ튂 ?뚯씪 ?ㅼ슫濡쒕뱶"""
 
     filepath = os.path.join(INSTALLER_DIR, CURRENT_FILENAME)
 
     if not os.path.exists(filepath):
         raise HTTPException(
             status_code=404,
-            detail="설치 파일을 찾을 수 없습니다. 관리자에게 문의하세요."
+            detail="?ㅼ튂 ?뚯씪??李얠쓣 ???놁뒿?덈떎. 愿由ъ옄?먭쾶 臾몄쓽?섏꽭??"
         )
 
     return FileResponse(
@@ -325,9 +324,9 @@ async def download_latest():
 
 @router.get("/agent/v1/latest")
 async def get_latest_version():
-    """에이전트 최신 버전 정보 (자동 업데이트용)"""
+    """?먯씠?꾪듃 理쒖떊 踰꾩쟾 ?뺣낫 (?먮룞 ?낅뜲?댄듃??"""
 
-    # TODO: DB에서 조회
+    # TODO: DB?먯꽌 議고쉶
     filename = f"ReceiptTap_{CURRENT_VERSION}.exe"
     filepath = os.path.join(INSTALLER_DIR, filename)
 
@@ -341,14 +340,14 @@ async def get_latest_version():
         "download_url": "/download/latest",
         "sha256": sha256,
         "release_date": "2026-10-07",
-        "mandatory": False,  # 필수 업데이트 여부
-        "release_notes": "초기 버전"
+        "mandatory": False,  # ?꾩닔 ?낅뜲?댄듃 ?щ?
+        "release_notes": "珥덇린 踰꾩쟾"
     })
 
 
 @router.get("/download/version/{version}")
 async def download_specific_version(version: str):
-    """특정 버전 다운로드"""
+    """?뱀젙 踰꾩쟾 ?ㅼ슫濡쒕뱶"""
 
     filename = f"ReceiptTap_{version}.exe"
     filepath = os.path.join(INSTALLER_DIR, filename)
@@ -356,7 +355,7 @@ async def download_specific_version(version: str):
     if not os.path.exists(filepath):
         raise HTTPException(
             status_code=404,
-            detail=f"버전 {version}을 찾을 수 없습니다."
+            detail=f"踰꾩쟾 {version}??李얠쓣 ???놁뒿?덈떎."
         )
 
     return FileResponse(

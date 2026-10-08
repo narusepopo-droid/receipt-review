@@ -42,15 +42,34 @@ namespace ReceiptTap.Core
 
             try
             {
-                // SPMC COM 객체 생성
-                var spmcType = Type.GetTypeFromProgID("HHDSPMC.Monitor");
-                if (spmcType == null)
+                // Interop DLL에서 직접 타입 로드 (COM 등록 불필요)
+                var interopPath = System.IO.Path.Combine(
+                    AppDomain.CurrentDomain.BaseDirectory,
+                    "Interop.hhdspmcLib.dll"
+                );
+
+                if (!System.IO.File.Exists(interopPath))
                 {
-                    // COM 등록 안 되어 있으면 직접 DLL 로드 시도
-                    throw new InvalidOperationException("SPMC COM 컴포넌트가 등록되지 않았습니다. spmc_redist.exe를 설치하세요.");
+                    throw new InvalidOperationException("Interop.hhdspmcLib.dll 파일이 없습니다.");
                 }
 
-                _monitor = Activator.CreateInstance(spmcType);
+                var assembly = System.Reflection.Assembly.LoadFrom(interopPath);
+                var monitorType = assembly.GetType("hhdspmcLib.MonitorClass");
+
+                if (monitorType == null)
+                {
+                    // 대안: COM ProgID로 시도
+                    var spmcType = Type.GetTypeFromProgID("HHDSPMC.Monitor");
+                    if (spmcType == null)
+                    {
+                        throw new InvalidOperationException("SPMC를 초기화할 수 없습니다.");
+                    }
+                    _monitor = Activator.CreateInstance(spmcType);
+                }
+                else
+                {
+                    _monitor = Activator.CreateInstance(monitorType);
+                }
 
                 // 이벤트 연결
                 // SPMC는 OnData 이벤트로 데이터를 전달
