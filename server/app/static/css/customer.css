@@ -380,15 +380,15 @@ body {
 .keywords {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--spacing-sm);
+    gap: 8px;
     margin-bottom: var(--spacing-lg);
 }
 
 .keyword-chip {
     display: inline-flex;
     align-items: center;
-    padding: var(--spacing-sm) var(--spacing-md);
-    font-size: var(--font-size-base);
+    padding: 8px 14px;
+    font-size: 14px;
     font-weight: 500;
     color: var(--color-text-secondary);
     background: var(--color-bg);
@@ -397,6 +397,7 @@ body {
     cursor: pointer;
     transition: all var(--transition-fast);
     user-select: none;
+    white-space: nowrap;
 }
 
 .keyword-chip:hover {
