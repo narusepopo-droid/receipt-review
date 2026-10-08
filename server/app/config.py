@@ -28,3 +28,7 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+# 편의를 위한 전역 인스턴스
+settings = get_settings()
