@@ -470,25 +470,32 @@ class EscPosRenderer:
     def _text(self, ln, cell_w: int, cell_h: int) -> Image.Image:
         text = ln.text.rstrip()
         st = ln.style
-        cols = max(1, self._cols(text))
-        base = Image.new("L", (cols * cell_w, cell_h + self.LINE_GAP), 255)
-        if text.strip():
-            draw = ImageDraw.Draw(base)
-            font = self._font(cell_h - 2, st.bold)
-            x = 0
-            for ch in text:
-                w = cell_w * (2 if self._is_wide(ch) else 1)
-                if ch != " ":
-                    draw.text((x + w / 2, 1 + (cell_h - 2) / 2), ch, font=font, fill=0, anchor="mm")
-                x += w
-            if st.underline:
-                draw.line([(0, cell_h - 1), (x, cell_h - 1)], fill=0, width=2)
-
         sx = 2 if st.double_width else 1
         sy = 2 if st.double_height else 1
-        if sx > 1 or sy > 1:
-            base = base.resize((base.width * sx, cell_h * sy + self.LINE_GAP), Image.NEAREST)
-        return base.convert("RGB")
+        # 가로·세로 같은 배율은 큰 글꼴로 직접 그려 선명하게 (OCR 인식률)
+        k = min(sx, sy)
+        cw, ch = cell_w * k, cell_h * k
+        cols = max(1, self._cols(text))
+        base = Image.new("L", (cols * cw, ch), 255)
+        if text.strip():
+            draw = ImageDraw.Draw(base)
+            font = self._font(ch - 2 * k, st.bold)
+            x = 0
+            for c in text:
+                w = cw * (2 if self._is_wide(c) else 1)
+                if c != " ":
+                    draw.text((x + w / 2, ch / 2), c, font=font, fill=0, anchor="mm")
+                x += w
+            if st.underline:
+                draw.line([(0, ch - 1), (x, ch - 1)], fill=0, width=2 * k)
+
+        # 한쪽만 2배인 경우 부드럽게 늘림
+        if sx != k or sy != k:
+            base = base.resize((base.width * sx // k, base.height * sy // k), Image.BICUBIC)
+
+        out = Image.new("L", (base.width, base.height + self.LINE_GAP), 255)
+        out.paste(base, (0, 0))
+        return out.convert("RGB")
 
     def _raster(self, image_data, max_width: int) -> Image.Image:
         bmp = Image.frombytes("1", (image_data.width, image_data.height), bytes(image_data.data))

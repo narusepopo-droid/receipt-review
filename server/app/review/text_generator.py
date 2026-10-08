@@ -19,7 +19,28 @@ DEFAULT_TEMPLATES = [
     "역시 {메뉴}! {키워드1} {키워드2} 만족스러웠습니다.",
 ]
 
-DEFAULT_MENUS = ["대표메뉴"]
+DEFAULT_MENUS: list[str] = []
+
+# 점주가 템플릿을 등록하지 않았을 때 쓰는 조합형 문장 재료
+# (시작 × 메뉴/본문 × 키워드 문장 순서 × 마무리 → 수천 가지 조합, 같은 문장 반복 방지)
+OPENINGS = [
+    "", "", "오늘 방문했어요.", "점심 먹으러 왔어요.", "저녁 식사하러 들렀어요.",
+    "지인 추천으로 와봤어요.", "근처에 볼일이 있어서 들렀어요.", "오랜만에 다시 왔어요.",
+    "가족이랑 같이 왔어요.", "친구랑 왔는데 좋았어요.",
+]
+MENU_SENTENCES = [
+    "{메뉴} 정말 맛있었어요.", "{메뉴} 먹었는데 기대 이상이었어요.", "{메뉴} 추천합니다!",
+    "{메뉴}가 특히 맛있었어요.", "{메뉴} 양도 넉넉하고 좋았어요.", "역시 {메뉴}가 최고네요.",
+    "{메뉴} 또 먹고 싶어요.", "{메뉴} 맛집 인정합니다.",
+]
+NO_MENU_SENTENCES = [
+    "음식이 전체적으로 맛있었어요.", "메뉴가 다 맛있었어요.", "음식이 정갈하고 맛있었어요.",
+    "먹는 내내 만족스러웠어요.", "음식이 빨리 나와서 좋았어요.", "기대 이상이었어요.",
+]
+CLOSINGS = [
+    "다음에 또 올게요!", "재방문 의사 있어요.", "또 방문할게요.", "추천합니다!",
+    "잘 먹고 갑니다.", "만족스러운 식사였어요.", "주변에도 추천할게요.", "자주 올 것 같아요.", "",
+]
 
 DEFAULT_KEYWORD_PHRASES = {
     "맛있어요": [
@@ -48,6 +69,16 @@ DEFAULT_KEYWORD_PHRASES = {
         "인테리어가 예뻐요.",
     ],
 }
+
+
+def _josa_iga(word: str) -> str:
+    """받침 있으면 '이', 없으면 '가' (갈비탕이 / 김치찌개가)"""
+    if not word:
+        return "가"
+    ch = word[-1]
+    if "가" <= ch <= "힣":
+        return "이" if (ord(ch) - 0xAC00) % 28 else "가"
+    return "가"
 
 
 class TextGenerator:
@@ -172,14 +203,20 @@ class TextGenerator:
             min_len = settings.text_min_len
             max_len = settings.text_max_len
 
+        custom_templates = bool(settings and settings.templates)
+
+        def make() -> str:
+            if custom_templates:
+                tpl = random.choice(templates)
+                if not menus:
+                    # 메뉴가 없으면 {메뉴}가 없는 템플릿 우선
+                    no_menu = [t for t in templates if "{메뉴}" not in t]
+                    tpl = random.choice(no_menu) if no_menu else tpl
+                return self._fill_template(tpl, menus, selected_keywords, keyword_phrases)
+            return self._compose(menus, selected_keywords, keyword_phrases)
+
         for _ in range(max_attempts):
-            template = random.choice(templates)
-            text = self._fill_template(
-                template,
-                menus,
-                selected_keywords,
-                keyword_phrases
-            )
+            text = make()
 
             if len(text) < min_len or len(text) > max_len:
                 continue
@@ -190,14 +227,31 @@ class TextGenerator:
             await self.record_text(store_id, text)
             return text
 
-        fallback = self._fill_template(
-            random.choice(templates),
-            menus,
-            selected_keywords,
-            keyword_phrases
-        )
+        fallback = make()
         await self.record_text(store_id, fallback)
         return fallback
+
+    def _compose(self, menus: list[str], keywords: list[str], keyword_phrases: Optional[dict]) -> str:
+        """조합형 기본 문장: 시작 + 메뉴 문장 + 키워드 문장들(섞음) + 마무리"""
+        parts = [random.choice(OPENINGS)]
+        if menus:
+            menu = random.choice(menus)
+            sentence = random.choice(MENU_SENTENCES).replace("{메뉴}가", menu + _josa_iga(menu))
+            parts.append(sentence.replace("{메뉴}", menu))
+        else:
+            parts.append(random.choice(NO_MENU_SENTENCES))
+
+        kws = list(keywords)[:3]
+        random.shuffle(kws)
+        for kw in kws:
+            phrase = self._keyword_to_phrase(kw, keyword_phrases).strip()
+            if phrase and phrase[-1] not in ".!?~":
+                phrase += "."
+            parts.append(phrase)
+
+        parts.append(random.choice(CLOSINGS))
+        text = " ".join(p for p in parts if p)
+        return re.sub(r"\s+", " ", text).strip()
 
     async def regenerate(
         self,
