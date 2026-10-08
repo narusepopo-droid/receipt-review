@@ -1,4 +1,6 @@
 using System;
+using System.IO.Ports;
+using System.Linq;
 using System.Windows.Forms;
 using ReceiptTap.Core;
 
@@ -8,10 +10,11 @@ namespace ReceiptTap.App
     {
         private AgentConfig _config;
         private ComboBox _captureModeCombo;
-        private TextBox _comPortTextBox;
+        private ComboBox _comPortCombo;
         private TextBox _printerIpTextBox;
         private Button _saveButton;
         private Button _testButton;
+        private Button _detectButton;
 
         public SettingsForm(AgentConfig config)
         {
@@ -57,13 +60,25 @@ namespace ReceiptTap.App
             };
             Controls.Add(comLabel);
 
-            _comPortTextBox = new TextBox
+            _comPortCombo = new ComboBox
             {
                 Location = new System.Drawing.Point(120, 57),
                 Size = new System.Drawing.Size(100, 25),
-                Text = "COM1"
+                DropDownStyle = ComboBoxStyle.DropDownList
             };
-            Controls.Add(_comPortTextBox);
+            Controls.Add(_comPortCombo);
+
+            _detectButton = new Button
+            {
+                Text = "자동 감지",
+                Location = new System.Drawing.Point(230, 55),
+                Size = new System.Drawing.Size(90, 28)
+            };
+            _detectButton.Click += OnDetect;
+            Controls.Add(_detectButton);
+
+            // 초기 COM 포트 목록 로드
+            RefreshComPorts();
 
             // 프린터 IP
             var ipLabel = new Label
@@ -116,7 +131,20 @@ namespace ReceiptTap.App
         private void LoadConfig()
         {
             _captureModeCombo.SelectedIndex = _config.CaptureMode == "network" ? 1 : 0;
-            _comPortTextBox.Text = _config.ComPort ?? "COM1";
+
+            // 저장된 COM 포트 선택
+            var savedPort = _config.ComPort ?? "COM1";
+            for (int i = 0; i < _comPortCombo.Items.Count; i++)
+            {
+                if (_comPortCombo.Items[i].ToString() == savedPort)
+                {
+                    _comPortCombo.SelectedIndex = i;
+                    break;
+                }
+            }
+            if (_comPortCombo.SelectedIndex < 0 && _comPortCombo.Items.Count > 0)
+                _comPortCombo.SelectedIndex = 0;
+
             _printerIpTextBox.Text = _config.PrinterIp ?? "192.168.0.100";
             OnCaptureModeChanged(null, null);
         }
@@ -124,8 +152,51 @@ namespace ReceiptTap.App
         private void OnCaptureModeChanged(object sender, EventArgs e)
         {
             var isSerial = _captureModeCombo.SelectedIndex == 0;
-            _comPortTextBox.Enabled = isSerial;
+            _comPortCombo.Enabled = isSerial;
+            _detectButton.Enabled = isSerial;
             _printerIpTextBox.Enabled = !isSerial;
+        }
+
+        private void RefreshComPorts()
+        {
+            _comPortCombo.Items.Clear();
+            try
+            {
+                var ports = SerialPort.GetPortNames();
+                foreach (var port in ports)
+                {
+                    _comPortCombo.Items.Add(port);
+                }
+            }
+            catch { }
+
+            if (_comPortCombo.Items.Count == 0)
+            {
+                _comPortCombo.Items.Add("COM1");
+            }
+        }
+
+        private void OnDetect(object sender, EventArgs e)
+        {
+            RefreshComPorts();
+
+            if (_comPortCombo.Items.Count == 0)
+            {
+                MessageBox.Show("COM 포트를 찾을 수 없습니다.", "자동 감지", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // 첫 번째 포트 선택
+            _comPortCombo.SelectedIndex = 0;
+
+            var portList = string.Join(", ", _comPortCombo.Items.Cast<string>());
+            MessageBox.Show(
+                $"발견된 COM 포트: {portList}\n\n" +
+                "영수증 프린터가 연결된 포트를 선택하세요.",
+                "자동 감지",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information
+            );
         }
 
         private void OnTest(object sender, EventArgs e)
@@ -143,7 +214,7 @@ namespace ReceiptTap.App
         private void OnSave(object sender, EventArgs e)
         {
             _config.CaptureMode = _captureModeCombo.SelectedIndex == 0 ? "serial" : "network";
-            _config.ComPort = _comPortTextBox.Text;
+            _config.ComPort = _comPortCombo.SelectedItem?.ToString() ?? "COM1";
             _config.PrinterIp = _printerIpTextBox.Text;
             _config.Save();
 

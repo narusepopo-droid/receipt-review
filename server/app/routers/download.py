@@ -27,8 +27,8 @@ class VersionInfo(BaseModel):
 # ============ 설정 ============
 
 INSTALLER_DIR = "app/static/downloads"
-CURRENT_VERSION = "1.0.1"
-CURRENT_FILENAME = "ReceiptTap_v1.0.1.zip"
+CURRENT_VERSION = "1.0.2"
+CURRENT_FILENAME = "ReceiptTap_v1.0.2.zip"
 
 
 # ============ 다운로드 페이지 ============

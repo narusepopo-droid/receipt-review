@@ -45,6 +45,9 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
+; Register SPMC COM (silent)
+Filename: "regsvr32.exe"; Parameters: "/s ""{app}\hhdspmc.dll"""; Flags: runhidden; StatusMsg: "SPMC 등록 중..."
+
 ; Start the application after install
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
