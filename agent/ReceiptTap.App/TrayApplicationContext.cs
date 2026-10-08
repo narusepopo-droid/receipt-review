@@ -1,89 +1,82 @@
 using System;
-using System.Drawing;
+using System.Threading;
 using System.Windows.Forms;
 using ReceiptTap.Core;
 
 namespace ReceiptTap.App
 {
     /// <summary>
-    /// 트레이 앱 컨텍스트
+    /// 트레이 앱 컨텍스트 (작업표시줄 N 아이콘)
     /// </summary>
     public class TrayApplicationContext : ApplicationContext
     {
         private NotifyIcon _trayIcon;
         private AgentConfig _config;
         private ContextMenuStrip _menu;
+        private ToolStripItem _statusItem;
         private CaptureService _captureService;
+        private SettingsForm _settingsForm;
+        private readonly SynchronizationContext _ui;
 
         public TrayApplicationContext()
         {
+            // SPMC 이벤트·타이머 콜백을 UI 스레드로 넘기기 위해 필요
+            if (!(SynchronizationContext.Current is WindowsFormsSynchronizationContext))
+                SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+            _ui = SynchronizationContext.Current;
+
             _config = AgentConfig.Load();
             InitializeTrayIcon();
-            StartCaptureService();
+
+            if (!string.IsNullOrEmpty(_config.AuthToken))
+            {
+                _config.Activated = true;
+                StartCaptureService();
+            }
+            else
+            {
+                ShowLoginDialog();
+            }
         }
 
         private void StartCaptureService()
         {
-            if (!_config.Activated) return;
+            if (!_config.Activated || _captureService != null) return;
 
             _captureService = new CaptureService(_config);
-            _captureService.StatusChanged += (s, status) => UpdateStatus(status);
-            _captureService.LogMessage += (s, msg) => {
-                System.Diagnostics.Debug.WriteLine(msg);
-                // 캡처 성공 시 알림
-                if (msg.Contains("영수증 캡처"))
-                {
-                    _trayIcon.ShowBalloonTip(2000, "영수증 캡처!", msg, ToolTipIcon.Info);
-                }
-            };
+            _captureService.StatusChanged += (s, status) => OnUi(() => UpdateStatus(status));
+            _captureService.PortDetected += (s, port) => OnUi(() =>
+                _trayIcon.ShowBalloonTip(4000, "프린터 자동 연결됨",
+                    $"{port} 포트에서 영수증을 찾았습니다.\n이제 영수증이 자동으로 수집됩니다.", ToolTipIcon.Info));
+            _captureService.ReceiptProcessed += (s, r) => OnUi(() =>
+            {
+                if (_settingsForm == null)
+                    _trayIcon.ShowBalloonTip(2000, "영수증 읽음", $"{r.CapturedAt:HH:mm:ss} {r.Port} · {r.UploadState}", ToolTipIcon.None);
+            });
             _captureService.Start();
+            UpdateStatus(_captureService.CurrentStatus);
         }
 
         private void InitializeTrayIcon()
         {
             _menu = new ContextMenuStrip();
-            _menu.Items.Add("상태: 대기 중", null, null);
+            _statusItem = _menu.Items.Add("상태: 대기 중", null, OnSettings);
             _menu.Items.Add("-");
-            _menu.Items.Add("설정", null, OnSettings);
+            _menu.Items.Add("상태 및 설정 열기", null, OnSettings);
             _menu.Items.Add("로그 보기", null, OnViewLogs);
             _menu.Items.Add("-");
             _menu.Items.Add("종료", null, OnExit);
 
             _trayIcon = new NotifyIcon
             {
-                Icon = GetStatusIcon(AgentStatus.Idle),
-                Text = "ReceiptTap - 영수증 리뷰",
+                Icon = AppIcons.ForStatus(AgentStatus.Idle),
+                Text = "영수증리뷰",
                 ContextMenuStrip = _menu,
                 Visible = true
             };
 
-            _trayIcon.DoubleClick += OnSettings;
-
-            // 저장된 인증 정보로 자동 로그인 시도
-            if (!string.IsNullOrEmpty(_config.AuthToken))
-            {
-                // 이미 로그인됨 - 자동 시작
-                _config.Activated = true;
-                UpdateStatus(AgentStatus.Connected);
-                _trayIcon.ShowBalloonTip(
-                    2000,
-                    "영수증리뷰",
-                    $"{_config.StoreName ?? "매장"}에 자동 연결되었습니다",
-                    ToolTipIcon.Info
-                );
-            }
-            else
-            {
-                // 로그인 필요
-                ShowLoginDialog();
-            }
-        }
-
-        private Icon GetStatusIcon(AgentStatus status)
-        {
-            // TODO: 실제 아이콘 파일로 교체
-            // 초록: 정상, 노랑: 서버 연결 안 됨, 빨강: 캡처 안 됨
-            return SystemIcons.Application;
+            _trayIcon.MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) OnSettings(s, e); };
+            _trayIcon.BalloonTipClicked += OnSettings;
         }
 
         private void ShowLoginDialog()
@@ -95,64 +88,79 @@ namespace ReceiptTap.App
                     _config = AgentConfig.Load();
                     _config.Activated = true;
                     _config.Save();
-                    UpdateStatus(AgentStatus.Connected);
                     StartCaptureService();
 
-                    // 환영 메시지
                     _trayIcon.ShowBalloonTip(
-                        3000,
+                        4000,
                         "영수증리뷰",
-                        $"{_config.StoreName}에 연결되었습니다!",
+                        $"{_config.StoreName}에 연결되었습니다!\n포스에서 영수증을 1장 출력하면 프린터가 자동 연결됩니다.",
                         ToolTipIcon.Info
                     );
                 }
             }
         }
 
+        private void OnUi(Action a)
+        {
+            if (_ui != null) _ui.Post(_ => { try { a(); } catch { } }, null);
+            else a();
+        }
+
         private void UpdateStatus(AgentStatus status)
         {
-            _trayIcon.Icon = GetStatusIcon(status);
-            _menu.Items[0].Text = $"상태: {GetStatusText(status)}";
+            _trayIcon.Icon = AppIcons.ForStatus(status);
+            var text = $"상태: {GetStatusText(status)}";
+            _statusItem.Text = text;
+
+            var tip = "영수증리뷰 - " + GetStatusText(status);
+            if (!string.IsNullOrEmpty(_captureService?.ReceiptPort)) tip += $" ({_captureService.ReceiptPort})";
+            _trayIcon.Text = tip.Length > 63 ? tip.Substring(0, 63) : tip;
         }
 
         private string GetStatusText(AgentStatus status)
         {
             switch (status)
             {
-                case AgentStatus.Connected: return "연결됨 (정상)";
+                case AgentStatus.Connected: return "정상 작동 중";
+                case AgentStatus.Searching: return "프린터 찾는 중";
                 case AgentStatus.Disconnected: return "서버 연결 안 됨";
-                case AgentStatus.CaptureError: return "캡처 오류";
+                case AgentStatus.CaptureError: return "영수증 읽기 오류";
                 default: return "대기 중";
             }
         }
 
         private void OnSettings(object sender, EventArgs e)
         {
-            using (var dialog = new SettingsForm(_config))
+            if (string.IsNullOrEmpty(_config.AuthToken))
             {
-                if (dialog.ShowDialog() == DialogResult.OK)
-                {
-                    _config = AgentConfig.Load();
-                }
+                ShowLoginDialog();
+                return;
             }
+
+            if (_settingsForm != null && !_settingsForm.IsDisposed)
+            {
+                _settingsForm.WindowState = FormWindowState.Normal;
+                _settingsForm.Activate();
+                return;
+            }
+
+            _settingsForm = new SettingsForm(_config, _captureService);
+            _settingsForm.FormClosed += (s, a) => _settingsForm = null;
+            _settingsForm.Show();
+            _settingsForm.Activate();
         }
 
         private void OnViewLogs(object sender, EventArgs e)
         {
             var logPath = AgentConfig.LogPath;
-            if (System.IO.Directory.Exists(logPath))
-            {
-                System.Diagnostics.Process.Start("explorer.exe", logPath);
-            }
-            else
-            {
-                MessageBox.Show("로그 폴더가 없습니다.", "ReceiptTap", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
+            System.IO.Directory.CreateDirectory(logPath);
+            System.Diagnostics.Process.Start("explorer.exe", logPath);
         }
 
         private void OnExit(object sender, EventArgs e)
         {
             _trayIcon.Visible = false;
+            _captureService?.Dispose();
             Application.Exit();
         }
 
@@ -172,6 +180,7 @@ namespace ReceiptTap.App
     {
         Idle,
         Connected,
+        Searching,
         Disconnected,
         CaptureError
     }

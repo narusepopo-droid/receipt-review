@@ -23,7 +23,12 @@ namespace ReceiptTap.Core
         public string StoreName { get; set; }
         public string StoreCode { get; set; }
         public string CaptureMode { get; set; } = "serial";
+        /// <summary>점주가 직접 고정한 포트 (PortLocked=true 일 때만 사용)</summary>
         public string ComPort { get; set; }
+        /// <summary>true 면 ComPort 만 감시, false 면 모든 포트 자동 감시</summary>
+        public bool PortLocked { get; set; }
+        /// <summary>자동 감시로 영수증이 들어온 포트 (표시용)</summary>
+        public string DetectedPort { get; set; }
         public string PrinterIp { get; set; }
         public int PrinterPort { get; set; } = 9100;
         public bool Activated { get; set; }
@@ -80,6 +85,8 @@ namespace ReceiptTap.Core
                 StoreCode = this.StoreCode,
                 CaptureMode = this.CaptureMode,
                 ComPort = this.ComPort,
+                PortLocked = this.PortLocked,
+                DetectedPort = this.DetectedPort,
                 PrinterIp = this.PrinterIp,
                 PrinterPort = this.PrinterPort,
                 Activated = this.Activated

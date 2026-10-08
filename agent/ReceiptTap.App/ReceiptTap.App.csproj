@@ -8,6 +8,8 @@
     <AssemblyName>ReceiptTap</AssemblyName>
     <UseWindowsForms>true</UseWindowsForms>
     <PlatformTarget>x86</PlatformTarget>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Version>1.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,6 +18,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ReceiptTap.Core\ReceiptTap.Core.csproj" />
+  </ItemGroup>
+
+  <!-- SPMC 실행 파일·라이선스·드라이버를 출력 폴더에 포함 (설치 파일/zip에 들어감) -->
+  <ItemGroup>
+    <None Include="..\lib\hhdspmc\hhdspmc.dll" Link="hhdspmc.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\lib\hhdspmc\SPMC_License.spmclic" Link="SPMC_License.spmclic" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\lib\hhdspmc\drivers\*" Link="drivers\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\installer\install.bat" Link="install.bat" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

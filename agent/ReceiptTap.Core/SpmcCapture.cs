@@ -5,9 +5,12 @@ using hhdspmcLib;
 
 namespace ReceiptTap.Core
 {
+    /// <summary>
+    /// SPMC 시리얼 포트 모니터링 캡처 (비간섭: 포스→프린터 쓰기 데이터를 옆에서 읽기만 함)
+    /// </summary>
     public class SpmcCapture : IReceiptCapture
     {
-        private MonitoringClass _monitor;
+        private Monitoring _monitor;
         private readonly string _comPort;
         private bool _isCapturing;
         private MemoryStream _buffer;
@@ -16,9 +19,9 @@ namespace ReceiptTap.Core
         private readonly object _lockObj = new object();
 
         private const int CUT_TIMEOUT_MS = 500;
-        private static readonly byte[] GS_V = { 0x1D, 0x56 };
 
         public string CaptureMode => "serial";
+        public string Port => _comPort;
         public bool IsCapturing => _isCapturing;
 
         public event EventHandler<ReceiptCapturedEventArgs> ReceiptCaptured;
@@ -30,24 +33,33 @@ namespace ReceiptTap.Core
             _buffer = new MemoryStream();
         }
 
+        /// <summary>
+        /// 캡처 시작. 실패하면 예외를 던진다 (호출 쪽에서 상태를 "캡처 오류"로 표시해야 함)
+        /// </summary>
         public void Start()
         {
             if (_isCapturing) return;
 
             try
             {
-                _monitor = new MonitoringClass();
+                var sm = SpmcHost.Get();
+                var device = SpmcHost.FindDevice(_comPort);
+                if (device == null)
+                    throw new InvalidOperationException($"{_comPort} 포트를 찾을 수 없습니다.");
+
+                _monitor = sm.CreateMonitor();
                 _monitor.OnWrite += Monitor_OnWrite;
-                _monitor.Connect(_comPort);
+                _monitor.Connect(device);
 
                 _isCapturing = true;
                 _lastDataTime = DateTime.Now;
-
                 _cutTimer = new Timer(CheckTimeout, null, 100, 100);
             }
             catch (Exception ex)
             {
-                OnError(ex, $"SPMC 시작 실패: {ex.Message}");
+                CleanupMonitor();
+                OnError(ex, $"SPMC 시작 실패 ({_comPort}): {ex.Message}");
+                throw;
             }
         }
 
@@ -57,27 +69,47 @@ namespace ReceiptTap.Core
 
             try
             {
-                byte[] data = (byte[])array;
+                // SPMC는 byte/sbyte 배열을 줄 수 있으므로 그대로 복사 (카솔 방식)
+                var data = new byte[array.Length];
+                Buffer.BlockCopy(array, 0, data, 0, array.Length);
 
                 lock (_lockObj)
                 {
                     _buffer.Write(data, 0, data.Length);
                     _lastDataTime = DateTime.Now;
-
-                    if (ContainsCutCommand(data))
-                    {
-                        FlushBuffer();
-                    }
+                    SplitAtCuts();
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                OnError(ex, "데이터 수신 처리 오류: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// 버퍼에 GS V(커팅)가 있으면 그 지점까지를 영수증 1건으로 잘라 보낸다
+        /// </summary>
+        private void SplitAtCuts()
+        {
+            while (true)
+            {
+                var buf = _buffer.ToArray();
+                int end = EscPosText.FindCutEnd(buf);
+                if (end < 0) return;
+
+                var receipt = new byte[end];
+                Array.Copy(buf, receipt, end);
+                _buffer = new MemoryStream();
+                _buffer.Write(buf, end, buf.Length - end);
+                Raise(receipt);
+            }
         }
 
         private void CheckTimeout(object state)
         {
-            if (_buffer.Length > 0 && (DateTime.Now - _lastDataTime).TotalMilliseconds > CUT_TIMEOUT_MS)
+            lock (_lockObj)
             {
-                lock (_lockObj)
+                if (_buffer.Length > 0 && (DateTime.Now - _lastDataTime).TotalMilliseconds > CUT_TIMEOUT_MS)
                 {
                     FlushBuffer();
                 }
@@ -92,46 +124,52 @@ namespace ReceiptTap.Core
             {
                 _cutTimer?.Dispose();
                 _cutTimer = null;
-
-                if (_monitor != null)
-                {
-                    _monitor.Disconnect();
-                    System.Runtime.InteropServices.Marshal.ReleaseComObject(_monitor);
-                    _monitor = null;
-                }
-
-                FlushBuffer();
-                _isCapturing = false;
+                CleanupMonitor();
+                lock (_lockObj) FlushBuffer();
             }
             catch (Exception ex)
             {
                 OnError(ex, "SPMC 중지 실패");
             }
+            finally
+            {
+                _isCapturing = false;
+            }
         }
 
-        private bool ContainsCutCommand(byte[] data)
+        private void CleanupMonitor()
         {
-            for (int i = 0; i < data.Length - 1; i++)
-            {
-                if (data[i] == GS_V[0] && data[i + 1] == GS_V[1])
-                    return true;
-            }
-            return false;
+            if (_monitor == null) return;
+            try { _monitor.OnWrite -= Monitor_OnWrite; } catch { }
+            try { if (_monitor.Connected) _monitor.Disconnect(); } catch { }
+            try { System.Runtime.InteropServices.Marshal.ReleaseComObject(_monitor); } catch { }
+            _monitor = null;
         }
 
         private void FlushBuffer()
         {
             if (_buffer.Length == 0) return;
-
             var rawData = _buffer.ToArray();
             _buffer = new MemoryStream();
+            Raise(rawData);
+        }
 
-            ReceiptCaptured?.Invoke(this, new ReceiptCapturedEventArgs
+        private void Raise(byte[] rawData)
+        {
+            if (rawData.Length == 0) return;
+            try
             {
-                RawData = rawData,
-                CapturedAt = DateTime.Now,
-                Source = _comPort
-            });
+                ReceiptCaptured?.Invoke(this, new ReceiptCapturedEventArgs
+                {
+                    RawData = rawData,
+                    CapturedAt = DateTime.Now,
+                    Source = _comPort
+                });
+            }
+            catch (Exception ex)
+            {
+                OnError(ex, "영수증 처리 오류: " + ex.Message);
+            }
         }
 
         private void OnError(Exception ex, string message)
@@ -149,17 +187,11 @@ namespace ReceiptTap.Core
             _buffer?.Dispose();
         }
 
-        public static string[] GetAvailablePorts()
-        {
-            return System.IO.Ports.SerialPort.GetPortNames();
-        }
-
         public static bool IsSpmcInstalled()
         {
             try
             {
-                var monitor = new MonitoringClass();
-                System.Runtime.InteropServices.Marshal.ReleaseComObject(monitor);
+                SpmcHost.Get();
                 return true;
             }
             catch

@@ -2,7 +2,7 @@
 ; Inno Setup 6.x
 
 #define MyAppName "ReceiptTap"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "광고토대왕"
 #define MyAppURL "https://review.placemaster.co.kr"
 #define MyAppExeName "ReceiptTap.exe"
@@ -46,7 +46,9 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 ; Register SPMC COM (silent)
-Filename: "regsvr32.exe"; Parameters: "/s ""{app}\hhdspmc.dll"""; Flags: runhidden; StatusMsg: "SPMC 등록 중..."
+; 카솔 등으로 SPMC가 이미 등록된 PC는 건드리지 않음
+Filename: "{sys}\pnputil.exe"; Parameters: "/add-driver ""{app}\drivers\hhdspmc.inf"" /install"; Flags: runhidden; StatusMsg: "SPMC 드라이버 설치 중..."; Check: not IsSPMCInstalled
+Filename: "{syswow64}\regsvr32.exe"; Parameters: "/s ""{app}\hhdspmc.dll"""; Flags: runhidden; StatusMsg: "SPMC 등록 중..."; Check: not IsSPMCInstalled
 
 ; Start the application after install
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
@@ -67,8 +69,7 @@ korean.WelcomeLabel2=이 프로그램은 [name]을(를) 설치합니다.%n%n설�
 function IsSPMCInstalled: Boolean;
 begin
   // Check if SPMC is already installed (카솔 매장 등)
-  Result := FileExists(ExpandConstant('{sys}\hhdspmc.dll')) or
-            FileExists(ExpandConstant('{pf32}\HHD Software\Serial Port Monitoring Control\spmc.dll'));
+  Result := RegKeyExists(HKCR, 'hhdspmc.SerialMonitor');
 end;
 
 function InitializeSetup: Boolean;

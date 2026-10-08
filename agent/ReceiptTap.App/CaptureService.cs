@@ -7,33 +7,46 @@ namespace ReceiptTap.App
 {
     /// <summary>
     /// 캡처 서비스 - 캡처 + 업로드 + 큐 관리 + 자동 업데이트
+    /// UI(STA) 스레드에서 생성·Start 할 것 (SPMC COM 객체 규칙)
     /// </summary>
     public class CaptureService : IDisposable
     {
-        public const string VERSION = "1.0.0";
+        public const string VERSION = "1.1.0";
 
         private readonly AgentConfig _config;
-        private IReceiptCapture _capture;
+        private AutoPortCapture _capture;
         private ReceiptUploader _uploader;
         private LocalQueue _queue;
         private AutoUpdater _autoUpdater;
         private Timer _heartbeatTimer;
         private Timer _queueRetryTimer;
-        private DateTime? _lastCaptureAt;
         private bool _isRunning;
+        private bool _serverOk = true;
 
         public event EventHandler<AgentStatus> StatusChanged;
         public event EventHandler<string> LogMessage;
         public event EventHandler<UpdateInfo> UpdateAvailable;
+        /// <summary>영수증 1건 처리 완료 (업로드 결과 포함)</summary>
+        public event EventHandler<CapturedReceipt> ReceiptProcessed;
+        /// <summary>영수증 프린터 포트를 자동으로 찾음</summary>
+        public event EventHandler<string> PortDetected;
 
         public AgentStatus CurrentStatus { get; private set; } = AgentStatus.Idle;
+        public string StatusDetail { get; private set; } = "";
+        public CapturedReceipt LastReceipt { get; private set; }
+        public int TodayCount { get; private set; }
+        private DateTime _todayDate = DateTime.Today;
+        public DateTime? LastServerOkAt { get; private set; }
+        public int QueueLength => SafeQueueCount();
+        public string ReceiptPort => _capture?.ReceiptPort ?? _config.DetectedPort;
+        public string[] WatchedPorts => _capture == null ? new string[0] : new System.Collections.Generic.List<string>(_capture.WatchedPorts).ToArray();
+        public bool PortLocked => _config.PortLocked;
 
         public CaptureService(AgentConfig config)
         {
             _config = config;
             _queue = new LocalQueue(AgentConfig.QueuePath);
 
-            // 자동 업데이터 초기화
             _autoUpdater = new AutoUpdater(config, VERSION);
             _autoUpdater.LogMessage += (s, msg) => Log($"[업데이트] {msg}");
             _autoUpdater.UpdateAvailable += (s, info) => UpdateAvailable?.Invoke(this, info);
@@ -46,67 +59,61 @@ namespace ReceiptTap.App
             if (!_config.Activated || string.IsNullOrEmpty(_config.AuthToken))
             {
                 Log("로그인이 필요합니다.");
+                SetStatus(AgentStatus.Idle, "로그인이 필요합니다");
                 return;
             }
 
+            _isRunning = true;
+            _uploader = new ReceiptUploader(_config.ServerUrl, _config.AuthToken);
+
+            // 서버 관련 타이머는 캡처 성공 여부와 상관없이 시작 (서버에 상태 보고)
+            _heartbeatTimer = new Timer(SendHeartbeat, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
+            _queueRetryTimer = new Timer(RetryQueue, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+            _autoUpdater.Start();
+            _autoUpdater.CleanupOldUpdates();
+
+            StartCapture();
+        }
+
+        private void StartCapture()
+        {
+            if (_config.CaptureMode == "network")
+            {
+                Log("네트워크 프린터 캡처는 아직 지원하지 않습니다.");
+                SetStatus(AgentStatus.CaptureError, "네트워크 프린터는 아직 지원하지 않습니다");
+                return;
+            }
+
+            var locked = _config.PortLocked ? _config.ComPort : null;
+            _capture = new AutoPortCapture(locked, _config.DetectedPort);
+            _capture.ReceiptCaptured += OnReceiptCaptured;
+            _capture.ErrorOccurred += (s, e) => Log($"캡처 오류: {e.Message}");
+            _capture.LogMessage += (s, m) => Log(m);
+            _capture.PortDetected += OnPortDetected;
+
             try
             {
-                _uploader = new ReceiptUploader(_config.ServerUrl, _config.AuthToken);
-
-                // COM 포트 자동 감지
-                string comPort = _config.ComPort;
-                if (string.IsNullOrEmpty(comPort))
-                {
-                    comPort = AutoDetectComPort();
-                    if (!string.IsNullOrEmpty(comPort))
-                    {
-                        _config.ComPort = comPort;
-                        _config.CaptureMode = "serial";
-                        _config.Save();
-                        Log($"COM 포트 자동 감지: {comPort}");
-                    }
-                }
-
-                // 캡처 방식에 따라 생성
-                if (_config.CaptureMode == "serial" && !string.IsNullOrEmpty(comPort))
-                {
-                    _capture = new SpmcCapture(comPort);
-                }
-                else if (_config.CaptureMode == "network" && !string.IsNullOrEmpty(_config.PrinterIp))
-                {
-                    // 네트워크 캡처는 추후 구현
-                    Log("네트워크 캡처는 아직 지원하지 않습니다.");
-                    return;
-                }
-                else
-                {
-                    Log("프린터를 찾을 수 없습니다. 설정에서 직접 선택해주세요.");
-                    return;
-                }
-
-                _capture.ReceiptCaptured += OnReceiptCaptured;
-                _capture.ErrorOccurred += OnCaptureError;
                 _capture.Start();
-
-                // 하트비트 타이머 (1분마다)
-                _heartbeatTimer = new Timer(SendHeartbeat, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
-
-                // 큐 재시도 타이머 (30초마다)
-                _queueRetryTimer = new Timer(RetryQueue, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
-
-                // 자동 업데이트 시작 (6시간마다 체크)
-                _autoUpdater.Start();
-                _autoUpdater.CleanupOldUpdates();
-
-                _isRunning = true;
-                UpdateStatus(AgentStatus.Connected);
-                Log($"캡처 시작: {_config.CaptureMode} - {_config.ComPort ?? _config.PrinterIp} (v{VERSION})");
+                Log($"캡처 시작 (v{VERSION}) - 감시 포트: {string.Join(", ", WatchedPorts)}" +
+                    (locked != null ? " (고정)" : " (자동)"));
+                RefreshStatus();
             }
             catch (Exception ex)
             {
-                Log($"시작 실패: {ex.Message}");
-                UpdateStatus(AgentStatus.CaptureError);
+                Log($"캡처 시작 실패: {ex.Message}");
+                SetStatus(AgentStatus.CaptureError, ex.Message);
+                _capture.Dispose();
+                _capture = null;
             }
+        }
+
+        /// <summary>설정 변경 후 캡처만 다시 시작</summary>
+        public void RestartCapture()
+        {
+            if (!_isRunning) { Start(); return; }
+            _capture?.Dispose();
+            _capture = null;
+            StartCapture();
         }
 
         public void Stop()
@@ -116,193 +123,179 @@ namespace ReceiptTap.App
             _heartbeatTimer?.Dispose();
             _queueRetryTimer?.Dispose();
             _autoUpdater?.Dispose();
-            _capture?.Stop();
             _capture?.Dispose();
+            _capture = null;
 
             _isRunning = false;
-            UpdateStatus(AgentStatus.Idle);
+            SetStatus(AgentStatus.Idle, "중지됨");
             Log("캡처 중지");
         }
 
-        /// <summary>
-        /// 수동 업데이트 확인
-        /// </summary>
         public async Task<UpdateInfo> CheckForUpdateAsync()
         {
             return await _autoUpdater.CheckForUpdateAsync();
         }
 
+        private void OnPortDetected(object sender, string port)
+        {
+            _config.DetectedPort = port;
+            try { _config.Save(); } catch { }
+            PortDetected?.Invoke(this, port);
+        }
+
         private async void OnReceiptCaptured(object sender, ReceiptCapturedEventArgs e)
         {
-            _lastCaptureAt = e.CapturedAt;
-            Log($"영수증 캡처: {e.RawData.Length} bytes");
+            if (_todayDate != DateTime.Today) { _todayDate = DateTime.Today; TodayCount = 0; }
+            TodayCount++;
+
+            var receipt = new CapturedReceipt
+            {
+                RawData = e.RawData,
+                CapturedAt = e.CapturedAt,
+                Port = e.Source,
+                Text = SafeText(e.RawData),
+                UploadState = "전송 중..."
+            };
+            LastReceipt = receipt;
+            Log($"영수증 캡처: {e.Source}, {e.RawData.Length} bytes");
+            RefreshStatus();
 
             try
             {
-                var result = await _uploader.UploadAsync(
-                    e.RawData,
-                    e.CapturedAt,
-                    _capture.CaptureMode,
-                    VERSION
-                );
-
+                var result = await _uploader.UploadAsync(e.RawData, e.CapturedAt, "serial", VERSION);
                 if (result.Success)
                 {
+                    receipt.UploadState = "서버 전송 완료";
                     Log($"업로드 성공: {result.Response}");
-                    UpdateStatus(AgentStatus.Connected);
+                    MarkServer(true);
                 }
                 else
                 {
+                    receipt.UploadState = "서버 전송 실패 → 나중에 자동 재전송";
                     Log($"업로드 실패 (큐 저장): {result.Error}");
-                    _queue.Enqueue(e.RawData, e.CapturedAt, _capture.CaptureMode);
-                    UpdateStatus(AgentStatus.Disconnected);
+                    _queue.Enqueue(e.RawData, e.CapturedAt, "serial");
+                    MarkServer(false);
                 }
             }
             catch (Exception ex)
             {
+                receipt.UploadState = "서버 전송 실패 → 나중에 자동 재전송";
                 Log($"업로드 오류 (큐 저장): {ex.Message}");
-                _queue.Enqueue(e.RawData, e.CapturedAt, _capture.CaptureMode);
-                UpdateStatus(AgentStatus.Disconnected);
+                _queue.Enqueue(e.RawData, e.CapturedAt, "serial");
+                MarkServer(false);
             }
+
+            ReceiptProcessed?.Invoke(this, receipt);
         }
 
-        private void OnCaptureError(object sender, CaptureErrorEventArgs e)
+        private static string SafeText(byte[] data)
         {
-            Log($"캡처 오류: {e.Message}");
-            UpdateStatus(AgentStatus.CaptureError);
+            try { return EscPosText.ToText(data); } catch { return "(내용 표시 실패)"; }
         }
 
         private async void SendHeartbeat(object state)
         {
             if (_uploader == null) return;
-
             try
             {
-                var success = await _uploader.SendHeartbeatAsync(
-                    VERSION,
-                    _capture?.CaptureMode ?? "unknown",
-                    _lastCaptureAt,
-                    _queue.Count
-                );
-
-                if (success && CurrentStatus == AgentStatus.Disconnected)
-                {
-                    UpdateStatus(AgentStatus.Connected);
-                }
+                var ok = await _uploader.SendHeartbeatAsync(VERSION, "serial", LastReceipt?.CapturedAt, SafeQueueCount());
+                MarkServer(ok);
             }
             catch
             {
-                // 하트비트 실패는 조용히 처리
+                MarkServer(false);
             }
         }
 
         private async void RetryQueue(object state)
         {
-            if (_uploader == null || _queue.Count == 0) return;
+            if (_uploader == null || SafeQueueCount() == 0) return;
 
             foreach (var item in _queue.GetPendingItems())
             {
                 try
                 {
                     var data = _queue.LoadData(item);
-                    var result = await _uploader.UploadAsync(
-                        data,
-                        item.CapturedAt,
-                        item.CaptureMode,
-                        VERSION
-                    );
-
-                    if (result.Success)
-                    {
-                        _queue.Remove(item.Id);
-                        Log($"큐 재시도 성공: {item.Id}");
-                    }
+                    var result = await _uploader.UploadAsync(data, item.CapturedAt, item.CaptureMode, VERSION);
+                    if (!result.Success) break;
+                    _queue.Remove(item.Id);
+                    Log($"큐 재시도 성공: {item.Id}");
+                    MarkServer(true);
                 }
                 catch
                 {
-                    // 재시도 실패, 다음에 다시 시도
                     break;
                 }
             }
         }
 
-        private void UpdateStatus(AgentStatus status)
+        private void MarkServer(bool ok)
+        {
+            _serverOk = ok;
+            if (ok) LastServerOkAt = DateTime.Now;
+            RefreshStatus();
+        }
+
+        /// <summary>현재 상황으로 상태 다시 계산</summary>
+        private void RefreshStatus()
+        {
+            if (!_isRunning) return;
+            if (_capture == null || !_capture.IsCapturing)
+            {
+                if (CurrentStatus != AgentStatus.CaptureError)
+                    SetStatus(AgentStatus.CaptureError, "영수증 감시가 시작되지 않았습니다");
+                return;
+            }
+            if (!_serverOk)
+            {
+                SetStatus(AgentStatus.Disconnected, $"서버 연결 안 됨 (대기 중인 영수증 {SafeQueueCount()}건)");
+                return;
+            }
+            if (string.IsNullOrEmpty(ReceiptPort))
+            {
+                SetStatus(AgentStatus.Searching, "프린터 찾는 중 - 포스에서 영수증을 1장 출력해 주세요");
+                return;
+            }
+            SetStatus(AgentStatus.Connected, $"{ReceiptPort} 프린터에서 영수증 수신 중");
+        }
+
+        private void SetStatus(AgentStatus status, string detail)
         {
             CurrentStatus = status;
+            StatusDetail = detail;
             StatusChanged?.Invoke(this, status);
+        }
+
+        private int SafeQueueCount()
+        {
+            try { return _queue.Count; } catch { return 0; }
         }
 
         private void Log(string message)
         {
             LogMessage?.Invoke(this, message);
-
-            // 파일 로깅
             try
             {
                 var logDir = AgentConfig.LogPath;
                 System.IO.Directory.CreateDirectory(logDir);
                 var logFile = System.IO.Path.Combine(logDir, $"{DateTime.Now:yyyy-MM-dd}.log");
-                System.IO.File.AppendAllText(logFile, $"{DateTime.Now:HH:mm:ss} {message}\n");
+                System.IO.File.AppendAllText(logFile, $"{DateTime.Now:HH:mm:ss} {message}\r\n");
             }
             catch { }
-        }
-
-        /// <summary>
-        /// COM 포트 자동 감지 - 영수증 프린터 찾기
-        /// </summary>
-        private string AutoDetectComPort()
-        {
-            try
-            {
-                var ports = System.IO.Ports.SerialPort.GetPortNames();
-                Log($"사용 가능한 COM 포트: {string.Join(", ", ports)}");
-
-                // 1. 레지스트리에서 프린터 COM 포트 찾기
-                using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"HARDWARE\DEVICEMAP\SERIALCOMM"))
-                {
-                    if (key != null)
-                    {
-                        foreach (var valueName in key.GetValueNames())
-                        {
-                            var portName = key.GetValue(valueName)?.ToString();
-                            if (!string.IsNullOrEmpty(portName))
-                            {
-                                Log($"발견: {valueName} -> {portName}");
-
-                                // USB-Serial 또는 프린터 관련 포트 찾기
-                                if (valueName.Contains("USB") || valueName.Contains("Serial") ||
-                                    valueName.Contains("Prolific") || valueName.Contains("FTDI") ||
-                                    valueName.Contains("CH34") || valueName.Contains("POS"))
-                                {
-                                    return portName;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 2. 첫 번째 사용 가능한 COM 포트 반환 (COM1 제외)
-                foreach (var port in ports)
-                {
-                    if (port != "COM1")
-                    {
-                        return port;
-                    }
-                }
-
-                // 3. COM 포트가 없으면 null
-                return null;
-            }
-            catch (Exception ex)
-            {
-                Log($"COM 포트 감지 오류: {ex.Message}");
-                return null;
-            }
         }
 
         public void Dispose()
         {
             Stop();
         }
+    }
+
+    public class CapturedReceipt
+    {
+        public byte[] RawData { get; set; }
+        public DateTime CapturedAt { get; set; }
+        public string Port { get; set; }
+        public string Text { get; set; }
+        public string UploadState { get; set; }
     }
 }
