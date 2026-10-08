@@ -38,7 +38,9 @@ samples/receipts-bin/*
 !samples/receipts-bin/.gitkeep
 
 # 서버 업로드/생성 파일
-server/uploads/
+server/uploads/*
+!server/uploads/.gitkeep
+!server/uploads/version.json
 server/receipts/
 server/static/generated/
 

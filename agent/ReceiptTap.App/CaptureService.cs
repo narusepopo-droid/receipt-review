@@ -6,14 +6,17 @@ using ReceiptTap.Core;
 namespace ReceiptTap.App
 {
     /// <summary>
-    /// 캡처 서비스 - 캡처 + 업로드 + 큐 관리
+    /// 캡처 서비스 - 캡처 + 업로드 + 큐 관리 + 자동 업데이트
     /// </summary>
     public class CaptureService : IDisposable
     {
+        public const string VERSION = "1.0.0";
+
         private readonly AgentConfig _config;
         private IReceiptCapture _capture;
         private ReceiptUploader _uploader;
         private LocalQueue _queue;
+        private AutoUpdater _autoUpdater;
         private Timer _heartbeatTimer;
         private Timer _queueRetryTimer;
         private DateTime? _lastCaptureAt;
@@ -21,6 +24,7 @@ namespace ReceiptTap.App
 
         public event EventHandler<AgentStatus> StatusChanged;
         public event EventHandler<string> LogMessage;
+        public event EventHandler<UpdateInfo> UpdateAvailable;
 
         public AgentStatus CurrentStatus { get; private set; } = AgentStatus.Idle;
 
@@ -28,6 +32,12 @@ namespace ReceiptTap.App
         {
             _config = config;
             _queue = new LocalQueue(AgentConfig.QueuePath);
+
+            // 자동 업데이터 초기화
+            _autoUpdater = new AutoUpdater(config, VERSION);
+            _autoUpdater.LogMessage += (s, msg) => Log($"[업데이트] {msg}");
+            _autoUpdater.UpdateAvailable += (s, info) => UpdateAvailable?.Invoke(this, info);
+            _autoUpdater.UpdateStarting += (s, e) => Log("업데이트 설치를 위해 프로그램이 재시작됩니다...");
         }
 
         public void Start()
@@ -84,9 +94,13 @@ namespace ReceiptTap.App
                 // 큐 재시도 타이머 (30초마다)
                 _queueRetryTimer = new Timer(RetryQueue, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
 
+                // 자동 업데이트 시작 (6시간마다 체크)
+                _autoUpdater.Start();
+                _autoUpdater.CleanupOldUpdates();
+
                 _isRunning = true;
                 UpdateStatus(AgentStatus.Connected);
-                Log($"캡처 시작: {_config.CaptureMode} - {_config.ComPort ?? _config.PrinterIp}");
+                Log($"캡처 시작: {_config.CaptureMode} - {_config.ComPort ?? _config.PrinterIp} (v{VERSION})");
             }
             catch (Exception ex)
             {
@@ -101,12 +115,21 @@ namespace ReceiptTap.App
 
             _heartbeatTimer?.Dispose();
             _queueRetryTimer?.Dispose();
+            _autoUpdater?.Dispose();
             _capture?.Stop();
             _capture?.Dispose();
 
             _isRunning = false;
             UpdateStatus(AgentStatus.Idle);
             Log("캡처 중지");
+        }
+
+        /// <summary>
+        /// 수동 업데이트 확인
+        /// </summary>
+        public async Task<UpdateInfo> CheckForUpdateAsync()
+        {
+            return await _autoUpdater.CheckForUpdateAsync();
         }
 
         private async void OnReceiptCaptured(object sender, ReceiptCapturedEventArgs e)
@@ -120,7 +143,7 @@ namespace ReceiptTap.App
                     e.RawData,
                     e.CapturedAt,
                     _capture.CaptureMode,
-                    "1.0.0"
+                    VERSION
                 );
 
                 if (result.Success)
@@ -156,7 +179,7 @@ namespace ReceiptTap.App
             try
             {
                 var success = await _uploader.SendHeartbeatAsync(
-                    "1.0.0",
+                    VERSION,
                     _capture?.CaptureMode ?? "unknown",
                     _lastCaptureAt,
                     _queue.Count
@@ -186,7 +209,7 @@ namespace ReceiptTap.App
                         data,
                         item.CapturedAt,
                         item.CaptureMode,
-                        "1.0.0"
+                        VERSION
                     );
 
                     if (result.Success)

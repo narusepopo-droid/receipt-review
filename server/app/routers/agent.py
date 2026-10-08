@@ -273,10 +273,69 @@ async def upload_receipt(
     )
 
 
-@router.get("/latest")
+class VersionInfo(BaseModel):
+    version: str
+    download_url: str
+    checksum: str  # SHA256
+    file_size: int
+    release_notes: str
+    mandatory: bool = False  # 필수 업데이트 여부
+
+
+@router.get("/latest", response_model=VersionInfo)
 async def get_latest_version():
-    return {
+    """최신 버전 정보 반환 - 에이전트가 6시간마다 확인"""
+
+    # 설치 파일 경로
+    installer_path = os.path.join(settings.UPLOAD_DIR, "ReceiptTap_Setup.exe")
+
+    # 버전 정보 파일
+    version_file = os.path.join(settings.UPLOAD_DIR, "version.json")
+
+    # 기본값
+    version_info = {
         "version": "1.0.0",
-        "download_url": "/download/ReceiptTap_Setup.exe",
+        "download_url": f"{settings.SERVER_URL}/download/agent/ReceiptTap_Setup.exe",
+        "checksum": "",
+        "file_size": 0,
         "release_notes": "초기 버전",
+        "mandatory": False
     }
+
+    # 버전 파일이 있으면 읽기
+    if os.path.exists(version_file):
+        import json
+        with open(version_file, "r", encoding="utf-8") as f:
+            version_info.update(json.load(f))
+
+    # 설치 파일이 있으면 체크섬 계산
+    if os.path.exists(installer_path):
+        version_info["file_size"] = os.path.getsize(installer_path)
+
+        # 체크섬이 없으면 계산
+        if not version_info.get("checksum"):
+            with open(installer_path, "rb") as f:
+                version_info["checksum"] = hashlib.sha256(f.read()).hexdigest()
+
+    return VersionInfo(**version_info)
+
+
+@router.get("/download/agent/{filename}")
+async def download_agent(filename: str):
+    """에이전트 설치 파일 다운로드"""
+    from fastapi.responses import FileResponse
+
+    # 보안: 파일명 검증
+    if not filename.endswith(".exe") or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    file_path = os.path.join(settings.UPLOAD_DIR, filename)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(
+        file_path,
+        media_type="application/octet-stream",
+        filename=filename
+    )

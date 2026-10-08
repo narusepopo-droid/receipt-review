@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     PHONE_ENC_KEY: str = "change-me-32-bytes-for-aes-256!!"
     PHONE_HMAC_KEY: str = "change-me-hmac-key-for-phone-hash"
 
+    SERVER_URL: str = "https://review.placemaster.co.kr"
+    UPLOAD_DIR: str = "./uploads"
     RECEIPT_IMAGE_DIR: str = "./data/receipts"
     RECEIPT_RAW_DIR: str = "./data/raw"
 
