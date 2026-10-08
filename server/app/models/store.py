@@ -4,6 +4,7 @@ from typing import Optional
 from sqlalchemy import String, Integer, DateTime, Enum, JSON, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
+import bcrypt
 
 from .base import Base, TimestampMixin
 
@@ -37,6 +38,21 @@ class Store(Base, TimestampMixin):
         uselist=False
     )
     agents: Mapped[list["Agent"]] = relationship(back_populates="store")
+
+    def set_password(self, password: str):
+        """비밀번호 해시 저장"""
+        self.admin_password_hash = bcrypt.hashpw(
+            password.encode(), bcrypt.gensalt()
+        ).decode()
+
+    def verify_password(self, password: str) -> bool:
+        """비밀번호 검증"""
+        if not self.admin_password_hash:
+            return False
+        return bcrypt.checkpw(
+            password.encode(),
+            self.admin_password_hash.encode()
+        )
 
 
 class StoreSettings(Base):
