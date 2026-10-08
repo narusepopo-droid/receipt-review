@@ -74,3 +74,4 @@ agent/installer/Output/
 # 인증서, 키
 *.pfx
 *.snk
+receipt-review.pem
