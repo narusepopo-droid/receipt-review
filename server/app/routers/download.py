@@ -27,26 +27,19 @@ class VersionInfo(BaseModel):
 # ============ 설정 ============
 
 INSTALLER_DIR = "app/static/downloads"
-CURRENT_VERSION = "1.0.0"
-CURRENT_FILENAME = "ReceiptTap_v1.0.0.zip"
+CURRENT_VERSION = "1.0.1"
+CURRENT_FILENAME = "ReceiptTap_v1.0.1.zip"
 
 
 # ============ 다운로드 페이지 ============
 
 @router.get("/download", response_class=HTMLResponse)
 async def download_page():
-    """설치 파일 다운로드 페이지 (placemaster.co.kr에서 링크)"""
+    """설치 파일 다운로드 페이지 - 로그인 필수"""
 
-    # TODO: DB에서 최신 버전 정보 조회
     version_info = {
         "version": CURRENT_VERSION,
-        "release_date": "2026-10-07",
-        "sha256": "확인 후 표시됩니다",
-        "requirements": [
-            "Windows 7 SP1 이상 (Windows 10/11 권장)",
-            ".NET Framework 4.6.2 이상",
-            "영수증 프린터 연결 필요"
-        ]
+        "release_date": "2026-10-08",
     }
 
     html = f"""
