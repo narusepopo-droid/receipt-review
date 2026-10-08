@@ -821,13 +821,20 @@ event_log
   - [x] 리뷰 문구 조합형 생성 (2026-10-09) — 반복 방지(조합 9천+), 메뉴 없을 때 처리, 조사(이/가)
   - [x] 수신거부 API·화면, 서버 번호 검증, 시간당·일일 배정 상한 (2026-10-09)
   - [x] 운영 (2026-10-09) — DB 매일 04:30 백업(14일), 스왑 1GB, nginx 업로드 30MB, 배포 점검 스크립트 server/scripts/e2e_smoke.py (10항목)
-  - [x] 테스트 101개 (pytest), 샘플 ESC/POS 생성기 server/scripts/make_sample_escpos.py
+  - [x] 테스트 106개 (pytest), 샘플 ESC/POS 생성기 server/scripts/make_sample_escpos.py
+  - [x] Phase 8 홍보 문자 (2026-10-09) — 수신동의자만, (광고)·수신거부 자동, 야간 차단, 예약·이력·잔액(운영자 충전). 알리고 키 없으면 모의 발송
+  - [x] 운영자 알림 (2026-10-09) — 에이전트 30분 끊김/복구 문자 (OPS_ALERT_PHONE + 알리고 키 필요, 없으면 로그)
+  - [x] 문서 (2026-10-09) — docs/pos-install-guide.md (백신 대응 포함), README 갱신
+  - [x] **실제 에이전트 통합 시험 (2026-10-09)** — 개발 PC에서 ReceiptTap.exe v1.1.2 실행 → COM1 영수증 자동 연결 → 운영 서버 업로드·하트비트 성공
 - 진행 중:
   - [ ] 🛑 **매장 포스 실제 테스트** — v1.1.2 설치 → 영수증 1장 출력 → 자동 연결·상태판·서버 수신 확인 (수작나베석촌점 에이전트는 v1.0.0, 재설치 필요)
   - [ ] 🛑 P3·P4 손님 폰 테스트 (아이폰 사파리 공유 저장은 실기기로만 확인 가능)
   - [ ] 🛑 Setup.exe 관리자 권한 실제 설치 테스트 → 통과 시 release.ps1 -Publish (ZipOnly 없이)
   - [ ] 결제 시스템(토스페이먼츠) — 키·결정 필요
-  - [ ] Phase 8 홍보 문자 — 알리고 키·발신번호 필요
+  - [ ] Phase 8 실제 발송 — 알리고 키·발신번호·080 수신거부 번호 필요 (코드 완료, 현재 모의 발송)
+  - [ ] 네트워크(LAN) 프린터 캡처 — 테스트 매장 프린터 방식 확인 + Npcap 재배포 라이선스 결정 후
+  - [ ] 수작나베석촌점: 네이버 리뷰 주소·직원 PIN 미등록, 에이전트 v1.0.0 → v1.1.2 재설치
+  - [ ] 운영자 비밀번호 기본값 → .env OPS_PASSWORD 로 변경 필요
 - 막힌 점:
   - 실제 매장·실제 폰 테스트 대기 (코드·서버는 점검 통과)
 - 서버 접속: 이 PC ~/.ssh/receipt-review → ubuntu@13.124.130.55, 앱 /home/ubuntu/receipt-review, 배포 = git pull + sudo systemctl restart receipt-review + scripts/e2e_smoke.py
