@@ -571,7 +571,7 @@
                 }).finally(() => {
                     this.readyToGo = true;
                     mainBtn.disabled = false;
-                    mainBtn.innerHTML = '<span>영수증 저장했으면</span><strong>네이버로 이동</strong>';
+                    mainBtn.innerHTML = '<span>저장했으면</span><strong>네이버로 이동</strong>';
                     mainBtn.classList.add('btn--pulse');
                     copyPromise.then((ok) => {
                         Toast.show(ok ? '문구가 복사되었어요. 네이버 글 입력칸에 붙여넣으세요' : '문구를 길게 눌러 복사해 주세요', ok ? 'success' : 'info', 3000);
@@ -584,7 +584,7 @@
                 // 이미지 준비 실패 → 길게 눌러 저장 안내
                 Toast.show('영수증 이미지를 길게 눌러 "사진에 저장"을 선택해 주세요', 'info', 4000);
                 this.readyToGo = true;
-                mainBtn.innerHTML = '<span>영수증 저장했으면</span><strong>네이버로 이동</strong>';
+                mainBtn.innerHTML = '<span>저장했으면</span><strong>네이버로 이동</strong>';
                 return;
             }
 
