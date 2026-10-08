@@ -1,0 +1,790 @@
+<title>영수증리뷰 손님화면</title>
+<style>
+/* 레이아웃: 모바일 최적화 단일 컬럼 */
+:root {
+    --primary: #03C75A;
+    --primary-dark: #02a84d;
+    --primary-light: #e8f8ee;
+    --bg: #f7f8fa;
+    --surface: #ffffff;
+    --text: #1a1a1a;
+    --text-secondary: #666666;
+    --text-muted: #999999;
+    --border: #e8e8e8;
+    --error: #ff4757;
+    --warning-bg: #fff3e0;
+    --warning-text: #e65100;
+    --review-bg: #fff9e6;
+    --review-border: #ffe082;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --bg: #0f0f0f;
+        --surface: #1a1a1a;
+        --text: #f0f0f0;
+        --text-secondary: #a0a0a0;
+        --text-muted: #707070;
+        --border: #2a2a2a;
+        --primary-light: #0d3320;
+        --review-bg: #2a2510;
+        --review-border: #5d4e1a;
+        --warning-bg: #2a1a0a;
+        color-scheme: dark;
+    }
+}
+
+:root[data-theme="dark"] {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --text: #f0f0f0;
+    --text-secondary: #a0a0a0;
+    --text-muted: #707070;
+    --border: #2a2a2a;
+    --primary-light: #0d3320;
+    --review-bg: #2a2510;
+    --review-border: #5d4e1a;
+    --warning-bg: #2a1a0a;
+    color-scheme: dark;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 16px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0));
+}
+
+.container {
+    max-width: 400px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 32px);
+}
+
+.screen { display: none; flex-direction: column; flex: 1; }
+.screen.active { display: flex; animation: fadeIn 0.3s ease; }
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* 진행바 */
+.progress {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 24px;
+}
+.progress-step {
+    flex: 1;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    transition: background 0.3s;
+}
+.progress-step.active,
+.progress-step.done { background: var(--primary); }
+
+/* 헤더 */
+.header {
+    text-align: center;
+    padding: 16px 0 24px;
+}
+.store-name {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+.subtitle {
+    font-size: 16px;
+    color: var(--text-secondary);
+}
+
+/* 혜택 배너 */
+.benefit {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    padding: 20px;
+    border-radius: 16px;
+    text-align: center;
+    margin-bottom: 24px;
+}
+.benefit-icon { font-size: 28px; margin-bottom: 8px; }
+.benefit-text { font-size: 17px; font-weight: 600; }
+
+/* 카드 */
+.card {
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.card-title {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 16px;
+}
+
+/* 입력 */
+.input-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    display: block;
+}
+.phone-input {
+    width: 100%;
+    padding: 16px;
+    font-size: 22px;
+    font-weight: 600;
+    text-align: center;
+    letter-spacing: 2px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.phone-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px var(--primary-light);
+}
+.phone-input::placeholder {
+    color: var(--text-muted);
+    font-weight: 400;
+    letter-spacing: 0;
+}
+.input-hint {
+    font-size: 13px;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 8px;
+}
+
+/* 체크박스 */
+.checkbox-group { margin-bottom: 16px; }
+.checkbox-item {
+    display: flex;
+    gap: 12px;
+    padding: 14px;
+    background: var(--bg);
+    border-radius: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+}
+.checkbox-item:hover { background: var(--primary-light); }
+.checkbox-item input {
+    width: 22px;
+    height: 22px;
+    accent-color: var(--primary);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+.checkbox-content { flex: 1; }
+.checkbox-label {
+    font-size: 15px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+.badge-required { background: var(--primary-light); color: var(--primary); }
+.badge-optional { background: var(--border); color: var(--text-muted); }
+.checkbox-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* 버튼 */
+.btn {
+    width: 100%;
+    min-height: 56px;
+    padding: 16px 24px;
+    font-size: 17px;
+    font-weight: 600;
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.1s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    box-shadow: 0 4px 16px rgba(3, 199, 90, 0.3);
+}
+.btn-large { min-height: 64px; font-size: 18px; }
+.btn span { font-size: 15px; opacity: 0.9; }
+.btn strong { font-size: 18px; }
+
+/* 키워드 */
+.keywords {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+.keyword {
+    padding: 10px 16px;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--bg);
+    border: 2px solid transparent;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.keyword:hover {
+    background: var(--primary-light);
+    color: var(--primary);
+}
+.keyword.active {
+    background: var(--primary-light);
+    color: var(--primary);
+    border-color: var(--primary);
+    font-weight: 600;
+}
+.keyword svg {
+    width: 14px;
+    height: 14px;
+    opacity: 0;
+    transform: scale(0);
+    transition: all 0.2s;
+}
+.keyword.active svg {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* 사진 알림 */
+.photo-reminder {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    background: var(--warning-bg);
+    border-radius: 12px;
+    margin-bottom: 16px;
+}
+.photo-reminder-icon { font-size: 22px; }
+.photo-reminder-text {
+    font-size: 15px;
+    color: var(--warning-text);
+    font-weight: 500;
+}
+
+/* 영수증 미리보기 */
+.receipt-preview {
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    margin-bottom: 12px;
+}
+.receipt-img {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.receipt-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 8px;
+}
+
+/* 문구 미리보기 */
+.text-preview {
+    background: var(--review-bg);
+    border: 1px solid var(--review-border);
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 12px;
+}
+.review-text {
+    font-size: 16px;
+    line-height: 1.7;
+    color: var(--text);
+}
+.regenerate-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--primary);
+    background: var(--surface);
+    border: 1px solid var(--primary);
+    border-radius: 20px;
+    cursor: pointer;
+}
+
+/* 단계 안내 */
+.steps {
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+.steps-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--primary);
+    text-align: center;
+    margin-bottom: 20px;
+}
+.step {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+}
+.step:last-child {
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-bottom: none;
+}
+.step-num {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: white;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.step-text {
+    font-size: 15px;
+    font-weight: 500;
+}
+.step-text strong {
+    color: var(--primary);
+    font-weight: 700;
+}
+
+/* 푸터 */
+.footer {
+    text-align: center;
+    padding: 16px 0;
+    margin-top: auto;
+}
+.footer-text {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* 완료 화면 */
+.completion {
+    text-align: center;
+    padding: 24px 0;
+}
+.completion-icon {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    background: var(--primary-light);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+.completion-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+.completion-subtitle {
+    font-size: 15px;
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+}
+.live-clock {
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    color: white;
+    padding: 20px;
+    border-radius: 16px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+}
+.live-clock::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    animation: shimmer 3s infinite;
+}
+@keyframes shimmer {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+.clock-time {
+    font-size: 42px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 2px;
+}
+.clock-date {
+    font-size: 14px;
+    opacity: 0.8;
+    margin-top: 4px;
+}
+.completion-code {
+    background: var(--primary-light);
+    border: 2px dashed var(--primary);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+.code-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+.code-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--primary);
+    letter-spacing: 6px;
+    font-variant-numeric: tabular-nums;
+}
+</style>
+
+<!-- 화면 1: 전화번호 입력 -->
+<div class="container">
+    <div id="screen1" class="screen active">
+        <div class="progress">
+            <div class="progress-step active"></div>
+            <div class="progress-step"></div>
+            <div class="progress-step"></div>
+        </div>
+
+        <div class="header">
+            <h1 class="store-name">맛있는 식당</h1>
+            <p class="subtitle">리뷰 작성하고 혜택 받으세요</p>
+        </div>
+
+        <div class="benefit">
+            <div class="benefit-icon">🎁</div>
+            <p class="benefit-text">리뷰 작성 시 음료 1잔 서비스!</p>
+        </div>
+
+        <div class="card">
+            <label class="input-label">휴대폰 번호</label>
+            <input type="tel" id="phoneInput" class="phone-input" placeholder="010-0000-0000" inputmode="numeric" maxlength="13">
+            <p class="input-hint">하이픈(-)은 자동으로 입력됩니다</p>
+        </div>
+
+        <div class="checkbox-group">
+            <label class="checkbox-item">
+                <input type="checkbox" id="privacyCheck" checked>
+                <div class="checkbox-content">
+                    <span class="checkbox-label">
+                        개인정보 수집·이용 동의
+                        <span class="badge badge-required">필수</span>
+                    </span>
+                    <p class="checkbox-desc">서비스 제공을 위해 휴대폰 번호를 수집합니다</p>
+                </div>
+            </label>
+            <label class="checkbox-item">
+                <input type="checkbox" id="marketingCheck" checked>
+                <div class="checkbox-content">
+                    <span class="checkbox-label">
+                        마케팅 정보 수신 동의
+                        <span class="badge badge-optional">선택</span>
+                    </span>
+                    <p class="checkbox-desc">매장 이벤트, 할인 정보를 받아보실 수 있습니다</p>
+                </div>
+            </label>
+        </div>
+
+        <button id="nextBtn1" class="btn btn-primary" disabled>다음</button>
+
+        <div class="footer">
+            <p class="footer-text">© 맛있는 식당 · Powered by 영수증리뷰</p>
+        </div>
+    </div>
+
+    <!-- 화면 2: 키워드 선택 -->
+    <div id="screen2" class="screen">
+        <div class="progress">
+            <div class="progress-step done"></div>
+            <div class="progress-step active"></div>
+            <div class="progress-step"></div>
+        </div>
+
+        <div class="header">
+            <h1 class="store-name">어떤 점이 좋았나요?</h1>
+            <p class="subtitle">해당하는 키워드를 선택해주세요</p>
+        </div>
+
+        <div class="card">
+            <div class="keywords">
+                <button class="keyword active" data-kw="맛있어요">
+                    <svg viewBox="0 0 16 16" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
+                    맛있어요
+                </button>
+                <button class="keyword" data-kw="친절해요">
+                    <svg viewBox="0 0 16 16" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
+                    친절해요
+                </button>
+                <button class="keyword active" data-kw="분위기 좋아요">
+                    <svg viewBox="0 0 16 16" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
+                    분위기 좋아요
+                </button>
+                <button class="keyword" data-kw="가성비 좋아요">
+                    <svg viewBox="0 0 16 16" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
+                    가성비 좋아요
+                </button>
+                <button class="keyword" data-kw="양이 많아요">
+                    <svg viewBox="0 0 16 16" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
+                    양이 많아요
+                </button>
+                <button class="keyword" data-kw="재방문 의사 있어요">
+                    <svg viewBox="0 0 16 16" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
+                    재방문 의사 있어요
+                </button>
+            </div>
+            <p style="text-align: center; color: var(--text-muted); font-size: 14px;">선택하지 않고 넘어가셔도 됩니다</p>
+        </div>
+
+        <button id="nextBtn2" class="btn btn-primary">다음</button>
+
+        <div class="footer">
+            <p class="footer-text">선택한 키워드로 리뷰 문구가 생성됩니다</p>
+        </div>
+    </div>
+
+    <!-- 화면 3: 결과 -->
+    <div id="screen3" class="screen">
+        <div class="photo-reminder">
+            <span class="photo-reminder-icon">📷</span>
+            <span class="photo-reminder-text">음식·매장 사진 2장 찍어두셨나요?</span>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">영수증</h2>
+            <div class="receipt-preview">
+                <canvas id="receiptCanvas" width="240" height="180" class="receipt-img"></canvas>
+            </div>
+            <p class="receipt-label">이 영수증이 폰에 저장됩니다</p>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">리뷰 문구</h2>
+            <div class="text-preview">
+                <p class="review-text" id="reviewText">돼지김치찌개 정말 맛있었어요! 분위기도 좋고 직원분들이 친절해서 기분 좋게 식사했습니다. 다음에 또 올게요.</p>
+            </div>
+            <div style="text-align: center;">
+                <button class="regenerate-btn" onclick="regenerateText()">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/><path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/></svg>
+                    다른 문구
+                </button>
+            </div>
+        </div>
+
+        <div class="steps">
+            <p class="steps-title">네이버에서 이렇게 하세요</p>
+            <div class="step">
+                <span class="step-num">1</span>
+                <p class="step-text">앨범에서 <strong>영수증</strong> 선택</p>
+            </div>
+            <div class="step">
+                <span class="step-num">2</span>
+                <p class="step-text">미리 찍어둔 <strong>사진 2장</strong> 첨부</p>
+            </div>
+            <div class="step">
+                <span class="step-num">3</span>
+                <p class="step-text">글 입력칸에 <strong>붙여넣기</strong> → 등록</p>
+            </div>
+        </div>
+
+        <button id="mainAction" class="btn btn-primary btn-large">
+            <span>영수증 저장 + 문구 복사하고</span>
+            <strong>네이버로 이동</strong>
+        </button>
+    </div>
+
+    <!-- 화면 4: 완료 -->
+    <div id="screen4" class="screen">
+        <div class="completion">
+            <div class="completion-icon">✓</div>
+            <h1 class="completion-title">리뷰 작성 완료!</h1>
+            <p class="completion-subtitle">직원에게 이 화면을 보여주세요</p>
+        </div>
+
+        <div class="live-clock">
+            <div class="clock-time" id="clockTime">14:32:15</div>
+            <div class="clock-date" id="clockDate">2026년 10월 8일 목요일</div>
+        </div>
+
+        <div class="completion-code">
+            <p class="code-label">완료 코드</p>
+            <p class="code-value" id="completionCode">847291</p>
+        </div>
+
+        <div class="benefit">
+            <div class="benefit-icon">🎁</div>
+            <p class="benefit-text">음료 1잔 서비스 받으세요!</p>
+        </div>
+    </div>
+</div>
+
+<script>
+// 영수증 이미지 생성
+function drawReceipt() {
+    const canvas = document.getElementById('receiptCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'black';
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('맛있는 식당', canvas.width/2, 24);
+    ctx.font = '10px monospace';
+    ctx.fillText('123-45-67890', canvas.width/2, 40);
+    ctx.fillText('─'.repeat(20), canvas.width/2, 55);
+    ctx.textAlign = 'left';
+    ctx.fillText('돼지김치찌개 x2  18,000', 16, 75);
+    ctx.fillText('계란말이 x1      8,000', 16, 92);
+    ctx.fillText('공기밥 x2        2,000', 16, 109);
+    ctx.textAlign = 'center';
+    ctx.fillText('─'.repeat(20), canvas.width/2, 124);
+    ctx.font = 'bold 12px monospace';
+    ctx.fillText('합계: 28,000원', canvas.width/2, 145);
+    ctx.font = '9px monospace';
+    ctx.fillText('2026-10-08 14:25:33', canvas.width/2, 165);
+    ctx.fillText('승인번호: 12345678', canvas.width/2, 178);
+}
+drawReceipt();
+
+// 전화번호 포맷팅
+const phoneInput = document.getElementById('phoneInput');
+const privacyCheck = document.getElementById('privacyCheck');
+const nextBtn1 = document.getElementById('nextBtn1');
+
+phoneInput.addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 11) value = value.slice(0, 11);
+    if (value.length > 7) {
+        value = value.slice(0, 3) + '-' + value.slice(3, 7) + '-' + value.slice(7);
+    } else if (value.length > 3) {
+        value = value.slice(0, 3) + '-' + value.slice(3);
+    }
+    e.target.value = value;
+    checkForm();
+});
+
+privacyCheck.addEventListener('change', checkForm);
+
+function checkForm() {
+    const phone = phoneInput.value.replace(/\D/g, '');
+    nextBtn1.disabled = !(phone.length >= 10 && privacyCheck.checked);
+}
+
+// 화면 전환
+function showScreen(num) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen' + num).classList.add('active');
+    window.scrollTo(0, 0);
+}
+
+document.getElementById('nextBtn1').addEventListener('click', () => showScreen(2));
+document.getElementById('nextBtn2').addEventListener('click', () => showScreen(3));
+
+// 키워드 토글
+document.querySelectorAll('.keyword').forEach(btn => {
+    btn.addEventListener('click', () => btn.classList.toggle('active'));
+});
+
+// 문구 재생성
+const texts = [
+    '돼지김치찌개 정말 맛있었어요! 분위기도 좋고 직원분들이 친절해서 기분 좋게 식사했습니다. 다음에 또 올게요.',
+    '오늘 돼지김치찌개 먹었는데 정말 맛있었어요! 양도 푸짐하고 분위기도 좋았습니다. 강력 추천합니다!',
+    '친구랑 같이 갔는데 돼지김치찌개가 진짜 맛있었어요. 분위기도 좋고 재방문 의사 100%입니다!'
+];
+let textIndex = 0;
+function regenerateText() {
+    textIndex = (textIndex + 1) % texts.length;
+    document.getElementById('reviewText').textContent = texts[textIndex];
+}
+
+// 메인 액션 (저장 + 복사 + 이동)
+document.getElementById('mainAction').addEventListener('click', async () => {
+    const text = document.getElementById('reviewText').textContent;
+    try {
+        await navigator.clipboard.writeText(text);
+    } catch(e) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+    }
+    showScreen(4);
+    startClock();
+});
+
+// 실시간 시계
+function startClock() {
+    function update() {
+        const now = new Date();
+        const time = now.toLocaleTimeString('ko-KR', { hour12: false });
+        const date = now.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+        document.getElementById('clockTime').textContent = time;
+        document.getElementById('clockDate').textContent = date;
+    }
+    update();
+    setInterval(update, 1000);
+    document.getElementById('completionCode').textContent = Math.floor(100000 + Math.random() * 900000);
+}
+</script>
