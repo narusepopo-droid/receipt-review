@@ -435,7 +435,7 @@ async def signup_page():
                     const result = await res.json();
 
                     if (result.success) {
-                        showSuccess('로그인 성공! 프로그램에서 같은 계정으로 로그인하세요.');
+                        window.location.href = '/download';
                     } else {
                         showError(result.message || '로그인에 실패했습니다.');
                     }
