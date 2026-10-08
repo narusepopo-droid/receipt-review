@@ -107,8 +107,11 @@ def require_ops_auth(request: Request):
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     """운영자 로그인 페이지"""
-    return templates.TemplateResponse("ops/login.html", {
-        "request": request,
+    return templates.TemplateResponse(
+        request=request,
+        name="ops/login.html",
+        context={
+        
         "error": None
     })
 
@@ -126,8 +129,11 @@ async def login(
         request.session["ops_authenticated"] = True
         return RedirectResponse(url="/ops/dashboard", status_code=303)
 
-    return templates.TemplateResponse("ops/login.html", {
-        "request": request,
+    return templates.TemplateResponse(
+        request=request,
+        name="ops/login.html",
+        context={
+        
         "error": "아이디 또는 비밀번호가 올바르지 않습니다."
     })
 
@@ -158,8 +164,11 @@ async def dashboard(request: Request):
         "unclassified_count": 0
     }
 
-    return templates.TemplateResponse("ops/dashboard.html", {
-        "request": request,
+    return templates.TemplateResponse(
+        request=request,
+        name="ops/dashboard.html",
+        context={
+        
         "stats": stats
     })
 
@@ -175,8 +184,11 @@ async def stores_list(request: Request):
     # TODO: DB에서 매장 목록 조회
     stores = []
 
-    return templates.TemplateResponse("ops/stores.html", {
-        "request": request,
+    return templates.TemplateResponse(
+        request=request,
+        name="ops/stores.html",
+        context={
+        
         "stores": stores
     })
 
@@ -187,8 +199,11 @@ async def store_new_form(request: Request):
     if not verify_ops_session(request):
         return RedirectResponse(url="/ops/login", status_code=303)
 
-    return templates.TemplateResponse("ops/store_form.html", {
-        "request": request,
+    return templates.TemplateResponse(
+        request=request,
+        name="ops/store_form.html",
+        context={
+        
         "store": None,
         "mode": "create"
     })
@@ -225,8 +240,11 @@ async def store_detail(request: Request, store_id: int):
     # TODO: DB에서 매장 조회
     store = None
 
-    return templates.TemplateResponse("ops/store_form.html", {
-        "request": request,
+    return templates.TemplateResponse(
+        request=request,
+        name="ops/store_form.html",
+        context={
+        
         "store": store,
         "mode": "edit"
     })
@@ -312,8 +330,11 @@ async def agents_list(request: Request):
     # - warning: 하트비트 5-30분 또는 캡처 0건 또는 큐 > 100
     # - offline: 하트비트 30분 초과
 
-    return templates.TemplateResponse("ops/agents.html", {
-        "request": request,
+    return templates.TemplateResponse(
+        request=request,
+        name="ops/agents.html",
+        context={
+        
         "agents": agents
     })
 
@@ -341,8 +362,11 @@ async def unclassified_receipts(request: Request):
     # TODO: DB에서 classification='unclassified' 영수증 조회
     receipts = []
 
-    return templates.TemplateResponse("ops/unclassified.html", {
-        "request": request,
+    return templates.TemplateResponse(
+        request=request,
+        name="ops/unclassified.html",
+        context={
+        
         "receipts": receipts
     })
 
@@ -377,8 +401,11 @@ async def stats_page(request: Request):
     # TODO: DB에서 통계 조회
     stores_stats = []
 
-    return templates.TemplateResponse("ops/stats.html", {
-        "request": request,
+    return templates.TemplateResponse(
+        request=request,
+        name="ops/stats.html",
+        context={
+        
         "stores_stats": stores_stats
     })
 
@@ -418,8 +445,11 @@ async def installer_page(request: Request):
     # TODO: 설치 파일 목록 조회
     versions = []
 
-    return templates.TemplateResponse("ops/installer.html", {
-        "request": request,
+    return templates.TemplateResponse(
+        request=request,
+        name="ops/installer.html",
+        context={
+        
         "versions": versions
     })
 
@@ -489,8 +519,11 @@ async def signups_list(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(stmt)
     approved_stores = result.scalars().all()
 
-    return templates.TemplateResponse("ops/signups.html", {
-        "request": request,
+    return templates.TemplateResponse(
+        request=request,
+        name="ops/signups.html",
+        context={
+        
         "pending_stores": pending_stores,
         "approved_stores": approved_stores
     })

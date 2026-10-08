@@ -76,10 +76,11 @@ async def get_current_store(request: Request, db: AsyncSession):
 
 @router.get("/login", response_class=HTMLResponse, name="admin_login")
 async def login_page(request: Request, error: Optional[str] = None):
-    return templates.TemplateResponse("admin/login.html", {
-        "request": request,
-        "error": error
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/login.html",
+        context={"error": error}
+    )
 
 
 @router.post("/login", name="admin_login_post")
@@ -99,10 +100,11 @@ async def login(
         request.session["store_id"] = store.id
         return RedirectResponse(url="/admin/dashboard", status_code=302)
 
-    return templates.TemplateResponse("admin/login.html", {
-        "request": request,
-        "error": "아이디 또는 비밀번호가 올바르지 않습니다."
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/login.html",
+        context={"error": "아이디 또는 비밀번호가 올바르지 않습니다."}
+    )
 
 
 @router.get("/logout", name="admin_logout")
@@ -283,32 +285,35 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     )
     today_receipts = today_receipts_result.scalar() or 0
 
-    return templates.TemplateResponse("admin/dashboard.html", {
-        "request": request,
-        "store": {
-            "id": store.id,
-            "name": store.name,
-            "biz_no": store.biz_no,
-            "store_code": store.store_code
-        },
-        "active_menu": "dashboard",
-        "today": date.today(),
-        "stats": {
-            "today_sessions": today_sessions,
-            "sessions_change": sessions_change,
-            "available_receipts": available_receipts,
-            "completed": completed,
-            "benefits_given": benefits_given,
-            **step_stats
-        },
-        "agent_online": agent_online,
-        "last_heartbeat": last_heartbeat,
-        "agent_version": agent_version,
-        "capture_mode": capture_mode,
-        "queue_length": queue_length,
-        "today_receipts": today_receipts,
-        "recent_activities": recent_activities
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/dashboard.html",
+        context={
+            "store": {
+                "id": store.id,
+                "name": store.name,
+                "biz_no": store.biz_no,
+                "store_code": store.store_code
+            },
+            "active_menu": "dashboard",
+            "today": date.today(),
+            "stats": {
+                "today_sessions": today_sessions,
+                "sessions_change": sessions_change,
+                "available_receipts": available_receipts,
+                "completed": completed,
+                "benefits_given": benefits_given,
+                **step_stats
+            },
+            "agent_online": agent_online,
+            "last_heartbeat": last_heartbeat,
+            "agent_version": agent_version,
+            "capture_mode": capture_mode,
+            "queue_length": queue_length,
+            "today_receipts": today_receipts,
+            "recent_activities": recent_activities
+        }
+    )
 
 
 # ============ Customers ============
@@ -385,20 +390,23 @@ async def customers_page(request: Request, page: int = 1, db: AsyncSession = Dep
 
     total_pages = (total + per_page - 1) // per_page
 
-    return templates.TemplateResponse("admin/customers.html", {
-        "request": request,
-        "store": {"id": store.id, "name": store.name},
-        "active_menu": "customers",
-        "customers": customers,
-        "stats": {
-            "total": total,
-            "opted_in": opted_in,
-            "returning": returning,
-            "new_this_month": new_this_month
-        },
-        "current_page": page,
-        "total_pages": total_pages
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/customers.html",
+        context={
+            "store": {"id": store.id, "name": store.name},
+            "active_menu": "customers",
+            "customers": customers,
+            "stats": {
+                "total": total,
+                "opted_in": opted_in,
+                "returning": returning,
+                "new_this_month": new_this_month
+            },
+            "current_page": page,
+            "total_pages": total_pages
+        }
+    )
 
 
 # ============ Receipts ============
@@ -458,21 +466,24 @@ async def receipts_page(request: Request, page: int = 1, status: str = "all", db
     total = available_count + assigned_count + disposed_count
     total_pages = (total + per_page - 1) // per_page if status == "all" else 1
 
-    return templates.TemplateResponse("admin/receipts.html", {
-        "request": request,
-        "store": {"id": store.id, "name": store.name},
-        "active_menu": "receipts",
-        "receipts": receipts,
-        "status_filter": status,
-        "counts": {
-            "all": total,
-            "available": available_count,
-            "assigned": assigned_count,
-            "disposed": disposed_count
-        },
-        "current_page": page,
-        "total_pages": total_pages
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/receipts.html",
+        context={
+            "store": {"id": store.id, "name": store.name},
+            "active_menu": "receipts",
+            "receipts": receipts,
+            "status_filter": status,
+            "counts": {
+                "all": total,
+                "available": available_count,
+                "assigned": assigned_count,
+                "disposed": disposed_count
+            },
+            "current_page": page,
+            "total_pages": total_pages
+        }
+    )
 
 
 # ============ Phrases ============
@@ -495,16 +506,19 @@ async def phrases_page(request: Request, db: AsyncSession = Depends(get_db)):
     signature_menus = settings.signature_menus if settings and settings.signature_menus else []
     templates_list = settings.templates if settings and settings.templates else []
 
-    return templates.TemplateResponse("admin/phrases.html", {
-        "request": request,
-        "store": {"id": store.id, "name": store.name},
-        "active_menu": "phrases",
-        "keywords": keywords,
-        "signature_menus": signature_menus,
-        "templates": templates_list,
-        "text_min_len": settings.text_min_len if settings else 30,
-        "text_max_len": settings.text_max_len if settings else 150
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/phrases.html",
+        context={
+            "store": {"id": store.id, "name": store.name},
+            "active_menu": "phrases",
+            "keywords": keywords,
+            "signature_menus": signature_menus,
+            "templates": templates_list,
+            "text_min_len": settings.text_min_len if settings else 30,
+            "text_max_len": settings.text_max_len if settings else 150
+        }
+    )
 
 
 @router.post("/phrases/save", name="admin_save_phrases")
@@ -546,19 +560,22 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
     store = store_data["store"]
     settings = store_data["settings"] or {}
 
-    return templates.TemplateResponse("admin/settings.html", {
-        "request": request,
-        "store": {"id": store.id, "name": store.name, "naver_review_url": store.naver_review_url, "staff_pin": store.staff_pin},
-        "active_menu": "settings",
-        "settings": {
-            "benefit_text": settings.benefit_text if settings else "",
-            "primary_color": settings.primary_color if settings else "#03C75A",
-            "assignment_policy": settings.assignment_policy if settings else "latest_same_day",
-            "business_day_cutoff": settings.business_day_cutoff if settings else "05:00",
-            "hourly_assign_limit": settings.hourly_assign_limit if settings else 50,
-            "daily_assign_limit": settings.daily_assign_limit if settings else 200
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/settings.html",
+        context={
+            "store": {"id": store.id, "name": store.name, "naver_review_url": store.naver_review_url, "staff_pin": store.staff_pin},
+            "active_menu": "settings",
+            "settings": {
+                "benefit_text": settings.benefit_text if settings else "",
+                "primary_color": settings.primary_color if settings else "#03C75A",
+                "assignment_policy": settings.assignment_policy if settings else "latest_same_day",
+                "business_day_cutoff": settings.business_day_cutoff if settings else "05:00",
+                "hourly_assign_limit": settings.hourly_assign_limit if settings else 50,
+                "daily_assign_limit": settings.daily_assign_limit if settings else 200
+            }
         }
-    })
+    )
 
 
 @router.post("/settings/save", name="admin_save_settings")
@@ -615,14 +632,17 @@ async def tables_page(request: Request, db: AsyncSession = Depends(get_db)):
     store = store_data["store"]
     settings = store_data["settings"]
 
-    return templates.TemplateResponse("admin/tables.html", {
-        "request": request,
-        "store": {"id": store.id, "name": store.name, "store_code": store.store_code},
-        "active_menu": "tables",
-        "table_count": 10,
-        "start_number": 1,
-        "benefit_text": settings.benefit_text if settings else "리뷰 작성 시 음료 1잔 서비스"
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/tables.html",
+        context={
+            "store": {"id": store.id, "name": store.name, "store_code": store.store_code},
+            "active_menu": "tables",
+            "table_count": 10,
+            "start_number": 1,
+            "benefit_text": settings.benefit_text if settings else "리뷰 작성 시 음료 1잔 서비스"
+        }
+    )
 
 
 @router.get("/tables/download", name="admin_download_tables")
