@@ -231,3 +231,70 @@ async def test_pin_bruteforce_limited(web):
     sid = r.json()["session_id"]
     codes = [(await web.post(f"/api/v1/session/{sid}/benefit", json={"pin": f"{i:04d}"})).status_code for i in range(7)]
     assert 429 in codes
+
+
+@pytest.mark.asyncio
+async def test_ops_store_management_and_agent_status(web, tmp_path, monkeypatch):
+    """운영자: 매장 등록·수정·정지, 에이전트 상태, 판별불가 분류, 통계, 설치파일"""
+    import json
+    from datetime import timezone
+    from app.services import release as rel
+    from app.routers.auth import generate_token
+
+    await web.post("/ops/login", data={"username": settings.OPS_USERNAME, "password": settings.OPS_PASSWORD})
+
+    r = await web.post("/ops/stores/new", data={
+        "name": "새매장", "biz_no": "111-22-33333", "naver_review_url": "https://m.place.naver.com/x",
+        "paper_width": "576", "admin_login_id": "new@test.com", "admin_password": "pw!", "staff_pin": "1234"})
+    assert r.status_code == 303
+    page = (await web.get("/ops/stores")).text
+    assert "새매장" in page
+
+    # 새 매장 점주가 바로 로그인 가능
+    r = await web.post("/auth/login", json={"email": "new@test.com", "password": "pw!"})
+    assert r.json()["success"], r.text
+    new_id = r.json()["store_id"]
+
+    r = await web.post(f"/ops/stores/{new_id}", data={"name": "새매장2", "status": "paused"})
+    assert r.status_code == 303
+    assert "새매장2" in (await web.get(f"/ops/stores/{new_id}")).text
+    assert (await web.post(f"/ops/stores/{new_id}/activate")).json()["status"] == "active"
+
+    # 에이전트 상태: 하트비트 전 offline → 후 warning(수신 0건)
+    agents = (await web.get("/ops/api/agents/status")).json()["agents"]
+    me = next(a for a in agents if a["store_id"] == new_id)
+    assert me["status"] == "offline"
+    await web.post("/agent/v1/heartbeat", headers={"Authorization": f"Bearer {generate_token(new_id)}"},
+                   json={"version": "1.1.2", "capture_mode": "serial", "last_capture_at": None, "queue_length": 0})
+    me = next(a for a in (await web.get("/ops/api/agents/status")).json()["agents"] if a["store_id"] == new_id)
+    assert me["status"] == "warning" and "0건" in me["warning_message"]
+    assert (await web.get("/ops/agents")).status_code == 200
+
+    # 판별 불가 영수증 (금액 있음 + 승인번호 없음) → 수동 정상 분류
+    monkeypatch.setattr(settings, "RECEIPT_IMAGE_DIR", str(tmp_path / "img"))
+    monkeypatch.setattr(settings, "RECEIPT_RAW_DIR", str(tmp_path / "raw"))
+    data = ("맛집\n" + "\n".join(f"품목{i}  1,000" for i in range(5)) + "\n합계 5,000\n").encode("cp949")
+    up = await web.post("/agent/v1/receipts", headers={"Authorization": f"Bearer {generate_token(new_id)}"},
+                        files={"file": ("r.bin", data, "application/octet-stream")},
+                        data={"captured_at": datetime.now(timezone.utc).isoformat()})
+    assert up.json()["classification"] == "unclassified", up.text
+    rid = up.json()["receipt_id"]
+    assert rid in (await web.get("/ops/receipts/unclassified")).text
+    assert (await web.post(f"/ops/receipts/{rid}/classify", data={"classification": "normal"})).json()["success"]
+    assert rid not in (await web.get("/ops/receipts/unclassified")).text
+
+    # 통계
+    st = (await web.get(f"/ops/api/stats/{new_id}")).json()
+    assert st["store_name"] == "새매장2" and len(st["hourly_distribution"]) == 24
+    assert (await web.get("/ops/stats")).status_code == 200
+    assert (await web.get("/ops/dashboard")).status_code == 200
+
+    # 설치 파일 업로드 → 최신 지정
+    monkeypatch.setattr(rel, "INSTALLER_DIR", str(tmp_path / "dl"))
+    monkeypatch.setattr(rel, "LATEST_JSON", str(tmp_path / "dl" / "latest.json"))
+    r = await web.post("/ops/installer/upload", data={"version": "9.0.0"},
+                       files={"file": ("x.zip", b"PKzip", "application/zip")})
+    assert r.json()["filename"] == "ReceiptTap_v9.0.0.zip", r.text
+    assert (await web.post("/ops/installer/9.0.0/set-latest")).json()["success"]
+    assert json.loads((tmp_path / "dl" / "latest.json").read_text(encoding="utf-8"))["version"] == "9.0.0"
+    assert "9.0.0" in (await web.get("/ops/installer")).text

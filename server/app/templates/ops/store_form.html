@@ -8,6 +8,15 @@
     <p class="page-subtitle">{{ '매장 정보를 수정합니다' if mode == 'edit' else '새로운 매장을 등록합니다' }}</p>
 </div>
 
+{% if error %}
+<div class="card" style="max-width: 800px; border-left: 4px solid var(--danger, #e53935); color: var(--danger, #e53935); margin-bottom: 16px;">{{ error }}</div>
+{% endif %}
+{% if mode == 'edit' and store %}
+<div class="card" style="max-width: 800px; margin-bottom: 16px; font-size: 14px;">
+    매장 코드 <strong>{{ store.store_code }}</strong> · 점주 로그인 <strong>{{ store.admin_login_id or '-' }}</strong> ·
+    손님 QR 주소 <code>https://review.placemaster.co.kr/t/{{ store.store_code }}/1</code>
+</div>
+{% endif %}
 <div class="card" style="max-width: 800px;">
     <form method="POST" action="{{ '/ops/stores/' ~ store.id if mode == 'edit' else '/ops/stores/new' }}">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
