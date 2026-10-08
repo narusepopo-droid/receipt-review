@@ -10,61 +10,23 @@
     <p class="completion__subtitle">{{ store.name }}에 리뷰를 남겨주셔서 감사합니다</p>
 </div>
 
-<!-- 실시간 시계 -->
-<div class="live-clock">
-    <div id="liveClock" class="live-clock__time">00:00:00</div>
-    <div id="liveDate" class="live-clock__date">2026년 10월 7일 수요일</div>
-</div>
-
-<!-- 완료 코드 -->
-<div class="completion-code">
-    <p class="completion-code__label">완료 코드</p>
-    <p class="completion-code__value">{{ completion_code }}</p>
-</div>
-
 <!-- 혜택 안내 -->
 <div class="benefit-banner">
     <div class="benefit-banner__icon">🎁</div>
     <p class="benefit-banner__text">{{ store.settings.benefit_text or "직원에게 이 화면을 보여주세요!" }}</p>
 </div>
 
-<!-- 혜택 지급 확인 -->
-<button type="button" id="confirmBenefit" class="btn btn--secondary btn--large">
-    직원 확인 (혜택 지급)
-</button>
-
-<!-- PIN 입력 (숨김) -->
-<div id="pinSection" class="staff-confirm hidden">
-    <p style="text-align: center; margin-bottom: 12px; color: var(--color-text-secondary); font-size: 14px;">
-        직원용 PIN 4자리를 입력하세요
+<!-- 직원 확인 안내 -->
+<div class="card" style="text-align: center; margin-top: 24px;">
+    <p style="font-size: 18px; font-weight: 600; color: var(--color-text); margin-bottom: 8px;">
+        직원 확인 후 혜택을 받으세요
     </p>
-    <div class="staff-confirm__pin">
-        <input
-            type="password"
-            id="pinInput"
-            class="staff-confirm__pin-input"
-            maxlength="4"
-            inputmode="numeric"
-            placeholder="••••"
-        >
-    </div>
-    <button type="button" onclick="window.ReviewApp.CompletionPage.verifyPin()" class="btn btn--primary btn--large">
-        확인
-    </button>
+    <p style="font-size: 14px; color: var(--color-text-secondary);">
+        이 화면을 직원에게 보여주시면 됩니다
+    </p>
 </div>
 
 <div class="footer">
-    <p class="footer__text">이 화면은 캡처 방지를 위해 실시간으로 변경됩니다</p>
+    <p class="footer__text">© {{ store.name }} · Powered by 영수증리뷰</p>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-// PIN 입력 자동 제출
-document.getElementById('pinInput')?.addEventListener('input', function(e) {
-    if (e.target.value.length === 4) {
-        window.ReviewApp.CompletionPage.verifyPin();
-    }
-});
-</script>
 {% endblock %}

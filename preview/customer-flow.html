@@ -440,60 +440,6 @@ body {
     color: var(--text-secondary);
     margin-bottom: 24px;
 }
-.live-clock {
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-    color: white;
-    padding: 20px;
-    border-radius: 16px;
-    margin-bottom: 20px;
-    position: relative;
-    overflow: hidden;
-}
-.live-clock::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-    animation: shimmer 3s infinite;
-}
-@keyframes shimmer {
-    0% { left: -100%; }
-    100% { left: 100%; }
-}
-.clock-time {
-    font-size: 42px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 2px;
-}
-.clock-date {
-    font-size: 14px;
-    opacity: 0.8;
-    margin-top: 4px;
-}
-.completion-code {
-    background: var(--primary-light);
-    border: 2px dashed var(--primary);
-    border-radius: 16px;
-    padding: 20px;
-    margin-bottom: 20px;
-}
-.code-label {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-secondary);
-    margin-bottom: 8px;
-}
-.code-value {
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--primary);
-    letter-spacing: 6px;
-    font-variant-numeric: tabular-nums;
-}
 </style>
 
 <!-- 화면 1: 전화번호 입력 -->
@@ -655,23 +601,26 @@ body {
     <div id="screen4" class="screen">
         <div class="completion">
             <div class="completion-icon">✓</div>
-            <h1 class="completion-title">리뷰 작성 완료!</h1>
-            <p class="completion-subtitle">직원에게 이 화면을 보여주세요</p>
-        </div>
-
-        <div class="live-clock">
-            <div class="clock-time" id="clockTime">14:32:15</div>
-            <div class="clock-date" id="clockDate">2026년 10월 8일 목요일</div>
-        </div>
-
-        <div class="completion-code">
-            <p class="code-label">완료 코드</p>
-            <p class="code-value" id="completionCode">847291</p>
+            <h1 class="completion-title">리뷰 등록 완료!</h1>
+            <p class="completion-subtitle">맛있는 식당에 리뷰를 남겨주셔서 감사합니다</p>
         </div>
 
         <div class="benefit">
             <div class="benefit-icon">🎁</div>
-            <p class="benefit-text">음료 1잔 서비스 받으세요!</p>
+            <p class="benefit-text">직원에게 이 화면을 보여주세요!</p>
+        </div>
+
+        <div class="card" style="text-align: center; margin-top: 24px;">
+            <p style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">
+                직원 확인 후 혜택을 받으세요
+            </p>
+            <p style="font-size: 14px; color: var(--text-secondary);">
+                이 화면을 직원에게 보여주시면 됩니다
+            </p>
+        </div>
+
+        <div class="footer">
+            <p class="footer-text">© 맛있는 식당 · Powered by 영수증리뷰</p>
         </div>
     </div>
 </div>
@@ -771,20 +720,6 @@ document.getElementById('mainAction').addEventListener('click', async () => {
         document.body.removeChild(ta);
     }
     showScreen(4);
-    startClock();
 });
 
-// 실시간 시계
-function startClock() {
-    function update() {
-        const now = new Date();
-        const time = now.toLocaleTimeString('ko-KR', { hour12: false });
-        const date = now.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-        document.getElementById('clockTime').textContent = time;
-        document.getElementById('clockDate').textContent = date;
-    }
-    update();
-    setInterval(update, 1000);
-    document.getElementById('completionCode').textContent = Math.floor(100000 + Math.random() * 900000);
-}
 </script>
