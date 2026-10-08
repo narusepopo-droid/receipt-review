@@ -48,6 +48,10 @@
                     <i data-feather="users"></i>
                     <span>고객 관리</span>
                 </a>
+                <a href="{{ url_for('admin_sms') }}" class="nav-item {% if active_menu == 'sms' %}active{% endif %}">
+                    <i data-feather="message-square"></i>
+                    <span>혜택 문자</span>
+                </a>
                 <a href="{{ url_for('admin_tables') }}" class="nav-item {% if active_menu == 'tables' %}active{% endif %}">
                     <i data-feather="grid"></i>
                     <span>테이블 안내판</span>

@@ -34,12 +34,57 @@ async def run_disposal_job():
             logger.error(f"Disposal job failed: {e}")
 
 
+async def run_sms_job():
+    from app.services.sms import run_due_campaigns
+    async with async_session_factory() as session:
+        try:
+            await run_due_campaigns(session)
+        except Exception as e:
+            logger.error(f"SMS job failed: {e}")
+
+
+async def ensure_schema():
+    """없는 테이블만 생성 + 모델과 DB 칼럼 차이 경고 (기존 테이블은 변경하지 않음)"""
+    from sqlalchemy import inspect
+    from app.db import engine
+    import app.models  # noqa: F401  모든 모델 등록
+    from app.models.base import Base
+
+    async with engine.begin() as conn:
+        await conn.run_sync(lambda c: Base.metadata.create_all(c, checkfirst=True))
+
+        def drift(c):
+            insp = inspect(c)
+            out = []
+            for table in Base.metadata.sorted_tables:
+                if not insp.has_table(table.name):
+                    continue
+                have = {col["name"] for col in insp.get_columns(table.name)}
+                missing = [col.name for col in table.columns if col.name not in have]
+                if missing:
+                    out.append(f"{table.name}: {missing}")
+            return out
+        for line in await conn.run_sync(drift):
+            logger.warning(f"DB 칼럼 누락 (마이그레이션 필요) {line}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    try:
+        await ensure_schema()
+    except Exception as e:
+        logger.error(f"Schema check failed: {e}")
+
     scheduler.add_job(
         run_disposal_job,
         IntervalTrigger(minutes=30),
         id="disposal",
+        replace_existing=True
+    )
+    scheduler.add_job(
+        run_sms_job,
+        IntervalTrigger(minutes=1),
+        id="sms",
         replace_existing=True
     )
     scheduler.start()

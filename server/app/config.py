@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     SESSION_HTTPS_ONLY: bool = False
     SESSION_MAX_AGE: int = 12 * 3600
 
+    # 홍보 문자 (알리고) - 비어 있으면 모의 발송
+    ALIGO_KEY: str = ""
+    ALIGO_USER_ID: str = ""
+    ALIGO_SENDER: str = ""          # 사전 등록된 발신번호
+    ALIGO_OPTOUT_080: str = ""      # 080 무료수신거부 번호 (있으면 문구에 포함)
+    SMS_COST_SMS: int = 20          # 건당 비용 (원)
+    SMS_COST_LMS: int = 50
+
     # 외부 사이트에서 API 호출 허용 (가입 페이지 등)
     CORS_ORIGINS: str = "https://placemaster.co.kr,https://www.placemaster.co.kr,https://review.placemaster.co.kr"
 

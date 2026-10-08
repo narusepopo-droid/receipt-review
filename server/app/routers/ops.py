@@ -660,6 +660,20 @@ async def set_latest_version(request: Request, version: str):
     return JSONResponse({"success": True, "latest_version": version})
 
 
+# ============ 문자 잔액 충전 ============
+
+@router.post("/stores/{store_id}/sms-charge")
+async def sms_charge(request: Request, store_id: int, amount: int = Form(...), memo: str = Form(""),
+                     db: AsyncSession = Depends(get_db)):
+    """매장 문자 잔액 충전 (음수면 차감)"""
+    if not verify_ops_session(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    from app.services.sms import charge
+    balance = await charge(db, store_id, amount, memo or ("충전" if amount >= 0 else "차감"))
+    await db.commit()
+    return JSONResponse({"success": True, "balance": balance})
+
+
 # ============ 가입 신청 관리 ============
 
 @router.get("/signups", response_class=HTMLResponse)

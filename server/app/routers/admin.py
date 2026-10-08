@@ -749,3 +749,96 @@ async def download_tables(
                 "Content-Disposition": f"attachment; filename=tables_{start}-{start+count-1}.zip"
             }
         )
+
+
+
+# ============ 홍보 문자 (Phase 8) ============
+
+class SmsRequest(BaseModel):
+    body: str
+    scheduled_at: Optional[str] = None   # "2026-10-09T14:30" (한국 시간), 없으면 즉시
+
+
+def _parse_kst(value: Optional[str]):
+    from datetime import timezone as _tz, timedelta as _td
+    if not value:
+        return None
+    dt = datetime.fromisoformat(value)
+    return dt if dt.tzinfo else dt.replace(tzinfo=_tz(_td(hours=9)))
+
+
+@router.get("/sms", response_class=HTMLResponse, name="admin_sms")
+async def sms_page(request: Request, db: AsyncSession = Depends(get_db)):
+    store_data = await get_current_store(request, db)
+    if not store_data:
+        return RedirectResponse(url="/admin/login", status_code=302)
+    store = store_data["store"]
+
+    from app.services import sms as sms_service
+    from app.models.sms import SmsCampaign
+    wallet = await sms_service.get_wallet(db, store.id)
+    await db.commit()
+    targets = len(await sms_service.opted_in_customers(db, store.id))
+    history = (await db.execute(select(SmsCampaign).where(SmsCampaign.store_id == store.id)
+                                .order_by(SmsCampaign.created_at.desc()).limit(50))).scalars().all()
+    return templates.TemplateResponse(request=request, name="admin/sms.html", context={
+        "store": {"id": store.id, "name": store.name}, "active_menu": "sms",
+        "balance": wallet.balance, "targets": targets, "history": history,
+        "test_mode": sms_service.is_test_mode(),
+        "cost_sms": sms_service.unit_cost("SMS"), "cost_lms": sms_service.unit_cost("LMS"),
+    })
+
+
+@router.post("/sms/preview", name="admin_sms_preview")
+async def sms_preview(request: Request, data: SmsRequest, db: AsyncSession = Depends(get_db)):
+    store_data = await get_current_store(request, db)
+    if not store_data:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    from app.services import sms as sms_service
+    store = store_data["store"]
+    final, msg_type = sms_service.compose(store, data.body or "")
+    targets = len(await sms_service.opted_in_customers(db, store.id))
+    when = _parse_kst(data.scheduled_at)
+    return JSONResponse({
+        "final_text": final, "msg_type": msg_type, "bytes": sms_service.text_bytes(final),
+        "targets": targets, "cost": sms_service.unit_cost(msg_type) * targets,
+        "night_blocked": sms_service.is_night(when or datetime.now(timezone.utc)),
+    })
+
+
+@router.post("/sms/send", name="admin_sms_send")
+async def sms_send(request: Request, data: SmsRequest, db: AsyncSession = Depends(get_db)):
+    store_data = await get_current_store(request, db)
+    if not store_data:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    from app.services import sms as sms_service
+    store = store_data["store"]
+    try:
+        when = _parse_kst(data.scheduled_at)
+        campaign = await sms_service.create_campaign(db, store, data.body, when)
+        if when is None or when <= datetime.now(timezone.utc):
+            await sms_service.send_campaign(db, campaign)
+        await db.commit()
+    except sms_service.SmsError as e:
+        await db.rollback()
+        return JSONResponse({"success": False, "error": str(e)}, status_code=400)
+    except ValueError:
+        await db.rollback()
+        return JSONResponse({"success": False, "error": "예약 시각 형식이 올바르지 않습니다"}, status_code=400)
+    return JSONResponse({"success": True, "status": campaign.status.value, "test_mode": campaign.test_mode,
+                         "success_count": campaign.success_count, "target_count": campaign.target_count})
+
+
+@router.post("/sms/{campaign_id}/cancel", name="admin_sms_cancel")
+async def sms_cancel(request: Request, campaign_id: int, db: AsyncSession = Depends(get_db)):
+    store_data = await get_current_store(request, db)
+    if not store_data:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    from app.models.sms import SmsCampaign, SmsStatus
+    c = (await db.execute(select(SmsCampaign).where(
+        SmsCampaign.id == campaign_id, SmsCampaign.store_id == store_data["store"].id))).scalar_one_or_none()
+    if not c or c.status != SmsStatus.SCHEDULED:
+        return JSONResponse({"success": False, "error": "취소할 수 없는 문자입니다"}, status_code=400)
+    c.status = SmsStatus.CANCELLED
+    await db.commit()
+    return JSONResponse({"success": True})

@@ -4,6 +4,7 @@ from .store import Store, StoreSettings, Agent
 from .receipt import Receipt
 from .customer import Customer, StoreCustomer, ConsentLog
 from .session import ReviewSession, TextHistory, EventLog
+from .sms import SmsCampaign, SmsWallet, SmsWalletLog
 
 __all__ = [
     "Base",
@@ -11,4 +12,5 @@ __all__ = [
     "Receipt",
     "Customer", "StoreCustomer", "ConsentLog",
     "ReviewSession", "TextHistory", "EventLog",
+    "SmsCampaign", "SmsWallet", "SmsWalletLog",
 ]
