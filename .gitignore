@@ -75,3 +75,9 @@ agent/installer/Output/
 *.pfx
 *.snk
 receipt-review.pem
+
+# 배포용 압축 파일 (GitHub Release / 서버에만 올림)
+*.zip
+
+# SPMC 라이선스 키 (새 파일이 실수로 올라가는 것 방지)
+*.spmclic
