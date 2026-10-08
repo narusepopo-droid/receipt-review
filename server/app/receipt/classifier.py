@@ -25,17 +25,24 @@ class ClassificationResult:
     existing_approval_no: Optional[str] = None
 
 
+# 취소 표기: 줄 전체가 "취소" 제목이거나 명확한 취소 거래 용어일 때만 인정
+# ("교환/환불/취소 시 영수증 지참" 같은 안내 문구 때문에 정상 영수증이 버려지지 않도록)
 CANCEL_PATTERNS = [
-    r"취\s*소",
-    r"승인\s*취소",
-    r"반\s*품",
+    r"승인취소",
+    r"취소승인",
+    r"거래취소",
+    r"취소거래",
+    r"취소영수증",
+    r"취소전표",
+    r"반품",
     r"CANCEL",
     r"VOID",
-    r"거래\s*취소",
 ]
+CANCEL_TITLE_PATTERN = r"^[\[\(<*=\-]*취소[\]\)>*=\-]*$"
 
 KITCHEN_PATTERNS = [
     r"주방\s*용",
+    r"주방\s*주문",
     r"주문서",
     r"주문\s*확인",
     r"KITCHEN",
@@ -58,15 +65,25 @@ def classify_receipt(
     text = parsed.raw_text
     text_upper = text.upper()
 
+    # 띄어쓰기를 없앤 줄 단위로 검사 ("[ 취 소 ]", "승 인 취 소" 등 대응)
+    compact_lines = [re.sub(r"\s+", "", l) for l in text.split("\n")]
+    compact_text = "\n".join(compact_lines)
+
+    cancel_hit = None
     for pattern in CANCEL_PATTERNS:
-        if re.search(pattern, text, re.IGNORECASE):
-            return ClassificationResult(
-                type=ReceiptType.CANCELLED,
-                reason=f"취소 패턴 감지: {pattern}",
-                should_store=False,
-                should_dispose_existing=True,
-                existing_approval_no=parsed.approval_no,
-            )
+        if re.search(pattern, compact_text, re.IGNORECASE):
+            cancel_hit = pattern
+            break
+    if not cancel_hit and any(re.match(CANCEL_TITLE_PATTERN, l) for l in compact_lines):
+        cancel_hit = "취소 제목 줄"
+    if cancel_hit:
+        return ClassificationResult(
+            type=ReceiptType.CANCELLED,
+            reason=f"취소 패턴 감지: {cancel_hit}",
+            should_store=False,
+            should_dispose_existing=True,
+            existing_approval_no=parsed.approval_no,
+        )
 
     if parsed.amount is not None and parsed.amount < 0:
         return ClassificationResult(
@@ -78,7 +95,7 @@ def classify_receipt(
         )
 
     for pattern in KITCHEN_PATTERNS:
-        if re.search(pattern, text, re.IGNORECASE):
+        if re.search(pattern, compact_text, re.IGNORECASE) or re.search(pattern, text, re.IGNORECASE):
             return ClassificationResult(
                 type=ReceiptType.KITCHEN,
                 reason=f"주방용 패턴 감지: {pattern}",
@@ -86,22 +103,15 @@ def classify_receipt(
             )
 
     if not parsed.approval_no and not parsed.amount:
-        for pattern in KITCHEN_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
-                return ClassificationResult(
-                    type=ReceiptType.KITCHEN,
-                    reason="승인번호/금액 없음 + 주방 패턴",
-                    should_store=False,
-                )
-        if len(parsed.lines) < 5:
-            return ClassificationResult(
-                type=ReceiptType.KITCHEN,
-                reason="짧은 출력물 (라인 5개 미만)",
-                should_store=False,
-            )
+        # 승인번호·결제금액이 모두 없으면 결제 영수증이 아님 (주문서·확인서 등)
+        return ClassificationResult(
+            type=ReceiptType.KITCHEN,
+            reason="승인번호/금액 없음 (주문서 등)",
+            should_store=False,
+        )
 
     for pattern in REPRINT_PATTERNS:
-        if re.search(pattern, text, re.IGNORECASE):
+        if re.search(pattern, compact_text, re.IGNORECASE):
             return ClassificationResult(
                 type=ReceiptType.REPRINT,
                 reason=f"재출력 패턴 감지: {pattern}",

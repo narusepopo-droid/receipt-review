@@ -2,6 +2,7 @@
 import os
 import secrets
 import hashlib
+import re
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from typing import Optional
@@ -19,6 +20,7 @@ from app.receipt.escpos_parser import parse_escpos
 from app.receipt.classifier import classify_receipt, ReceiptType
 from app.receipt.masking import mask_parsed_receipt
 from app.receipt.renderer import render_receipt
+from app.services.disposal import dispose_by_approval_no
 from app.routers.auth import verify_token
 
 router = APIRouter(prefix="/agent/v1", tags=["agent"])
@@ -198,18 +200,8 @@ async def upload_receipt(
     classification = classify_receipt(parsed, existing_approval_nos)
 
     if classification.should_dispose_existing and classification.existing_approval_no:
-        stmt = select(Receipt).where(
-            Receipt.store_id == store.id,
-            Receipt.approval_no == classification.existing_approval_no,
-            Receipt.status != ReceiptStatus.DISPOSED
-        )
-        result = await db.execute(stmt)
-        existing_receipts = result.scalars().all()
-
-        for receipt in existing_receipts:
-            receipt.status = ReceiptStatus.DISPOSED
-            receipt.disposed_at = datetime.now(timezone.utc)
-            receipt.dispose_reason = "cancelled"
+        # 취소 영수증: 같은 승인번호 영수증 즉시 폐기 (이미지·원본 파일 삭제 포함)
+        await dispose_by_approval_no(db, store.id, classification.existing_approval_no, "cancelled")
 
     if not classification.should_store:
         await db.commit()
@@ -241,10 +233,11 @@ async def upload_receipt(
     paid_at = None
     if parsed.paid_at:
         try:
-            paid_at = datetime.strptime(parsed.paid_at, "%Y-%m-%d %H:%M:%S")
-            paid_at = paid_at.replace(tzinfo=timezone.utc)
-        except:
-            paid_at = captured_at
+            # 영수증에 찍힌 시각은 한국 시간
+            paid_at = datetime.strptime(re.sub(r"[/.]", "-", parsed.paid_at), "%Y-%m-%d %H:%M:%S")
+            paid_at = paid_at.replace(tzinfo=timezone(timedelta(hours=9)))
+        except ValueError:
+            paid_at = None
 
     receipt = Receipt(
         id=receipt_id,

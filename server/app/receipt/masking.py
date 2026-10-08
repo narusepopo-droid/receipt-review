@@ -1,5 +1,6 @@
 """개인정보 마스킹 - 전화번호, 회원명, 카드번호 등"""
 import re
+from dataclasses import replace
 from typing import Callable
 
 from .escpos_parser import ParsedReceipt, TextLine
@@ -90,11 +91,7 @@ def mask_receipt_text(text: str) -> str:
 def mask_parsed_receipt(parsed: ParsedReceipt) -> ParsedReceipt:
     masked_lines = []
     for line in parsed.lines:
-        masked_text = mask_receipt_text(line.text)
-        masked_lines.append(TextLine(
-            text=masked_text,
-            style=line.style
-        ))
+        masked_lines.append(replace(line, text=mask_receipt_text(line.text)))
 
     parsed.lines = masked_lines
     parsed.raw_text = mask_receipt_text(parsed.raw_text)

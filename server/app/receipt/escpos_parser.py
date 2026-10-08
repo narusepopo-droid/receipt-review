@@ -37,6 +37,10 @@ class TextStyle:
 class TextLine:
     text: str
     style: TextStyle
+    # 텍스트 대신 그림 요소인 경우 (원래 위치 그대로 렌더링하기 위함)
+    image: Optional["ImageData"] = None
+    qr: Optional[str] = None
+    qr_module: int = 6
 
 
 @dataclass
@@ -81,12 +85,16 @@ class ESCPOSParser:
         self.lines: list[TextLine] = []
         self.images: list[ImageData] = []
         self.korean_mode = True
+        self._qr_data = ""
+        self._qr_module = 6
 
     def parse(self, data: bytes) -> ParsedReceipt:
         self.style = TextStyle()
         self.current_line = ""
         self.lines = []
         self.images = []
+        self._qr_data = ""
+        self._qr_module = 6
 
         i = 0
         while i < len(data):
@@ -99,8 +107,12 @@ class ESCPOSParser:
             elif byte == self.FS:
                 i = self._handle_fs(data, i)
             elif byte == self.LF:
-                self._flush_line()
+                self._flush_line(keep_empty=True)
                 i += 1
+            elif byte == 0x10 and i + 1 < len(data) and data[i + 1] in (0x04, 0x05):
+                i += 3  # DLE EOT/ENQ n (상태 조회)
+            elif byte == 0x10 and i + 1 < len(data) and data[i + 1] == 0x14:
+                i += 5  # DLE DC4 fn m t (실시간 명령)
             elif byte == self.CR:
                 i += 1
             else:
@@ -108,143 +120,157 @@ class ESCPOSParser:
 
         self._flush_line()
 
+        # 맨 끝 빈 줄 정리
+        while self.lines and not self.lines[-1].text.strip() and not self.lines[-1].image and not self.lines[-1].qr:
+            self.lines.pop()
+
         result = ParsedReceipt(
             lines=self.lines,
             images=self.images,
-            raw_text="\n".join(line.text for line in self.lines),
+            raw_text="\n".join(line.text for line in self.lines if not line.image and not line.qr),
         )
 
         self._extract_fields(result)
         return result
 
+    # 인자 개수가 고정인 명령 (명령 문자 → 인자 바이트 수)
+    ESC_ARGS = {
+        "@": 0, "2": 0, "<": 0, "L": 0, "S": 0, "i": 0, "m": 0,
+        "!": 1, "E": 1, "a": 1, "-": 1, "d": 1, "J": 1, "t": 1, "3": 1, "M": 1,
+        "G": 1, "R": 1, " ": 1, "{": 1, "V": 1, "r": 1, "U": 1, "e": 1, "K": 1,
+        "=": 1, "T": 1, "$": 2, "B": 2, "\\": 2, "c": 2, "p": 3, "W": 8,
+    }
+    GS_ARGS = {
+        ":": 0,
+        "!": 1, "B": 1, "H": 1, "h": 1, "w": 1, "f": 1, "a": 1, "r": 1, "I": 1,
+        "/": 1, "b": 1, "E": 1, "T": 1, "C": 1, "x": 1,
+        "L": 2, "W": 2, "P": 2, "$": 2, "\\": 2, "^": 3,
+    }
+    FS_ARGS = {"&": 0, ".": 0, "!": 1, "-": 1, "C": 1, "W": 1, "p": 2, "S": 2, "?": 2}
+
     def _handle_esc(self, data: bytes, i: int) -> int:
         if i + 1 >= len(data):
             return i + 1
 
-        cmd = data[i + 1]
+        cmd = chr(data[i + 1])
+        arg = data[i + 2] if i + 2 < len(data) else 0
 
-        if cmd == ord("@"):
+        if cmd == "@":
+            self._flush_line()
             self.style = TextStyle()
-            return i + 2
+        elif cmd == "!":
+            self.style.bold = bool(arg & 0x08)
+            self.style.double_height = bool(arg & 0x10)
+            self.style.double_width = bool(arg & 0x20)
+            self.style.underline = bool(arg & 0x80)
+        elif cmd in ("E", "G"):
+            self.style.bold = bool(arg & 0x01)
+        elif cmd == "a":
+            n = arg - 48 if arg >= 48 else arg
+            self.style.alignment = Alignment(n if n in (0, 1, 2) else 0)
+        elif cmd == "-":
+            self.style.underline = (arg % 48) > 0
+        elif cmd == "d":
+            # n줄 이송: 현재 줄 마감 후 빈 줄 (n-1)개
+            self._flush_line(keep_empty=True)
+            for _ in range(max(0, min(arg, 10) - 1)):
+                self._flush_line(keep_empty=True)
+        elif cmd == "*":
+            # 비트 이미지: ESC * m nL nH d1...dk (그림 복원은 생략, 데이터만 건너뜀)
+            n = (data[i + 3] if i + 3 < len(data) else 0) + ((data[i + 4] if i + 4 < len(data) else 0) << 8)
+            k = n * 3 if arg in (32, 33) else n
+            return i + 5 + k
+        elif cmd == "D":
+            # 탭 위치: NUL 로 끝남
+            j = i + 2
+            while j < len(data) and data[j] != 0:
+                j += 1
+            return j + 1
 
-        elif cmd == ord("!"):
-            if i + 2 < len(data):
-                n = data[i + 2]
-                self.style.bold = bool(n & 0x08)
-                self.style.double_height = bool(n & 0x10)
-                self.style.double_width = bool(n & 0x20)
-                return i + 3
-            return i + 2
-
-        elif cmd == ord("E"):
-            if i + 2 < len(data):
-                self.style.bold = bool(data[i + 2])
-                return i + 3
-            return i + 2
-
-        elif cmd == ord("a"):
-            if i + 2 < len(data):
-                n = data[i + 2]
-                self.style.alignment = Alignment(min(n, 2))
-                return i + 3
-            return i + 2
-
-        elif cmd == ord("-"):
-            if i + 2 < len(data):
-                self.style.underline = bool(data[i + 2])
-                return i + 3
-            return i + 2
-
-        elif cmd == ord("d"):
-            if i + 2 < len(data):
-                n = data[i + 2]
-                for _ in range(n):
-                    self._flush_line()
-                return i + 3
-            return i + 2
-
-        elif cmd == ord("J"):
-            if i + 2 < len(data):
-                return i + 3
-            return i + 2
-
-        elif cmd == ord("t"):
-            if i + 2 < len(data):
-                return i + 3
-            return i + 2
-
+        if cmd in self.ESC_ARGS:
+            return i + 2 + self.ESC_ARGS[cmd]
+        logger.debug("unsupported ESC %r", cmd)
         return i + 2
 
     def _handle_gs(self, data: bytes, i: int) -> int:
         if i + 1 >= len(data):
             return i + 1
 
-        cmd = data[i + 1]
+        cmd = chr(data[i + 1])
+        arg = data[i + 2] if i + 2 < len(data) else 0
 
-        if cmd == ord("!"):
-            if i + 2 < len(data):
-                n = data[i + 2]
-                self.style.double_width = bool(n & 0x10)
-                self.style.double_height = bool(n & 0x01)
-                return i + 3
-            return i + 2
-
-        elif cmd == ord("V"):
-            if i + 2 < len(data):
-                return i + 3
-            return i + 2
-
-        elif cmd == ord("v"):
+        if cmd == "!":
+            # 상위 4비트 = 가로 배율, 하위 4비트 = 세로 배율
+            self.style.double_width = ((arg >> 4) & 0x0F) > 0
+            self.style.double_height = (arg & 0x0F) > 0
+            return i + 3
+        elif cmd == "B":
+            # 흑백 반전 → 굵게로 근사
+            self.style.bold = self.style.bold or bool(arg & 0x01)
+            return i + 3
+        elif cmd == "V":
+            self._flush_line()
+            return i + (4 if arg in (65, 66, 97, 98, 103, 104) else 3)
+        elif cmd == "v":
             return self._handle_raster_image(data, i)
-
-        elif cmd == ord("("):
+        elif cmd == "(":
             return self._handle_gs_paren(data, i)
-
-        elif cmd == ord("k"):
+        elif cmd == "k":
             return self._handle_barcode(data, i)
+        elif cmd == "*":
+            # 다운로드 비트 이미지 정의: GS * x y d1...d(x*y*8)
+            y = data[i + 3] if i + 3 < len(data) else 0
+            return i + 4 + arg * y * 8
+        elif cmd == "8":
+            # GS 8 L p1 p2 p3 p4 ...: 큰 그래픽 데이터
+            if i + 6 < len(data):
+                ln = data[i + 3] | (data[i + 4] << 8) | (data[i + 5] << 16) | (data[i + 6] << 24)
+                return i + 7 + ln
+            return len(data)
 
+        if cmd in self.GS_ARGS:
+            return i + 2 + self.GS_ARGS[cmd]
+        logger.debug("unsupported GS %r", cmd)
         return i + 2
 
     def _handle_fs(self, data: bytes, i: int) -> int:
         if i + 1 >= len(data):
             return i + 1
 
-        cmd = data[i + 1]
+        cmd = chr(data[i + 1])
 
-        if cmd == ord("&"):
+        if cmd == "&":
             self.korean_mode = True
-            return i + 2
-        elif cmd == ord("."):
+        elif cmd == ".":
             self.korean_mode = False
-            return i + 2
+        elif cmd == "!":
+            arg = data[i + 2] if i + 2 < len(data) else 0
+            # 한글 문자 모드: 0x04 가로 2배, 0x08 세로 2배
+            if arg & 0x04:
+                self.style.double_width = True
+            if arg & 0x08:
+                self.style.double_height = True
 
-        return i + 2
+        if cmd in self.FS_ARGS:
+            return i + 2 + self.FS_ARGS[cmd]
+        return i + 3
 
     def _handle_raster_image(self, data: bytes, i: int) -> int:
+        # GS v 0 m xL xH yL yH d1...dk
         if i + 7 >= len(data):
-            return i + 2
+            return len(data)
 
         try:
-            m = data[i + 2]
-            xL = data[i + 3]
-            xH = data[i + 4]
-            yL = data[i + 5]
-            yH = data[i + 6]
+            width_bytes = data[i + 4] + (data[i + 5] << 8)
+            height = data[i + 6] + (data[i + 7] << 8)
+            img_start = i + 8
+            img_end = img_start + width_bytes * height
 
-            width_bytes = xL + (xH << 8)
-            height = yL + (yH << 8)
-            width = width_bytes * 8
-
-            data_len = width_bytes * height
-            img_start = i + 7
-            img_end = img_start + data_len
-
-            if img_end <= len(data):
-                self.images.append(ImageData(
-                    width=width,
-                    height=height,
-                    data=data[img_start:img_end]
-                ))
+            if img_end <= len(data) and width_bytes > 0 and height > 0:
+                img = ImageData(width=width_bytes * 8, height=height, data=data[img_start:img_end])
+                self.images.append(img)
+                self._flush_line()
+                self.lines.append(TextLine(text="", style=self.style.copy(), image=img))
 
             return img_end
         except Exception as e:
@@ -252,13 +278,25 @@ class ESCPOSParser:
             return i + 2
 
     def _handle_gs_paren(self, data: bytes, i: int) -> int:
-        if i + 3 >= len(data):
-            return i + 2
+        # GS ( fn pL pH [params]
+        if i + 4 >= len(data):
+            return len(data)
 
-        fn = data[i + 2]
-        pL = data[i + 3]
-        pH = data[i + 4] if i + 4 < len(data) else 0
-        param_len = pL + (pH << 8)
+        fn = chr(data[i + 2])
+        param_len = data[i + 3] + (data[i + 4] << 8)
+        params = data[i + 5:i + 5 + param_len]
+
+        # QR 코드: GS ( k pL pH cn=49 fn ...
+        if fn == "k" and len(params) >= 2 and params[0] == 49:
+            sub = params[1]
+            if sub == 67 and len(params) >= 3:          # 모듈 크기
+                self._qr_module = max(1, min(params[2], 16))
+            elif sub == 80 and len(params) >= 3:        # 데이터 저장 (params[2] = m)
+                self._qr_data = params[3:].decode("cp949", errors="replace")
+            elif sub == 81 and self._qr_data:           # 인쇄
+                self._flush_line()
+                self.lines.append(TextLine(text="", style=self.style.copy(),
+                                           qr=self._qr_data, qr_module=self._qr_module))
 
         return i + 5 + param_len
 
@@ -302,8 +340,8 @@ class ESCPOSParser:
                 pass
             return i + 1
 
-    def _flush_line(self):
-        if self.current_line:
+    def _flush_line(self, keep_empty: bool = False):
+        if self.current_line or keep_empty:
             self.lines.append(TextLine(
                 text=self.current_line,
                 style=self.style.copy()
@@ -329,14 +367,17 @@ class ESCPOSParser:
             result.paid_at = datetime_match.group(1)
 
         amount_patterns = [
-            r"합\s*계[:\s]*([0-9,]+)\s*원?",
-            r"총\s*금\s*액[:\s]*([0-9,]+)\s*원?",
-            r"결제금액[:\s]*([0-9,]+)\s*원?",
+            r"(?:받을|결제|승인)\s*금\s*액[:\s]*(-?[0-9][0-9,]*)\s*원?",
+            r"합\s*계(?:\s*금\s*액)?[:\s]*(-?[0-9][0-9,]*)\s*원?",
+            r"총\s*(?:금\s*액|합\s*계)[:\s]*(-?[0-9][0-9,]*)\s*원?",
         ]
         for pattern in amount_patterns:
             match = re.search(pattern, text)
             if match:
-                result.amount = int(match.group(1).replace(",", ""))
+                try:
+                    result.amount = int(match.group(1).replace(",", ""))
+                except ValueError:
+                    continue
                 break
 
         card_patterns = [

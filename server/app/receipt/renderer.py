@@ -11,8 +11,13 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 import json
+import unicodedata
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
+
+FONT_DIR = Path(__file__).resolve().parent.parent / "static" / "fonts"
+BUNDLED_FONT = FONT_DIR / "NanumGothicCoding-Regular.ttf"
+BUNDLED_FONT_BOLD = FONT_DIR / "NanumGothicCoding-Bold.ttf"
 
 
 class Alignment(Enum):
@@ -96,6 +101,7 @@ class ReceiptRenderer:
         # 시스템 폰트 후보 (고정폭 우선)
         font_candidates = [
             self.font_path,
+            str(BUNDLED_FONT),  # 저장소에 포함된 나눔고딕코딩 (서버에 한글 폰트가 없어도 동작)
             "D2Coding.ttf",
             "NanumGothicCoding.ttf",
             "NanumGothicCoding-Bold.ttf",
@@ -246,22 +252,22 @@ class ReceiptRenderer:
             biz_line = f"사업자번호 : {data.biz_no}"
             if data.phone:
                 biz_line = f"{data.biz_no} TEL: {data.phone}"
-            draw.text((COL_NAME, y), biz_line, font=self.font, fill="black")
+            draw.text((COL_NAME, y), biz_line, font=self.font_normal, fill="black")
             y += line_height
 
         if data.owner_name:
-            draw.text((COL_NAME, y), f"대표자: {data.owner_name}", font=self.font, fill="black")
+            draw.text((COL_NAME, y), f"대표자: {data.owner_name}", font=self.font_normal, fill="black")
             y += line_height
 
         if data.address:
-            draw.text((COL_NAME, y), data.address, font=self.font, fill="black")
+            draw.text((COL_NAME, y), data.address, font=self.font_normal, fill="black")
             y += line_height
 
         y += line_height
 
         # 거래일시
         if data.paid_at:
-            draw.text((COL_NAME, y), f"판매시간: {data.paid_at}", font=self.font, fill="black")
+            draw.text((COL_NAME, y), f"판매시간: {data.paid_at}", font=self.font_normal, fill="black")
             y += line_height
 
         y += 5
@@ -269,10 +275,10 @@ class ReceiptRenderer:
         y += 10
 
         # 품목 헤더
-        draw.text((COL_NAME, y), "상품", font=self.font, fill="black")
-        draw.text((COL_PRICE, y), "단가", font=self.font, fill="black", anchor="rm")
-        draw.text((COL_QTY, y), "수량", font=self.font, fill="black", anchor="rm")
-        draw.text((COL_TOTAL, y), "금액", font=self.font, fill="black", anchor="rm")
+        draw.text((COL_NAME, y), "상품", font=self.font_normal, fill="black")
+        draw.text((COL_PRICE, y), "단가", font=self.font_normal, fill="black", anchor="rm")
+        draw.text((COL_QTY, y), "수량", font=self.font_normal, fill="black", anchor="rm")
+        draw.text((COL_TOTAL, y), "금액", font=self.font_normal, fill="black", anchor="rm")
         y += line_height
 
         draw.line([(COL_NAME, y), (width - COL_NAME, y)], fill="black", width=1)
@@ -285,10 +291,10 @@ class ReceiptRenderer:
             price = item.get("price", 0)
             total = price  # qty가 이미 반영된 금액일 수 있음
 
-            draw.text((COL_NAME, y), name, font=self.font, fill="black")
-            draw.text((COL_PRICE, y), f"{price:,}", font=self.font, fill="black", anchor="rm")
-            draw.text((COL_QTY, y), str(qty), font=self.font, fill="black", anchor="rm")
-            draw.text((COL_TOTAL, y), f"{total:,}", font=self.font, fill="black", anchor="rm")
+            draw.text((COL_NAME, y), name, font=self.font_normal, fill="black")
+            draw.text((COL_PRICE, y), f"{price:,}", font=self.font_normal, fill="black", anchor="rm")
+            draw.text((COL_QTY, y), str(qty), font=self.font_normal, fill="black", anchor="rm")
+            draw.text((COL_TOTAL, y), f"{total:,}", font=self.font_normal, fill="black", anchor="rm")
             y += line_height
 
         y += 5
@@ -306,11 +312,11 @@ class ReceiptRenderer:
 
         # 카드 정보
         if data.card_issuer:
-            draw.text((COL_NAME, y), f"카드: {data.card_issuer}", font=self.font, fill="black")
+            draw.text((COL_NAME, y), f"카드: {data.card_issuer}", font=self.font_normal, fill="black")
             y += line_height
 
         if data.card_no:
-            draw.text((COL_NAME, y), f"카드번호: {data.card_no}", font=self.font, fill="black")
+            draw.text((COL_NAME, y), f"카드번호: {data.card_no}", font=self.font_normal, fill="black")
             y += line_height
 
         if data.approval_no:
@@ -321,7 +327,7 @@ class ReceiptRenderer:
 
         # 발행일시
         if data.paid_at:
-            draw.text((width // 2, y), f"발행일시 : {data.paid_at}", font=self.font, fill="black", anchor="mm")
+            draw.text((width // 2, y), f"발행일시 : {data.paid_at}", font=self.font_normal, fill="black", anchor="mm")
 
         # 이미지 크롭
         img = img.crop((0, 0, width, y + padding + 10))
@@ -371,6 +377,140 @@ class ReceiptRenderer:
         image.save(output_path, "PNG")
 
 
+class EscPosRenderer:
+    """
+    ESC/POS 파싱 결과(줄 목록)를 원래 프린터 출력 모양 그대로 그린다.
+    - 글자 칸(셀) 단위로 배치: 영문·숫자 1칸, 한글 2칸 → 공백으로 맞춘 열 정렬이 그대로 유지됨
+    - 정렬, 굵게, 밑줄, 가로/세로 2배, 로고(래스터 이미지), QR 위치까지 재현
+    """
+
+    CELL_W = 12          # 프린터 Font A: 12x24 dot
+    CELL_H = 24
+    LINE_GAP = 6
+    MARGIN_X = 8
+    MARGIN_TOP = 24
+    MARGIN_BOTTOM = 32
+
+    def __init__(self, paper_width: int = 576):
+        self.paper_width = paper_width
+        self._fonts: dict = {}
+
+    def _font(self, size: int, bold: bool):
+        key = (size, bold)
+        if key not in self._fonts:
+            path = BUNDLED_FONT_BOLD if bold else BUNDLED_FONT
+            try:
+                self._fonts[key] = ImageFont.truetype(str(path), size)
+            except OSError:
+                self._fonts[key] = ImageFont.load_default()
+        return self._fonts[key]
+
+    @staticmethod
+    def _is_wide(ch: str) -> bool:
+        return unicodedata.east_asian_width(ch) in ("W", "F")
+
+    def _cols(self, text: str) -> int:
+        return sum(2 if self._is_wide(c) else 1 for c in text)
+
+    def render(self, lines: list) -> Image.Image:
+        inner = self.paper_width - self.MARGIN_X * 2
+
+        # 셀 폭: 가장 긴 줄이 용지에 들어가도록 (최대 12px)
+        # (2배 폭 줄은 프린터에서도 넘치면 줄바꿈되므로 기준에서 제외)
+        text_lines = [ln for ln in lines
+                      if getattr(ln, "image", None) is None and not getattr(ln, "qr", None)]
+        normal = [ln for ln in text_lines if not ln.style.double_width] or text_lines
+        max_cols = max([self._cols(ln.text.rstrip()) for ln in normal] + [32])
+        cell_w = min(self.CELL_W, max(6, inner // max_cols))
+        cell_h = cell_w * 2
+
+        blocks = []
+        for ln in lines:
+            if getattr(ln, "image", None) is not None:
+                blocks.append((self._raster(ln.image, inner), ln.style.alignment))
+            elif getattr(ln, "qr", None):
+                blocks.append((self._qr(ln.qr, ln.qr_module), ln.style.alignment))
+            else:
+                for part in self._wrap(ln, max_cols):
+                    blocks.append((self._text(part, cell_w, cell_h), ln.style.alignment))
+
+        height = self.MARGIN_TOP + self.MARGIN_BOTTOM + sum(b.height for b, _ in blocks)
+        img = Image.new("RGB", (self.paper_width, height), "white")
+        y = self.MARGIN_TOP
+        for block, align in blocks:
+            a = int(align)
+            if a == 1:
+                x = self.MARGIN_X + (inner - block.width) // 2
+            elif a == 2:
+                x = self.MARGIN_X + inner - block.width
+            else:
+                x = self.MARGIN_X
+            img.paste(block, (max(0, x), y))
+            y += block.height
+        return img
+
+    def _wrap(self, ln, max_cols: int) -> list:
+        """한 줄이 용지 폭을 넘으면 프린터처럼 다음 줄로 넘긴다"""
+        scale = 2 if ln.style.double_width else 1
+        text = ln.text.rstrip()
+        if self._cols(text) * scale <= max_cols:
+            return [ln]
+        parts, cur, used = [], "", 0
+        for ch in text:
+            w = (2 if self._is_wide(ch) else 1) * scale
+            if used + w > max_cols:
+                parts.append(cur)
+                cur, used = "", 0
+            cur += ch
+            used += w
+        parts.append(cur)
+        from dataclasses import replace as _replace
+        return [_replace(ln, text=p) for p in parts]
+
+    def _text(self, ln, cell_w: int, cell_h: int) -> Image.Image:
+        text = ln.text.rstrip()
+        st = ln.style
+        cols = max(1, self._cols(text))
+        base = Image.new("L", (cols * cell_w, cell_h + self.LINE_GAP), 255)
+        if text.strip():
+            draw = ImageDraw.Draw(base)
+            font = self._font(cell_h - 2, st.bold)
+            x = 0
+            for ch in text:
+                w = cell_w * (2 if self._is_wide(ch) else 1)
+                if ch != " ":
+                    draw.text((x + w / 2, 1 + (cell_h - 2) / 2), ch, font=font, fill=0, anchor="mm")
+                x += w
+            if st.underline:
+                draw.line([(0, cell_h - 1), (x, cell_h - 1)], fill=0, width=2)
+
+        sx = 2 if st.double_width else 1
+        sy = 2 if st.double_height else 1
+        if sx > 1 or sy > 1:
+            base = base.resize((base.width * sx, cell_h * sy + self.LINE_GAP), Image.NEAREST)
+        return base.convert("RGB")
+
+    def _raster(self, image_data, max_width: int) -> Image.Image:
+        bmp = Image.frombytes("1", (image_data.width, image_data.height), bytes(image_data.data))
+        bmp = ImageOps.invert(bmp.convert("L"))  # ESC/POS 는 1=검정, PIL 은 1=흰색
+        if bmp.width > max_width:
+            ratio = max_width / bmp.width
+            bmp = bmp.resize((max_width, max(1, int(bmp.height * ratio))))
+        out = Image.new("L", (bmp.width, bmp.height + self.LINE_GAP), 255)
+        out.paste(bmp, (0, 0))
+        return out.convert("RGB")
+
+    def _qr(self, data: str, module: int) -> Image.Image:
+        import qrcode
+        qr = qrcode.QRCode(box_size=max(2, module), border=1)
+        qr.add_data(data)
+        qr.make(fit=True)
+        q = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+        out = Image.new("RGB", (q.width, q.height + self.LINE_GAP), "white")
+        out.paste(q, (0, 0))
+        return out
+
+
 def render_receipt(parsed_data, output_path: str, paper_width: int = 576):
     """
     파싱된 영수증 데이터를 PNG로 렌더링하는 헬퍼 함수
@@ -380,23 +520,31 @@ def render_receipt(parsed_data, output_path: str, paper_width: int = 576):
         output_path: 저장할 파일 경로
         paper_width: 용지 폭 (576=80mm, 384=58mm)
     """
+    # 실제 포스 원본(줄 목록)이 있으면 원래 모양 그대로 그린다
+    lines = getattr(parsed_data, "lines", None) or []
+    if any(getattr(l, "text", "").strip() for l in lines):
+        image = EscPosRenderer(paper_width).render(lines)
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        image.save(output_path, "PNG")
+        return
+
     renderer = ReceiptRenderer(paper_width=paper_width)
 
-    # ParsedReceipt -> ReceiptData 변환
+    # ParsedReceipt -> ReceiptData 변환 (줄 정보가 없는 경우의 대체 양식)
     data = ReceiptData(
         store_name=parsed_data.store_name or "매장명",
         biz_no=parsed_data.biz_no,
-        owner_name=parsed_data.owner_name,
-        address=parsed_data.address,
-        phone=parsed_data.phone,
+        owner_name=getattr(parsed_data, "owner_name", None),
+        address=getattr(parsed_data, "address", None),
+        phone=getattr(parsed_data, "phone", None),
         paid_at=parsed_data.paid_at,
         approval_no=parsed_data.approval_no,
         card_issuer=parsed_data.card_issuer,
-        card_no=parsed_data.card_no,
-        installment=parsed_data.installment,
+        card_no=getattr(parsed_data, "card_no", None),
+        installment=getattr(parsed_data, "installment", None),
         total_amount=parsed_data.amount or 0,
-        vat=parsed_data.vat,
-        supply_amount=parsed_data.supply_amount,
+        vat=getattr(parsed_data, "vat", None),
+        supply_amount=getattr(parsed_data, "supply_amount", None),
         items=parsed_data.items or []
     )
 

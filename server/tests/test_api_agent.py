@@ -1,170 +1,154 @@
 """
-에이전트 API 테스트
-- POST /agent/v1/activate
-- POST /agent/v1/receipts
-- POST /agent/v1/heartbeat
+에이전트 API 테스트 (실제 흐름)
+- 로그인 토큰(Bearer)으로 인증
+- 샘플 ESC/POS 바이트 업로드 → 분류 → 마스킹 → PNG 생성 → DB 저장
+- 취소 영수증 업로드 시 기존 영수증 폐기
+- 주방 주문서·재출력은 저장 안 함
+- 하트비트
 """
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
 import pytest
-from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
-import json
+import pytest_asyncio
+from httpx import AsyncClient, ASGITransport
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+
+from app.models.base import Base
+from app.models.store import Store, Agent
+from app.models.receipt import Receipt, ReceiptStatus
+from app.routers.auth import generate_token
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+import make_sample_escpos as samples  # noqa: E402
 
 
-class TestActivateAPI:
-    """활성화 API 테스트"""
+@pytest_asyncio.fixture
+async def api(tmp_path, monkeypatch):
+    from app.main import app
+    from app.db import get_db
+    from app.config import settings
 
-    def test_activate_with_valid_code(self, client, test_store):
-        """유효한 활성화 코드로 활성화 성공"""
-        # Given: 테스트 매장에 활성화 코드 생성
-        activation_code = "TEST1234"
+    monkeypatch.setattr(settings, "RECEIPT_IMAGE_DIR", str(tmp_path / "img"))
+    monkeypatch.setattr(settings, "RECEIPT_RAW_DIR", str(tmp_path / "raw"))
 
-        with patch('app.routers.agent.verify_activation_code') as mock_verify:
-            mock_verify.return_value = {
-                "store_id": test_store.id,
-                "agent_key": "generated_agent_key_123"
-            }
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-            # When
-            response = client.post("/agent/v1/activate", json={
-                "activation_code": activation_code
-            })
+    async with factory() as s:
+        store = Store(name="맛있는김치찌개", store_code="TEST01", paper_width=576)
+        s.add(store)
+        await s.commit()
+        store_id = store.id
 
-            # Then
-            assert response.status_code == 200
-            data = response.json()
-            assert "agent_key" in data
-            assert data["agent_key"] == "generated_agent_key_123"
+    async def _get_db():
+        async with factory() as s:
+            yield s
 
-    def test_activate_with_invalid_code(self, client):
-        """유효하지 않은 활성화 코드로 404"""
-        with patch('app.routers.agent.verify_activation_code') as mock_verify:
-            mock_verify.return_value = None
-
-            response = client.post("/agent/v1/activate", json={
-                "activation_code": "INVALID1"
-            })
-
-            assert response.status_code == 404
-
-    def test_activate_code_format_validation(self, client):
-        """활성화 코드 형식 검증"""
-        # 8자리가 아닌 코드
-        response = client.post("/agent/v1/activate", json={
-            "activation_code": "SHORT"
-        })
-
-        assert response.status_code == 422
+    app.dependency_overrides[get_db] = _get_db
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        client.headers["Authorization"] = f"Bearer {generate_token(store_id)}"
+        yield client, factory, store_id
+    app.dependency_overrides.clear()
+    await engine.dispose()
 
 
-class TestReceiptUploadAPI:
-    """영수증 업로드 API 테스트"""
-
-    def test_upload_receipt_success(self, client, test_store, test_agent_key):
-        """영수증 업로드 성공"""
-        # Given: ESC/POS 샘플 데이터
-        raw_data = b'\x1b@\x1ba\x01Test Receipt\n\x1dV\x00'
-
-        with patch('app.routers.agent.process_receipt') as mock_process:
-            mock_process.return_value = {"id": "receipt-uuid-123", "status": "available"}
-
-            # When
-            response = client.post(
-                "/agent/v1/receipts",
-                headers={"X-Agent-Key": test_agent_key},
-                files={"raw_data": ("receipt.bin", raw_data, "application/octet-stream")},
-                data={
-                    "captured_at": "2026-10-07T15:00:00",
-                    "capture_mode": "serial",
-                    "version": "1.0.0"
-                }
-            )
-
-            # Then
-            assert response.status_code == 201
-            data = response.json()
-            assert data["status"] == "available"
-
-    def test_upload_without_agent_key(self, client):
-        """에이전트 키 없이 업로드 시 401"""
-        raw_data = b'\x1b@Test\n'
-
-        response = client.post(
-            "/agent/v1/receipts",
-            files={"raw_data": ("receipt.bin", raw_data, "application/octet-stream")},
-            data={"captured_at": "2026-10-07T15:00:00"}
-        )
-
-        assert response.status_code == 401
-
-    def test_upload_with_invalid_agent_key(self, client):
-        """잘못된 에이전트 키로 업로드 시 401"""
-        raw_data = b'\x1b@Test\n'
-
-        response = client.post(
-            "/agent/v1/receipts",
-            headers={"X-Agent-Key": "invalid_key"},
-            files={"raw_data": ("receipt.bin", raw_data, "application/octet-stream")},
-            data={"captured_at": "2026-10-07T15:00:00"}
-        )
-
-        assert response.status_code == 401
+async def upload(client, data: bytes):
+    return await client.post(
+        "/agent/v1/receipts",
+        files={"file": ("r.bin", data, "application/octet-stream")},
+        data={"captured_at": datetime.now(timezone.utc).isoformat(), "capture_mode": "serial",
+              "agent_version": "1.1.0"},
+    )
 
 
-class TestHeartbeatAPI:
-    """하트비트 API 테스트"""
-
-    def test_heartbeat_success(self, client, test_agent_key):
-        """하트비트 전송 성공"""
-        with patch('app.routers.agent.update_agent_status') as mock_update:
-            mock_update.return_value = True
-
-            response = client.post(
-                "/agent/v1/heartbeat",
-                headers={"X-Agent-Key": test_agent_key},
-                json={
-                    "version": "1.0.0",
-                    "capture_mode": "serial",
-                    "last_capture_at": "2026-10-07T15:00:00",
-                    "queue_length": 0
-                }
-            )
-
-            assert response.status_code == 200
-
-    def test_heartbeat_updates_agent_status(self, client, test_agent_key, db_session):
-        """하트비트가 에이전트 상태를 업데이트하는지"""
-        # This would test the actual database update
-        pass
+async def receipts(factory):
+    async with factory() as s:
+        return (await s.execute(select(Receipt))).scalars().all()
 
 
-class TestLatestVersionAPI:
-    """최신 버전 확인 API 테스트"""
+@pytest.mark.asyncio
+async def test_upload_card_receipt_creates_masked_png(api):
+    client, factory, _ = api
+    r = await upload(client, samples.card_receipt())
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["success"] and body["classification"] == "normal"
 
-    def test_get_latest_version(self, client, test_agent_key):
-        """최신 버전 확인"""
-        response = client.get(
-            "/agent/v1/latest",
-            headers={"X-Agent-Key": test_agent_key}
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert "version" in data
-        assert "download_url" in data
-
-
-# Fixtures
-@pytest.fixture
-def test_agent_key():
-    """테스트용 에이전트 키"""
-    return "test_agent_key_abc123"
+    rows = await receipts(factory)
+    assert len(rows) == 1
+    rec = rows[0]
+    assert rec.status == ReceiptStatus.AVAILABLE
+    assert rec.approval_no == "30012345"
+    assert rec.amount == 30000
+    assert os.path.exists(rec.image_path) and os.path.exists(rec.raw_bytes_path)
+    # 마스킹: 저장된 텍스트에 휴대폰 번호가 남지 않음
+    assert "010-1234-5678" not in (rec.raw_text or "")
 
 
-@pytest.fixture
-def test_store():
-    """테스트용 매장"""
-    class MockStore:
-        id = 1
-        name = "테스트 매장"
-        store_code = "TEST01"
-    return MockStore()
+@pytest.mark.asyncio
+async def test_cancel_disposes_existing(api):
+    client, factory, _ = api
+    await upload(client, samples.card_receipt())
+    img = (await receipts(factory))[0].image_path
+    assert os.path.exists(img)
+
+    r = await upload(client, samples.card_receipt(cancel=True))
+    assert r.json()["classification"] == "cancelled"
+
+    rows = await receipts(factory)
+    assert len(rows) == 1
+    assert rows[0].status == ReceiptStatus.DISPOSED
+    assert not os.path.exists(img)          # 폐기 = 이미지 파일 삭제
+    assert rows[0].image_path is None
+
+
+@pytest.mark.asyncio
+async def test_footer_cancel_notice_is_still_normal(api):
+    """'교환/환불/취소 시 영수증 지참' 안내 문구가 있어도 정상 영수증"""
+    client, factory, _ = api
+    data = samples.card_receipt().replace(
+        "이용해 주셔서 감사합니다".encode("cp949"), "교환/환불/취소 시 영수증 지참".encode("cp949"))
+    r = await upload(client, data)
+    assert r.json()["classification"] == "normal"
+
+
+@pytest.mark.asyncio
+async def test_kitchen_and_reprint_not_stored(api):
+    client, factory, _ = api
+    r = await upload(client, samples.kitchen_order())
+    assert r.json()["classification"] == "kitchen"
+    await upload(client, samples.card_receipt())
+    r = await upload(client, samples.card_receipt())
+    assert r.json()["classification"] == "reprint"
+    assert len(await receipts(factory)) == 1
+
+
+@pytest.mark.asyncio
+async def test_upload_requires_auth(api):
+    client, _, _ = api
+    r = await client.post(
+        "/agent/v1/receipts",
+        files={"file": ("r.bin", b"x", "application/octet-stream")},
+        data={"captured_at": datetime.now(timezone.utc).isoformat()},
+        headers={"Authorization": "Bearer invalid"},
+    )
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_updates_agent(api):
+    client, factory, store_id = api
+    r = await client.post("/agent/v1/heartbeat", json={
+        "version": "1.1.0", "capture_mode": "serial", "last_capture_at": None, "queue_length": 3,
+    })
+    assert r.status_code == 200, r.text
+    async with factory() as s:
+        agent = (await s.execute(select(Agent).where(Agent.store_id == store_id))).scalar_one()
+        assert agent.version == "1.1.0" and agent.queue_length == 3

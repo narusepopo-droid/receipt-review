@@ -13,6 +13,9 @@ from ..models.session import ReviewSession, SessionStatus
 from ..models.store import Store, StoreSettings
 
 
+KST = timezone(timedelta(hours=9))
+
+
 class NoReceiptAvailableError(Exception):
     """사용 가능한 영수증이 없음"""
     pass
@@ -29,12 +32,10 @@ class AssignmentService:
         self.db = db
 
     def get_business_day_start(self, cutoff: str = "05:00") -> datetime:
-        """영업일 시작 시각 계산"""
-        now = datetime.now(timezone.utc)
+        """영업일 시작 시각 계산 (한국 시간 기준, 예: 새벽 5시)"""
+        now = datetime.now(KST)
         h, m = map(int, cutoff.split(":"))
-        cutoff_time = time(h, m)
-
-        today_cutoff = datetime.combine(now.date(), cutoff_time, tzinfo=timezone.utc)
+        today_cutoff = datetime.combine(now.date(), time(h, m), tzinfo=KST)
 
         if now < today_cutoff:
             return today_cutoff - timedelta(days=1)
@@ -75,27 +76,25 @@ class AssignmentService:
         business_day_start = self.get_business_day_start(cutoff)
 
         policy = store_settings.assignment_policy if store_settings else "latest_same_day"
-        order_by = "paid_at DESC" if policy == "latest_same_day" else "paid_at ASC"
 
-        query = text(f"""
-            SELECT id FROM receipts
-            WHERE store_id = :store_id
-              AND status = 'available'
-              AND classification = 'normal'
-              AND paid_at >= :business_day_start
-            ORDER BY {order_by}
-            LIMIT 1
-            FOR UPDATE SKIP LOCKED
-        """)
-
-        result = await self.db.execute(
-            query,
-            {
-                "store_id": session.store_id,
-                "business_day_start": business_day_start
-            }
+        order_col = Receipt.paid_at.desc() if policy == "latest_same_day" else Receipt.paid_at.asc()
+        # 영업일 시작 이후 + 생성 후 24시간 이내(폐기 기준과 동일)인 미배정 정상 영수증
+        query = (
+            select(Receipt.id)
+            .where(
+                Receipt.store_id == session.store_id,
+                Receipt.status == ReceiptStatus.AVAILABLE,
+                Receipt.classification == ReceiptClassification.NORMAL,
+                Receipt.paid_at >= business_day_start,
+                Receipt.created_at >= now - timedelta(hours=24),
+            )
+            .order_by(order_col)
+            .limit(1)
+            .with_for_update(skip_locked=True)   # PostgreSQL: 동시 요청 시 같은 영수증 중복 배정 방지
         )
-        row = result.fetchone()
+
+        result = await self.db.execute(query)
+        row = result.first()
 
         if not row:
             raise NoReceiptAvailableError("사용 가능한 영수증이 없습니다")

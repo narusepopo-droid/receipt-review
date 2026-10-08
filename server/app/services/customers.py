@@ -166,6 +166,6 @@ class CustomerService:
                 ReviewSession.store_id == store_id,
                 ReviewSession.customer_id == customer_id,
                 ReviewSession.started_at >= business_day_start
-            ).order_by(ReviewSession.started_at.desc())
+            ).order_by(ReviewSession.started_at.desc()).limit(1)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()

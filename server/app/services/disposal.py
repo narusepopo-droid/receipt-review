@@ -12,6 +12,8 @@ from app.models.receipt import ReceiptStatus
 
 logger = logging.getLogger(__name__)
 
+KST = timezone(timedelta(hours=9))
+
 
 def parse_cutoff_time(cutoff_str: str) -> dt_time:
     try:
@@ -25,6 +27,9 @@ def get_business_day_start(
     now: datetime,
     cutoff: dt_time = dt_time(5, 0)
 ) -> datetime:
+    # 영업일 마감 시각(예: 새벽 5시)은 한국 시간 기준
+    if now.tzinfo is not None:
+        now = now.astimezone(KST)
     cutoff_today = now.replace(
         hour=cutoff.hour,
         minute=cutoff.minute,
@@ -41,6 +46,8 @@ def get_business_day_end(
     now: datetime,
     cutoff: dt_time = dt_time(5, 0)
 ) -> datetime:
+    if now.tzinfo is not None:
+        now = now.astimezone(KST)
     cutoff_today = now.replace(
         hour=cutoff.hour,
         minute=cutoff.minute,
@@ -115,6 +122,28 @@ async def dispose_expired_receipts(db: AsyncSession) -> dict:
                 stats["unassigned_expired"] += 1
             except Exception as e:
                 stats["errors"].append(f"Receipt {receipt.id}: {e}")
+
+    # 안전장치 1: 설정과 관계없이 생성 후 24시간이 지난 영수증은 모두 폐기 (D5)
+    hard_cutoff = now - timedelta(hours=24)
+    stmt = select(Receipt).where(
+        Receipt.status != ReceiptStatus.DISPOSED,
+        Receipt.created_at < hard_cutoff
+    )
+    for receipt in (await db.execute(stmt)).scalars().all():
+        try:
+            await _dispose_receipt(receipt, "created_24h_expired", stats)
+            stats["unassigned_expired"] += 1
+        except Exception as e:
+            stats["errors"].append(f"Receipt {receipt.id}: {e}")
+
+    # 안전장치 2: 폐기 처리됐는데 파일이 남아 있는 경우 파일 삭제
+    stmt = select(Receipt).where(
+        Receipt.status == ReceiptStatus.DISPOSED,
+        (Receipt.image_path.isnot(None)) | (Receipt.raw_bytes_path.isnot(None))
+    )
+    for receipt in (await db.execute(stmt)).scalars().all():
+        reason = receipt.dispose_reason or "disposed"
+        await _dispose_receipt(receipt, reason, stats)
 
     await db.commit()
 
