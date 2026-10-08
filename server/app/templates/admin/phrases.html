@@ -57,6 +57,28 @@
         </div>
     </div>
 
+    <!-- Keyword Phrases Section -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">키워드별 문장</h3>
+        </div>
+        <div class="card-body">
+            <p style="font-size: 13px; color: var(--gray-600); margin-bottom: 16px;">
+                손님이 키워드를 고르면 아래 문장 중 하나가 리뷰에 들어갑니다. 한 줄에 한 문장씩 적어주세요.
+                비워두면 기본 문장을 씁니다. (새로 추가한 키워드는 저장 후 여기에 나타납니다)
+            </p>
+            <div id="phrases-container">
+                {% for keyword in keywords %}
+                <div class="form-group">
+                    <label class="form-label">{{ keyword.label }}</label>
+                    <textarea class="form-input phrase-input" data-keyword="{{ keyword.label }}" rows="3"
+                              placeholder="예) 국물이 정말 진했어요.">{{ (keyword.phrases or []) | join('\n') }}</textarea>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
     <!-- Signature Menus Section -->
     <div class="card">
         <div class="card-header">
@@ -152,10 +174,10 @@
                 {% for i in range(5) %}
                 <div class="preview-box" style="margin-bottom: 12px;">
                     <div class="preview-content" id="preview-{{ i }}">
-                        {{ sample_texts[i] if sample_texts else '돼지김치찌개 정말 맛있었어요! 직원분들이 친절하셔서 기분 좋게 식사했습니다. 다음에 또 올게요.' }}
+                        [새로 생성]을 누르면 지금 설정으로 만든 문구가 보입니다
                     </div>
                     <div style="text-align: right; margin-top: 8px; font-size: 12px; color: var(--gray-500);">
-                        <span id="preview-len-{{ i }}">47</span>자
+                        <span id="preview-len-{{ i }}">-</span>자
                     </div>
                 </div>
                 {% endfor %}
@@ -234,46 +256,50 @@ function removeTemplate(btn) {
     btn.closest('.template-item').remove();
 }
 
-function generatePreview() {
-    const templates = Array.from(document.querySelectorAll('.template-text')).map(el => el.value);
-    const menus = Array.from(document.querySelectorAll('#menus-container input')).map(el => el.value);
-    const keywords = Array.from(document.querySelectorAll('#keywords-container .chip')).map(el => el.dataset.keyword);
-
-    const keywordPhrases = {
-        '맛있어요': ['정말 맛있었어요', '맛이 최고예요'],
-        '친절해요': ['직원분들이 친절하셔서 기분 좋게 식사했습니다', '응대가 정말 친절해요'],
-        '분위기 좋아요': ['분위기가 좋아서 대화하기 좋았어요', '인테리어가 예뻐요'],
-        '가성비 좋아요': ['가격 대비 양이 푸짐해요', '가성비 최고'],
-        '재방문 의사 있어요': ['다음에 또 올게요', '또 방문하고 싶어요']
+function collectData() {
+    const phraseMap = {};
+    document.querySelectorAll('.phrase-input').forEach(el => {
+        phraseMap[el.dataset.keyword] = el.value.split('\n').map(v => v.trim()).filter(v => v);
+    });
+    return {
+        keywords: Array.from(document.querySelectorAll('#keywords-container .chip')).map(el => ({
+            label: el.dataset.keyword,
+            default: el.classList.contains('active'),
+            phrases: phraseMap[el.dataset.keyword] || []
+        })),
+        signature_menus: Array.from(document.querySelectorAll('#menus-container input')).map(el => el.value.trim()).filter(v => v),
+        templates: Array.from(document.querySelectorAll('.template-text')).map(el => el.value.trim()).filter(v => v),
+        text_min_len: parseInt(document.getElementById('text-min-len').value) || 30,
+        text_max_len: parseInt(document.getElementById('text-max-len').value) || 150
     };
+}
 
-    for (let i = 0; i < 5; i++) {
-        const template = templates[Math.floor(Math.random() * templates.length)] || '{메뉴} {키워드1}';
-        const menu = menus[Math.floor(Math.random() * menus.length)] || '대표메뉴';
-        const kw1 = keywords[Math.floor(Math.random() * keywords.length)] || '맛있어요';
-        const kw2 = keywords[Math.floor(Math.random() * keywords.length)] || '친절해요';
-
-        let text = template
-            .replace('{메뉴}', menu)
-            .replace('{키워드1}', keywordPhrases[kw1]?.[0] || kw1)
-            .replace('{키워드2}', keywordPhrases[kw2]?.[0] || kw2);
-
-        document.getElementById('preview-' + i).textContent = text;
-        document.getElementById('preview-len-' + i).textContent = text.length;
-    }
+function generatePreview() {
+    fetch('{{ url_for("admin_preview_phrases") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(collectData())
+    })
+    .then(res => res.json())
+    .then(data => {
+        (data.texts || []).forEach((t, i) => {
+            const el = document.getElementById('preview-' + i);
+            if (!el) return;
+            el.textContent = t.text;
+            const len = document.getElementById('preview-len-' + i);
+            len.textContent = t.len + (t.ok ? '' : ' (글자수 범위 밖)');
+            len.style.color = t.ok ? '' : 'var(--danger)';
+        });
+    })
+    .catch(() => alert('미리보기 생성 중 오류가 발생했습니다.'));
 }
 
 function saveSettings() {
-    const data = {
-        keywords: Array.from(document.querySelectorAll('#keywords-container .chip')).map(el => ({
-            label: el.dataset.keyword,
-            default: el.classList.contains('active')
-        })),
-        signature_menus: Array.from(document.querySelectorAll('#menus-container input')).map(el => el.value).filter(v => v),
-        templates: Array.from(document.querySelectorAll('.template-text')).map(el => el.value).filter(v => v),
-        text_min_len: parseInt(document.getElementById('text-min-len').value),
-        text_max_len: parseInt(document.getElementById('text-max-len').value)
-    };
+    const data = collectData();
+    if (data.text_min_len > data.text_max_len) {
+        alert('최소 글자수가 최대 글자수보다 클 수 없습니다.');
+        return;
+    }
 
     fetch('{{ url_for("admin_save_phrases") }}', {
         method: 'POST',
@@ -283,9 +309,10 @@ function saveSettings() {
     .then(res => res.json())
     .then(data => {
         if (data.success) {
-            alert('저장되었습니다.');
+            alert('저장되었습니다. 다음 손님부터 바로 적용됩니다.');
+            location.reload();
         } else {
-            alert('저장 실패: ' + data.error);
+            alert('저장 실패: ' + (data.error || data.detail || ''));
         }
     })
     .catch(err => alert('오류가 발생했습니다.'));

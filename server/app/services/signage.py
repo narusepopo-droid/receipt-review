@@ -18,6 +18,27 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 
+# 한글 글꼴: 저장소에 포함된 나눔고딕코딩 우선 (리눅스 서버에도 있음), 없으면 윈도우 맑은 고딕
+_FONT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "fonts")
+FONT_REGULAR = [os.path.join(_FONT_DIR, "NanumGothicCoding-Regular.ttf"), "C:/Windows/Fonts/malgun.ttf"]
+FONT_BOLD = [os.path.join(_FONT_DIR, "NanumGothicCoding-Bold.ttf"), "C:/Windows/Fonts/malgunbd.ttf"]
+
+
+def _first_existing(paths):
+    for p in paths:
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def _pil_font(bold: bool, size: int):
+    path = _first_existing(FONT_BOLD if bold else FONT_REGULAR)
+    try:
+        return ImageFont.truetype(path, size) if path else ImageFont.load_default()
+    except OSError:
+        return ImageFont.load_default()
+
+
 @dataclass
 class SignageConfig:
     store_name: str
@@ -26,7 +47,8 @@ class SignageConfig:
     table_count: int
     base_url: str = "https://review.placemaster.co.kr"
     size: str = "A6"  # A6 or A5
-    primary_color: str = "#2563EB"
+    primary_color: str = "#03C75A"
+    start_no: int = 1
 
 
 def generate_qr_code(url: str, size: int = 200) -> Image.Image:
@@ -58,16 +80,10 @@ def generate_signage_png(config: SignageConfig, table_no: int) -> bytes:
     draw = ImageDraw.Draw(img)
 
     # 폰트 로드
-    try:
-        font_title = ImageFont.truetype("malgunbd.ttf", 24)
-        font_benefit = ImageFont.truetype("malgunbd.ttf", 18)
-        font_step = ImageFont.truetype("malgun.ttf", 12)
-        font_table = ImageFont.truetype("malgun.ttf", 10)
-    except:
-        font_title = ImageFont.load_default()
-        font_benefit = font_title
-        font_step = font_title
-        font_table = font_title
+    font_title = _pil_font(True, 24)
+    font_benefit = _pil_font(True, 18)
+    font_step = _pil_font(False, 12)
+    font_table = _pil_font(False, 10)
 
     y = 20
     cx = width // 2
@@ -127,18 +143,20 @@ def generate_signage_pdf(config: SignageConfig) -> bytes:
     width, height = page_size
 
     # 폰트 등록 (시스템에 맑은고딕이 있다면)
+    regular, bold = _first_existing(FONT_REGULAR), _first_existing(FONT_BOLD)
     try:
-        font_path = "C:/Windows/Fonts/malgun.ttf"
-        if os.path.exists(font_path):
-            pdfmetrics.registerFont(TTFont("Malgun", font_path))
-            pdfmetrics.registerFont(TTFont("MalgunBold", "C:/Windows/Fonts/malgunbd.ttf"))
+        if regular and bold:
+            pdfmetrics.registerFont(TTFont("Malgun", regular))
+            pdfmetrics.registerFont(TTFont("MalgunBold", bold))
             use_korean_font = True
         else:
             use_korean_font = False
-    except:
+    except Exception:
         use_korean_font = False
 
-    for table_no in range(1, config.table_count + 1):
+    benefit = config.benefit_text or "리뷰 작성 시 혜택을 드려요"
+    last_no = config.start_no + config.table_count - 1
+    for table_no in range(config.start_no, last_no + 1):
         # 매장명
         if use_korean_font:
             c.setFont("MalgunBold", 18)
@@ -150,7 +168,7 @@ def generate_signage_pdf(config: SignageConfig) -> bytes:
         if use_korean_font:
             c.setFont("MalgunBold", 14)
         c.setFillColor(config.primary_color)
-        c.drawCentredString(width / 2, height - 45 * mm, config.benefit_text)
+        c.drawCentredString(width / 2, height - 45 * mm, benefit)
         c.setFillColorRGB(0, 0, 0)
 
         # QR 코드
@@ -187,13 +205,13 @@ def generate_signage_pdf(config: SignageConfig) -> bytes:
             y -= 5 * mm
 
         # 테이블 번호
-        c.setFont("Helvetica", 8)
+        c.setFont("Malgun" if use_korean_font else "Helvetica", 8)
         c.setFillColorRGB(0.5, 0.5, 0.5)
-        c.drawCentredString(width / 2, 10 * mm, f"Table {table_no}")
+        c.drawCentredString(width / 2, 10 * mm, f"테이블 {table_no}" if use_korean_font else f"Table {table_no}")
         c.setFillColorRGB(0, 0, 0)
 
         # 다음 페이지
-        if table_no < config.table_count:
+        if table_no < last_no:
             c.showPage()
 
     c.save()

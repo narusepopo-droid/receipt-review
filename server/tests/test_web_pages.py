@@ -298,3 +298,43 @@ async def test_ops_store_management_and_agent_status(web, tmp_path, monkeypatch)
     assert (await web.post("/ops/installer/9.0.0/set-latest")).json()["success"]
     assert json.loads((tmp_path / "dl" / "latest.json").read_text(encoding="utf-8"))["version"] == "9.0.0"
     assert "9.0.0" in (await web.get("/ops/installer")).text
+
+
+@pytest.mark.asyncio
+async def test_owner_phrases_apply_to_next_customer(web, tmp_path, monkeypatch):
+    """점주가 문구 설정을 바꾸면 다음 손님부터 바로 반영 (Phase 4 완료 기준)"""
+    import sys
+    from pathlib import Path
+    from datetime import timezone
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import make_sample_escpos as samples
+    from app.routers.auth import generate_token
+
+    await web.post("/admin/login", data={"login_id": "owner@test.com", "password": "pw1234!"})
+    payload = {
+        "keywords": [{"label": "국물맛집", "default": True, "phrases": ["국물이 정말 진하고 깊었어요."]}],
+        "signature_menus": ["얼큰나베"], "templates": [], "text_min_len": 10, "text_max_len": 200,
+    }
+    prev = (await web.post("/admin/phrases/preview", json=payload)).json()["texts"]
+    assert len(prev) == 5 and "국물이 정말 진하고 깊었어요." in prev[0]["text"]
+    assert (await web.post("/admin/phrases/save", json=payload)).json()["success"]
+    assert "국물이 정말 진하고 깊었어요." in (await web.get("/admin/phrases")).text
+
+    monkeypatch.setattr(settings, "RECEIPT_IMAGE_DIR", str(tmp_path / "img"))
+    monkeypatch.setattr(settings, "RECEIPT_RAW_DIR", str(tmp_path / "raw"))
+    await web.post("/agent/v1/receipts", headers={"Authorization": f"Bearer {generate_token(1)}"},
+                   files={"file": ("r.bin", samples.card_receipt(), "application/octet-stream")},
+                   data={"captured_at": datetime.now(timezone.utc).isoformat()})
+    sid = (await web.post("/api/v1/session/start?store_code=WEB01", json={"phone": "010-9999-0000"})).json()["session_id"]
+    await web.post(f"/api/v1/session/{sid}/keywords", json={"keywords": ["국물맛집"]})
+    text = (await web.post(f"/api/v1/session/{sid}/assign")).json()["generated_text"]
+    assert "국물이 정말 진하고 깊었어요." in text and "얼큰나베" in text, text
+
+
+@pytest.mark.asyncio
+async def test_table_sign_pdf_and_png(web):
+    await web.post("/admin/login", data={"login_id": "owner@test.com", "password": "pw1234!"})
+    r = await web.get("/admin/tables/download?format=pdf&count=3&start=2")
+    assert r.status_code == 200 and r.content[:4] == b"%PDF"
+    r = await web.get("/admin/tables/download?format=png&count=2")
+    assert r.status_code == 200 and r.content[:2] == b"PK"

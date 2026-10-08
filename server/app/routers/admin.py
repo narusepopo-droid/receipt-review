@@ -546,6 +546,34 @@ async def phrases_page(request: Request, db: AsyncSession = Depends(get_db)):
     )
 
 
+@router.post("/phrases/preview", name="admin_preview_phrases")
+async def preview_phrases(request: Request, data: PhrasesUpdate, db: AsyncSession = Depends(get_db)):
+    """저장 전 화면 값으로 실제 문구 생성기를 돌려 5개 미리보기 (DB 기록 없음)"""
+    store_data = await get_current_store(request, db)
+    if not store_data:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+
+    from app.review.text_generator import TextGenerator, DEFAULT_TEMPLATES
+    import random as _random
+    gen = TextGenerator(db)
+    kw_phrases = {k["label"]: [p for p in k.get("phrases", []) if p]
+                  for k in data.keywords if isinstance(k, dict) and k.get("label") and k.get("phrases")}
+    labels = [k["label"] for k in data.keywords if isinstance(k, dict) and k.get("label")]
+    defaults = [k["label"] for k in data.keywords if isinstance(k, dict) and k.get("default")] or labels[:2]
+    menus = [m for m in data.signature_menus if m]
+    texts = []
+    for i in range(5):
+        chosen = defaults if i == 0 else _random.sample(labels, k=min(len(labels), _random.randint(1, 3))) if labels else []
+        if data.templates:
+            tpl = _random.choice([t for t in data.templates if t] or DEFAULT_TEMPLATES)
+            text = gen._fill_template(tpl, menus, chosen, kw_phrases)
+        else:
+            text = gen._compose(menus, chosen, kw_phrases)
+        texts.append({"text": text, "len": len(text),
+                      "ok": data.text_min_len <= len(text) <= data.text_max_len, "keywords": chosen})
+    return JSONResponse({"texts": texts})
+
+
 @router.post("/phrases/save", name="admin_save_phrases")
 async def save_phrases(request: Request, data: PhrasesUpdate, db: AsyncSession = Depends(get_db)):
     store_data = await get_current_store(request, db)
@@ -691,9 +719,10 @@ async def download_tables(
     config = SignageConfig(
         store_name=store.name,
         store_code=store.store_code,
-        benefit_text=settings.benefit_text if settings else "리뷰 작성 시 음료 1잔 서비스",
-        table_count=count,
-        size=size
+        benefit_text=(settings.benefit_text if settings and settings.benefit_text else "리뷰 작성 시 음료 1잔 서비스"),
+        table_count=max(1, min(count, 200)),
+        size=size if size in ("A5", "A6") else "A6",
+        start_no=max(1, start),
     )
 
     if format == "pdf":

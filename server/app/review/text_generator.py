@@ -68,6 +68,19 @@ DEFAULT_KEYWORD_PHRASES = {
         "편안한 분위기에서 식사했어요.",
         "인테리어가 예뻐요.",
     ],
+    "재방문의사있어요": [
+        "다음에 또 오고 싶어요.",
+        "단골 될 것 같아요.",
+        "꼭 다시 올게요.",
+    ],
+    "양이많아요": [
+        "양이 정말 푸짐해요.",
+        "양이 넉넉해서 배불리 먹었어요.",
+    ],
+    "음식이빨리나와요": [
+        "음식이 빨리 나와서 좋았어요.",
+        "주문하고 금방 나왔어요.",
+    ],
 }
 
 
@@ -95,9 +108,14 @@ class TextGenerator:
         keyword_phrases: Optional[dict] = None
     ) -> str:
         """키워드를 문장형으로 변환"""
-        phrases = keyword_phrases or DEFAULT_KEYWORD_PHRASES
-        if keyword in phrases:
-            return random.choice(phrases[keyword])
+        # 점주 등록 문장 → 기본 문장 → 키워드 그대로 (띄어쓰기 무시하고 매칭)
+        norm = lambda t: re.sub(r"\s+", "", t or "")
+        for table in (keyword_phrases or {}, DEFAULT_KEYWORD_PHRASES):
+            for label, candidates in table.items():
+                if norm(label) == norm(keyword):
+                    cands = [c for c in (candidates or []) if c and norm(c) != norm(label)]
+                    if cands:
+                        return random.choice(cands)
         return keyword
 
     def _fill_template(
@@ -194,10 +212,8 @@ class TextGenerator:
             if settings.keywords:
                 kw_phrases = {}
                 for kw in settings.keywords:
-                    if isinstance(kw, dict) and "label" in kw:
-                        label = kw["label"]
-                        phrases = kw.get("phrases", [label])
-                        kw_phrases[label] = phrases if phrases else [label]
+                    if isinstance(kw, dict) and kw.get("label") and kw.get("phrases"):
+                        kw_phrases[kw["label"]] = [p for p in kw["phrases"] if p]
                 if kw_phrases:
                     keyword_phrases = kw_phrases
             min_len = settings.text_min_len
