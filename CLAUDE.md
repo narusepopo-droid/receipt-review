@@ -823,3 +823,4 @@ event_log
   - 2026-10-08: 결제 시스템 — 나중에 연동, 현재는 관리자 승인 방식
   - 2026-10-08: 관리 화면 — **웹 마이페이지 방식** (포스 앱은 캡처만, 관리는 웹에서)
   - 2026-10-09: 배포용 zip은 Git에서 제외(.gitignore *.zip) — 배포는 서버 static/downloads·GitHub Release로. agent/lib SPMC 파일은 빌드에 필요해 유지
+  - 2026-10-09: 서버 접속 — 이 PC 전용 SSH 열쇠(~/.ssh/receipt-review) 등록, 앱 폴더는 /home/ubuntu/receipt-review. 사이트 다운로드 v1.1.0 배포 완료

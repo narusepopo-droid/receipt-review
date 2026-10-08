@@ -5,7 +5,7 @@
 set -euo pipefail
 
 # Configuration
-APP_DIR="/var/www/receipt-review"
+APP_DIR="/home/ubuntu/receipt-review"
 SERVICE_NAME="receipt-review"
 BRANCH="main"
 LOG_FILE="/var/log/receipt-review-deploy.log"
