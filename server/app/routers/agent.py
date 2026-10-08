@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Header, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Header, UploadFile, File, Form, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +21,7 @@ from app.receipt.classifier import classify_receipt, ReceiptType
 from app.receipt.masking import mask_parsed_receipt
 from app.receipt.renderer import render_receipt
 from app.services.disposal import dispose_by_approval_no
+from app.services.release import get_release, sha256_of, parse_version, MIN_AUTO_UPDATE_VERSION
 from app.routers.auth import verify_token
 
 router = APIRouter(prefix="/agent/v1", tags=["agent"])
@@ -275,68 +276,28 @@ class VersionInfo(BaseModel):
     mandatory: bool = False
 
 
-# GitHub Release 정보 캐시 (5분)
-_github_cache = {"data": None, "expires": 0}
-GITHUB_REPO = "narusepopo-droid/receipt-review"
-
-
-async def get_github_release():
-    """GitHub에서 최신 릴리스 정보 가져오기 (5분 캐시)"""
-    import time
-    import aiohttp
-
-    now = time.time()
-    if _github_cache["data"] and _github_cache["expires"] > now:
-        return _github_cache["data"]
-
-    try:
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers={"Accept": "application/vnd.github.v3+json"}) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    _github_cache["data"] = data
-                    _github_cache["expires"] = now + 300  # 5분 캐시
-                    return data
-                elif resp.status == 404:
-                    return None  # 릴리스 없음
-    except Exception:
-        pass
-
-    return _github_cache.get("data")  # 실패 시 이전 캐시 반환
-
-
 @router.get("/latest", response_model=VersionInfo)
-async def get_latest_version():
-    """최신 버전 정보 반환 - GitHub Release에서 자동 확인"""
+async def get_latest_version(request: Request):
+    """최신 버전 정보 (에이전트 자동 업데이트용) - 서버 다운로드 폴더의 latest.json 기준"""
+    rel = get_release()
 
-    # GitHub Release 확인
-    release = await get_github_release()
+    # User-Agent: ReceiptTap/1.0.3 → 1.1.0 미만은 업데이트 방식이 달라 제외 (자기 버전을 그대로 알려줌)
+    ua = request.headers.get("user-agent", "")
+    m = re.match(r"ReceiptTap/([\d.]+)", ua)
+    if m and parse_version(m.group(1)) < parse_version(MIN_AUTO_UPDATE_VERSION):
+        return VersionInfo(version=m.group(1), download_url="", release_notes="수동 재설치 필요")
 
-    if release:
-        # 릴리스에서 .exe 파일 찾기
-        exe_asset = None
-        for asset in release.get("assets", []):
-            if asset["name"].endswith(".exe"):
-                exe_asset = asset
-                break
+    if not rel.package_path:
+        return VersionInfo(version=rel.version if not m else m.group(1), download_url="")
 
-        if exe_asset:
-            # 버전: v1.0.0 → 1.0.0
-            version = release["tag_name"].lstrip("v")
-
-            return VersionInfo(
-                version=version,
-                download_url=exe_asset["browser_download_url"],
-                file_size=exe_asset["size"],
-                release_notes=release.get("body", ""),
-                mandatory=False
-            )
-
-    # GitHub Release 없으면 기본값 (현재 버전)
+    base = str(request.base_url).rstrip("/")
+    if request.headers.get("x-forwarded-proto") == "https":
+        base = base.replace("http://", "https://", 1)
     return VersionInfo(
-        version="1.0.0",
-        download_url="",
-        release_notes="초기 버전",
-        mandatory=False
+        version=rel.version,
+        download_url=f"{base}/download/package/{rel.version}",
+        checksum=sha256_of(rel.package_path),
+        file_size=os.path.getsize(rel.package_path),
+        release_notes=rel.notes,
+        mandatory=False,
     )

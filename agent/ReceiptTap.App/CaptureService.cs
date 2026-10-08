@@ -11,7 +11,14 @@ namespace ReceiptTap.App
     /// </summary>
     public class CaptureService : IDisposable
     {
-        public const string VERSION = "1.1.0";
+        /// <summary>프로그램 버전 (ReceiptTap.App.csproj 의 &lt;Version&gt; 한 곳에서 관리)</summary>
+        public static readonly string VERSION = GetVersion();
+
+        private static string GetVersion()
+        {
+            var v = typeof(CaptureService).Assembly.GetName().Version;
+            return v == null ? "0.0.0" : $"{v.Major}.{v.Minor}.{v.Build}";
+        }
 
         private readonly AgentConfig _config;
         private AutoPortCapture _capture;

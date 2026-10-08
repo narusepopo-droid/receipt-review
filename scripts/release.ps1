@@ -1,70 +1,85 @@
-# 영수증리뷰 에이전트 릴리스 스크립트
-# 사용법: .\scripts\release.ps1 1.1.0 "버그 수정 및 안정성 개선"
-
+# 영수증리뷰 에이전트 빌드 + 배포
+#
+# 사용법 (프로젝트 루트에서):
+#   .\scripts\release.ps1                       # 빌드만 (dist\ 에 Setup.exe + zip 생성)
+#   .\scripts\release.ps1 -Publish -Notes "변경 내용"   # 빌드 + 서버 업로드 + 최신 버전 지정
+#
+# 버전은 agent\ReceiptTap.App\ReceiptTap.App.csproj 의 <Version> 한 곳에서 관리.
+# -Publish 하면:
+#   1) 서버 다운로드 폴더에 Setup.exe(첫 설치용)와 zip(자동 업데이트용) 업로드
+#   2) latest.json 갱신 → 사이트 다운로드 버튼과 설치된 프로그램 자동 업데이트에 즉시 반영
 param(
-    [Parameter(Mandatory=$true)]
-    [string]$Version,
-
-    [Parameter(Mandatory=$false)]
-    [string]$ReleaseNotes = "버그 수정 및 안정성 개선"
+    [switch]$Publish,
+    [switch]$ZipOnly,   # 첫 설치도 zip 으로 (설치 파일 테스트 전)
+    [string]$Notes = "버그 수정 및 안정성 개선",
+    [string]$Server = "ubuntu@13.124.130.55",
+    [string]$Key = "$env:USERPROFILE\.ssh\receipt-review"
 )
 
 $ErrorActionPreference = "Stop"
+$root = Split-Path $PSScriptRoot -Parent
+Set-Location $root
 
-Write-Host "===== 영수증리뷰 에이전트 v$Version 릴리스 =====" -ForegroundColor Cyan
+[xml]$proj = Get-Content "agent\ReceiptTap.App\ReceiptTap.App.csproj" -Encoding UTF8
+$version = ($proj.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
+if (-not $version) { throw "csproj 에서 <Version> 을 찾을 수 없습니다" }
+Write-Host "===== 영수증리뷰 에이전트 v$version =====" -ForegroundColor Cyan
 
-# 1. 버전 업데이트 (CaptureService.cs)
-Write-Host "`n[1/5] 버전 업데이트 중..." -ForegroundColor Yellow
-$captureServicePath = "agent\ReceiptTap.App\CaptureService.cs"
-$content = Get-Content $captureServicePath -Raw
-$content = $content -replace 'public const string VERSION = "[^"]+";', "public const string VERSION = `"$Version`";"
-Set-Content $captureServicePath $content -Encoding UTF8
-Write-Host "  CaptureService.cs 버전: $Version" -ForegroundColor Green
+# 1. 빌드
+Write-Host "[1/4] 빌드" -ForegroundColor Yellow
+dotnet build "agent\ReceiptTap.App\ReceiptTap.App.csproj" -c Release
+if ($LASTEXITCODE -ne 0) { throw "빌드 실패" }
+$bin = "agent\ReceiptTap.App\bin\Release\net462"
 
-# 2. 에이전트 빌드
-Write-Host "`n[2/5] 에이전트 빌드 중..." -ForegroundColor Yellow
-Push-Location agent
-dotnet build -c Release
-if ($LASTEXITCODE -ne 0) {
-    Pop-Location
-    throw "빌드 실패"
-}
-Pop-Location
-Write-Host "  빌드 완료" -ForegroundColor Green
+# 2. 자동 업데이트용 zip (pdb 제외)
+Write-Host "[2/4] zip 패키지" -ForegroundColor Yellow
+$dist = Join-Path $root "dist"
+New-Item -ItemType Directory -Force $dist | Out-Null
+$stage = Join-Path $env:TEMP "receipttap_stage_$version"
+if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+New-Item -ItemType Directory -Force $stage | Out-Null
+Copy-Item "$bin\*" $stage -Recurse -Exclude "*.pdb"
+$zip = Join-Path $dist "ReceiptTap_v$version.zip"
+if (Test-Path $zip) { Remove-Item $zip -Force }
+Compress-Archive -Path "$stage\*" -DestinationPath $zip
+Remove-Item $stage -Recurse -Force
 
-# 3. Inno Setup으로 설치파일 생성
-Write-Host "`n[3/5] 설치 파일 생성 중..." -ForegroundColor Yellow
-$innoPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-if (-not (Test-Path $innoPath)) {
-    Write-Host "  [경고] Inno Setup이 설치되지 않음 - 설치파일 생성 건너뜀" -ForegroundColor Yellow
-    Write-Host "  수동으로 설치파일을 생성한 후 GitHub Release에 업로드하세요" -ForegroundColor Yellow
-} else {
-    & $innoPath "agent\installer\ReceiptTap.iss"
-    if ($LASTEXITCODE -ne 0) {
-        throw "설치파일 생성 실패"
-    }
-    Write-Host "  설치 파일 생성 완료" -ForegroundColor Green
-}
+# 3. 설치 파일 (Inno Setup)
+Write-Host "[3/4] 설치 파일" -ForegroundColor Yellow
+$iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe") |
+    Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $iscc) { throw "Inno Setup 6 이 설치되어 있지 않습니다" }
+& $iscc "/DMyAppVersion=$version" "/O$dist" "agent\installer\ReceiptTap.iss"
+if ($LASTEXITCODE -ne 0) { throw "설치 파일 생성 실패" }
+$setup = Join-Path $dist "ReceiptTap_Setup_$version.exe"
 
-# 4. Git 커밋
-Write-Host "`n[4/5] Git 커밋 중..." -ForegroundColor Yellow
-git add -A
-git commit -m "v$Version 릴리스`n`n$ReleaseNotes"
-git push
-Write-Host "  커밋 & 푸시 완료" -ForegroundColor Green
-
-# 5. GitHub Release 생성
-Write-Host "`n[5/5] GitHub Release 생성 중..." -ForegroundColor Yellow
-$installerPath = "agent\installer\Output\ReceiptTap_Setup.exe"
-
-if (Test-Path $installerPath) {
-    gh release create "v$Version" $installerPath --title "v$Version" --notes $ReleaseNotes
-    Write-Host "  릴리스 완료: v$Version" -ForegroundColor Green
-} else {
-    # 설치파일 없이 릴리스 (나중에 수동 업로드)
-    gh release create "v$Version" --title "v$Version" --notes "$ReleaseNotes`n`n(설치 파일은 수동으로 업로드 필요)"
-    Write-Host "  릴리스 생성 (설치파일 없음 - 수동 업로드 필요)" -ForegroundColor Yellow
+Get-ChildItem $dist -Filter "*$version*" | ForEach-Object {
+    "{0}  {1:N0} bytes  sha256={2}" -f $_.Name, $_.Length, (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
 }
 
-Write-Host "`n===== 릴리스 완료! =====" -ForegroundColor Cyan
-Write-Host "모든 매장의 에이전트가 6시간 내에 자동 업데이트됩니다." -ForegroundColor White
+if (-not $Publish) {
+    Write-Host "`n빌드 완료 (서버 배포는 -Publish)" -ForegroundColor Green
+    exit 0
+}
+
+# 4. 서버 업로드 + latest.json
+Write-Host "[4/4] 서버 배포" -ForegroundColor Yellow
+$remoteDir = "receipt-review/server/app/static/downloads"
+if ($ZipOnly) { scp -i $Key $zip "${Server}:$remoteDir/" } else { scp -i $Key $setup $zip "${Server}:$remoteDir/" }
+if ($LASTEXITCODE -ne 0) { throw "업로드 실패" }
+
+$latest = [ordered]@{
+    version = $version
+    setup   = $(if ($ZipOnly) { $null } else { "ReceiptTap_Setup_$version.exe" })
+    package = "ReceiptTap_v$version.zip"
+    notes   = $Notes
+    date    = (Get-Date -Format "yyyy-MM-dd")
+} | ConvertTo-Json -Compress
+$tmp = Join-Path $env:TEMP "latest.json"
+[IO.File]::WriteAllText($tmp, $latest, (New-Object Text.UTF8Encoding $false))
+scp -i $Key $tmp "${Server}:$remoteDir/latest.json"
+if ($LASTEXITCODE -ne 0) { throw "latest.json 업로드 실패" }
+
+$check = ssh -i $Key $Server "curl -s -A 'ReceiptTap/1.1.0' http://127.0.0.1:8000/agent/v1/latest"
+Write-Host "서버 응답: $check"
+Write-Host "`n배포 완료: v$version - 설치된 프로그램은 6시간 안에 자동 업데이트됩니다." -ForegroundColor Green

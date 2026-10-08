@@ -26,9 +26,7 @@ class VersionInfo(BaseModel):
 
 # ============ 설정 ============
 
-INSTALLER_DIR = "app/static/downloads"
-CURRENT_VERSION = "1.1.0"
-CURRENT_FILENAME = "ReceiptTap_v1.1.0.zip"
+from app.services.release import get_release, sha256_of, INSTALLER_DIR  # noqa: E402
 
 
 # ============ 다운로드 페이지 ============
@@ -37,16 +35,12 @@ CURRENT_FILENAME = "ReceiptTap_v1.1.0.zip"
 async def download_page():
     """설치 파일 다운로드 페이지 - 로그인 필수"""
 
-    filepath = os.path.join(INSTALLER_DIR, CURRENT_FILENAME)
-    sha256 = "파일 준비 중"
-    release_date = "-"
-    if os.path.exists(filepath):
-        with open(filepath, "rb") as f:
-            sha256 = hashlib.sha256(f.read()).hexdigest()
-        release_date = datetime.fromtimestamp(os.path.getmtime(filepath)).strftime("%Y-%m-%d")
+    rel = get_release()
+    sha256 = sha256_of(rel.first_install_path) or "파일 준비 중"
+    release_date = rel.date or "-"
 
     version_info = {
-        "version": CURRENT_VERSION,
+        "version": rel.version,
         "release_date": release_date,
         "sha256": sha256,
         "requirements": [
@@ -320,61 +314,25 @@ async def download_page():
 
 @router.get("/download/latest")
 async def download_latest():
-    """최신 설치 파일 다운로드"""
+    """최신 설치 파일 다운로드 (설치 파일이 있으면 Setup.exe, 없으면 zip)"""
+    rel = get_release()
+    filepath = rel.first_install_path
+    if not filepath:
+        raise HTTPException(status_code=404, detail="설치 파일을 찾을 수 없습니다. 관리자에게 문의하세요.")
 
-    filepath = os.path.join(INSTALLER_DIR, CURRENT_FILENAME)
-
-    if not os.path.exists(filepath):
-        raise HTTPException(
-            status_code=404,
-            detail="설치 파일을 찾을 수 없습니다. 관리자에게 문의하세요."
-        )
-
+    is_exe = filepath.lower().endswith(".exe")
     return FileResponse(
         path=filepath,
-        filename=CURRENT_FILENAME,
-        media_type="application/zip"
+        filename=os.path.basename(filepath),
+        media_type="application/vnd.microsoft.portable-executable" if is_exe else "application/zip",
     )
 
 
-@router.get("/agent/v1/latest")
-async def get_latest_version():
-    """에이전트 최신 버전 정보 (자동 업데이트용)"""
-
-    # TODO: DB에서 조회
-    filename = f"ReceiptTap_{CURRENT_VERSION}.exe"
-    filepath = os.path.join(INSTALLER_DIR, filename)
-
-    sha256 = ""
-    if os.path.exists(filepath):
-        with open(filepath, "rb") as f:
-            sha256 = hashlib.sha256(f.read()).hexdigest()
-
-    return JSONResponse({
-        "version": CURRENT_VERSION,
-        "download_url": "/download/latest",
-        "sha256": sha256,
-        "release_date": "2026-10-07",
-        "mandatory": False,  # 필수 업데이트 여부
-        "release_notes": "초기 버전"
-    })
-
-
-@router.get("/download/version/{version}")
-async def download_specific_version(version: str):
-    """특정 버전 다운로드"""
-
-    filename = f"ReceiptTap_{version}.exe"
-    filepath = os.path.join(INSTALLER_DIR, filename)
-
-    if not os.path.exists(filepath):
-        raise HTTPException(
-            status_code=404,
-            detail=f"버전 {version}을 찾을 수 없습니다."
-        )
-
-    return FileResponse(
-        path=filepath,
-        filename=filename,
-        media_type="application/octet-stream"
-    )
+@router.get("/download/package/{version}")
+async def download_package(version: str):
+    """자동 업데이트용 프로그램 묶음(zip)"""
+    rel = get_release()
+    if version != rel.version or not rel.package_path:
+        raise HTTPException(status_code=404, detail=f"버전 {version} 패키지를 찾을 수 없습니다.")
+    return FileResponse(path=rel.package_path, filename=os.path.basename(rel.package_path),
+                        media_type="application/zip")
