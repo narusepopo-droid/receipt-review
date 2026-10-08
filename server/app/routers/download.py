@@ -26,8 +26,8 @@ class VersionInfo(BaseModel):
 # ============ ?ㅼ젙 ============
 
 INSTALLER_DIR = "app/static/downloads"
-CURRENT_VERSION = "1.0.3"
-CURRENT_FILENAME = "ReceiptTap_v1.0.3.zip"
+CURRENT_VERSION = "1.1.0"
+CURRENT_FILENAME = "ReceiptTap_v1.1.0.zip"
 
 
 # ============ ?ㅼ슫濡쒕뱶 ?섏씠吏 ============
