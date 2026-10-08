@@ -73,6 +73,7 @@ namespace ReceiptTap.App
             }
 
             _isRunning = true;
+            CleanupOldLogs();
             _uploader = new ReceiptUploader(_config.ServerUrl, _config.AuthToken);
 
             // 서버 관련 타이머는 캡처 성공 여부와 상관없이 시작 (서버에 상태 보고)
@@ -322,6 +323,22 @@ namespace ReceiptTap.App
             CurrentStatus = status;
             StatusDetail = detail;
             StatusChanged?.Invoke(this, status);
+        }
+
+        /// <summary>로그는 7일만 보관</summary>
+        private static void CleanupOldLogs()
+        {
+            try
+            {
+                var dir = AgentConfig.LogPath;
+                if (!System.IO.Directory.Exists(dir)) return;
+                foreach (var f in System.IO.Directory.GetFiles(dir, "*.log"))
+                {
+                    if (System.IO.File.GetLastWriteTime(f) < DateTime.Now.AddDays(-7))
+                        System.IO.File.Delete(f);
+                }
+            }
+            catch { }
         }
 
         private int SafeQueueCount()

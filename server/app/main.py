@@ -43,6 +43,15 @@ async def run_sms_job():
             logger.error(f"SMS job failed: {e}")
 
 
+async def run_alert_job():
+    from app.services.alerts import check_agents
+    async with async_session_factory() as session:
+        try:
+            await check_agents(session)
+        except Exception as e:
+            logger.error(f"Alert job failed: {e}")
+
+
 async def ensure_schema():
     """없는 테이블만 생성 + 모델과 DB 칼럼 차이 경고 (기존 테이블은 변경하지 않음)"""
     from sqlalchemy import inspect
@@ -79,6 +88,12 @@ async def lifespan(app: FastAPI):
         run_disposal_job,
         IntervalTrigger(minutes=30),
         id="disposal",
+        replace_existing=True
+    )
+    scheduler.add_job(
+        run_alert_job,
+        IntervalTrigger(minutes=10),
+        id="alerts",
         replace_existing=True
     )
     scheduler.add_job(

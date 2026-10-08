@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     SMS_COST_SMS: int = 20          # 건당 비용 (원)
     SMS_COST_LMS: int = 50
 
+    # 운영자 알림 받을 휴대폰 (에이전트 끊김 등). 알리고 키도 있어야 문자 발송
+    OPS_ALERT_PHONE: str = ""
+
     # 외부 사이트에서 API 호출 허용 (가입 페이지 등)
     CORS_ORIGINS: str = "https://placemaster.co.kr,https://www.placemaster.co.kr,https://review.placemaster.co.kr"
 

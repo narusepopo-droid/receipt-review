@@ -738,8 +738,11 @@
         // 인앱 브라우저 처리
         if (BrowserDetect.isInApp && !BrowserDetect.isNaverApp) {
             if (!InAppHandler.tryOpenExternal()) {
-                // 외부 브라우저 열기 실패 시 안내 표시 (선택적)
-                // InAppHandler.showExternalBrowserGuide();
+                // 인스타그램·페이스북 등: 자동 전환이 안 되므로 안내 (한 번만)
+                if (!sessionStorage.getItem('inappGuideShown')) {
+                    sessionStorage.setItem('inappGuideShown', '1');
+                    InAppHandler.showExternalBrowserGuide();
+                }
             }
         }
 
