@@ -52,9 +52,22 @@ namespace ReceiptTap.App
 
             _trayIcon.DoubleClick += OnSettings;
 
-            // 로그인 안 됐으면 로그인 창 열기
-            if (!_config.Activated || string.IsNullOrEmpty(_config.AuthToken))
+            // 저장된 인증 정보로 자동 로그인 시도
+            if (!string.IsNullOrEmpty(_config.AuthToken))
             {
+                // 이미 로그인됨 - 자동 시작
+                _config.Activated = true;
+                UpdateStatus(AgentStatus.Connected);
+                _trayIcon.ShowBalloonTip(
+                    2000,
+                    "영수증리뷰",
+                    $"{_config.StoreName ?? "매장"}에 자동 연결되었습니다",
+                    ToolTipIcon.Info
+                );
+            }
+            else
+            {
+                // 로그인 필요
                 ShowLoginDialog();
             }
         }

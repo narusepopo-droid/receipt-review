@@ -44,19 +44,24 @@ namespace ReceiptTap.Core
         }
 
         /// <summary>
-        /// 자동 업데이트 시작 (6시간마다 확인)
+        /// 시작 시 업데이트 확인 (1회만)
         /// </summary>
         public void Start()
         {
-            // 시작 후 1분 뒤에 첫 체크, 이후 6시간마다
+            // 시작 후 10초 뒤에 1회만 체크
             _checkTimer = new Timer(
-                async _ => await CheckForUpdateAsync(),
+                async _ =>
+                {
+                    await CheckForUpdateAsync();
+                    _checkTimer?.Dispose();
+                    _checkTimer = null;
+                },
                 null,
-                TimeSpan.FromMinutes(1),
-                TimeSpan.FromHours(6)
+                TimeSpan.FromSeconds(10),
+                Timeout.InfiniteTimeSpan
             );
 
-            Log("자동 업데이트 활성화 (6시간 간격)");
+            Log("시작 시 업데이트 확인 예약됨");
         }
 
         /// <summary>
