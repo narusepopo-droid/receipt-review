@@ -145,17 +145,24 @@ class AssignmentService:
         session: ReviewSession,
         status: SessionStatus
     ) -> ReviewSession:
-        """세션 상태 업데이트"""
+        """세션 상태 업데이트 (단계는 앞으로만 진행, 각 단계 시각은 처음 1번만 기록)"""
         now = datetime.now(timezone.utc)
-        session.status = status
+        order = [SessionStatus.STARTED, SessionStatus.ASSIGNED, SessionStatus.DOWNLOADED,
+                 SessionStatus.REDIRECTED, SessionStatus.COMPLETED, SessionStatus.BENEFIT_GIVEN]
+        if session.status in order and status in order and order.index(status) < order.index(session.status):
+            # 이미 더 진행된 상태 → 상태는 유지, 해당 단계 시각만 비어 있으면 기록
+            status_to_set = session.status
+        else:
+            status_to_set = status
+        session.status = status_to_set
 
-        if status == SessionStatus.DOWNLOADED:
+        if status == SessionStatus.DOWNLOADED and not session.downloaded_at:
             session.downloaded_at = now
-        elif status == SessionStatus.REDIRECTED:
+        elif status == SessionStatus.REDIRECTED and not session.redirected_at:
             session.redirected_at = now
-        elif status == SessionStatus.COMPLETED:
+        elif status == SessionStatus.COMPLETED and not session.completed_at:
             session.completed_at = now
-        elif status == SessionStatus.BENEFIT_GIVEN:
+        elif status == SessionStatus.BENEFIT_GIVEN and not session.benefit_given_at:
             session.benefit_given_at = now
 
         await self.db.flush()

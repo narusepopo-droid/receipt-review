@@ -13,7 +13,14 @@ namespace ReceiptTap.Core
     public class ReceiptUploader
     {
         private readonly string _serverUrl;
-        private readonly string _authToken;
+        private volatile string _authToken;
+
+        /// <summary>현재 토큰 (하트비트로 새 토큰을 받으면 바뀜)</summary>
+        public string AuthToken
+        {
+            get => _authToken;
+            set => _authToken = value;
+        }
 
         public ReceiptUploader(string serverUrl, string authToken)
         {
@@ -41,8 +48,8 @@ namespace ReceiptTap.Core
 
                 using (var stream = await request.GetRequestStreamAsync())
                 {
-                    // raw_data 파일
-                    WriteMultipartFile(stream, boundary, "raw_data", "receipt.bin", "application/octet-stream", rawData);
+                    // 서버 필드 이름: file, captured_at, capture_mode, agent_version
+                    WriteMultipartFile(stream, boundary, "file", "receipt.bin", "application/octet-stream", rawData);
 
                     // captured_at
                     WriteMultipartField(stream, boundary, "captured_at", capturedAt.ToString("o"));
@@ -50,8 +57,7 @@ namespace ReceiptTap.Core
                     // capture_mode
                     WriteMultipartField(stream, boundary, "capture_mode", captureMode);
 
-                    // version
-                    WriteMultipartField(stream, boundary, "version", version);
+                    WriteMultipartField(stream, boundary, "agent_version", version);
 
                     // 종료
                     var ending = Encoding.UTF8.GetBytes($"\r\n--{boundary}--\r\n");
@@ -75,11 +81,18 @@ namespace ReceiptTap.Core
             catch (WebException ex)
             {
                 var response = ex.Response as HttpWebResponse;
+                string body = null;
+                try
+                {
+                    if (response != null)
+                        using (var r = new StreamReader(response.GetResponseStream())) body = r.ReadToEnd();
+                }
+                catch { }
                 return new UploadResult
                 {
                     Success = false,
                     StatusCode = response != null ? (int)response.StatusCode : 0,
-                    Error = ex.Message
+                    Error = ex.Message + (string.IsNullOrEmpty(body) ? "" : " " + body)
                 };
             }
             catch (Exception ex)
@@ -93,9 +106,9 @@ namespace ReceiptTap.Core
         }
 
         /// <summary>
-        /// 하트비트 전송
+        /// 하트비트 전송. 서버가 새 토큰을 주면 AuthToken 이 바뀌고 NewToken 에 담김
         /// </summary>
-        public async Task<bool> SendHeartbeatAsync(string version, string captureMode, DateTime? lastCaptureAt, int queueLength)
+        public async Task<HeartbeatResult> SendHeartbeatAsync(string version, string captureMode, DateTime? lastCaptureAt, int queueLength)
         {
             try
             {
@@ -109,7 +122,7 @@ namespace ReceiptTap.Core
                 {
                     version,
                     capture_mode = captureMode,
-                    last_capture_at = lastCaptureAt?.ToString("o"),
+                    last_capture_at = lastCaptureAt?.ToUniversalTime().ToString("o"),
                     queue_length = queueLength
                 });
 
@@ -120,13 +133,32 @@ namespace ReceiptTap.Core
                 }
 
                 using (var response = (HttpWebResponse)await request.GetResponseAsync())
+                using (var reader = new StreamReader(response.GetResponseStream()))
                 {
-                    return response.StatusCode == HttpStatusCode.OK;
+                    var body = await reader.ReadToEndAsync();
+                    var result = new HeartbeatResult { Success = response.StatusCode == HttpStatusCode.OK, StatusCode = (int)response.StatusCode };
+                    try
+                    {
+                        var json = Newtonsoft.Json.Linq.JObject.Parse(body);
+                        var token = (string)json["new_token"];
+                        if (!string.IsNullOrEmpty(token))
+                        {
+                            _authToken = token;
+                            result.NewToken = token;
+                        }
+                    }
+                    catch { }
+                    return result;
                 }
+            }
+            catch (WebException ex)
+            {
+                var response = ex.Response as HttpWebResponse;
+                return new HeartbeatResult { Success = false, StatusCode = response != null ? (int)response.StatusCode : 0 };
             }
             catch
             {
-                return false;
+                return new HeartbeatResult { Success = false };
             }
         }
 
@@ -144,6 +176,15 @@ namespace ReceiptTap.Core
             stream.Write(headerBytes, 0, headerBytes.Length);
             stream.Write(fileData, 0, fileData.Length);
         }
+    }
+
+    public class HeartbeatResult
+    {
+        public bool Success { get; set; }
+        public int StatusCode { get; set; }
+        public string NewToken { get; set; }
+        /// <summary>토큰이 거부됨 → 다시 로그인 필요</summary>
+        public bool Unauthorized => StatusCode == 401;
     }
 
     public class UploadResult

@@ -34,7 +34,7 @@
         },
 
         get isLine() {
-            return /Line/.test(this.ua);
+            return /\bLine\//.test(this.ua);
         },
 
         get isInApp() {
@@ -129,8 +129,38 @@
         }
     };
 
+    // 현재 세션 id (서버가 화면에 넣어줌, 없으면 이전 화면에서 저장한 값)
+    function currentSessionId() {
+        return window.SESSION_ID || sessionStorage.getItem('sessionId') || '';
+    }
+
     // 클립보드
     const Clipboard = {
+        /** 사용자 탭 핸들러 안에서 await 없이 바로 호출할 것 (iOS 제스처 제한) */
+        copySync(text) {
+            let ok = false;
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.setAttribute('readonly', '');
+            textarea.style.cssText = 'position:fixed;left:0;top:0;opacity:0;font-size:16px;';
+            document.body.appendChild(textarea);
+            const range = document.createRange();
+            range.selectNodeContents(textarea);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            textarea.setSelectionRange(0, text.length);
+            try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+            document.body.removeChild(textarea);
+            sel.removeAllRanges();
+            // 최신 API 도 함께 시도 (실패해도 무시)
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                const p = navigator.clipboard.writeText(text).then(() => true).catch(() => ok);
+                return ok ? Promise.resolve(true) : p;
+            }
+            return Promise.resolve(ok);
+        },
+
         async copy(text) {
             try {
                 if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -362,11 +392,12 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    // 세션 저장
+                    // 세션 저장 (서버도 쿠키로 기억함)
                     sessionStorage.setItem('sessionId', data.session_id);
 
-                    // 기존 세션이면 바로 결과 화면으로
-                    if (data.existing_session) {
+                    // 오늘 이미 영수증을 받은 손님이면 바로 결과 화면으로
+                    if (data.is_returning && data.existing_receipt_id) {
+                        Toast.show('오늘 이미 참여하셨어요. 받으신 영수증을 다시 보여드릴게요', 'info', 2000);
                         window.location.href = `/t/${window.STORE_CODE}/${window.TABLE_NO}/result`;
                     } else {
                         window.location.href = `/t/${window.STORE_CODE}/${window.TABLE_NO}/keywords`;
@@ -417,7 +448,7 @@
 
         async submit() {
             const submitBtn = document.getElementById('submitKeywords');
-            const sessionId = sessionStorage.getItem('sessionId');
+            const sessionId = currentSessionId();
 
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<span class="loading__spinner"></span> 처리 중...';
@@ -456,99 +487,133 @@
 
             if (!mainBtn) return;
 
-            // 영수증 이미지 미리 로드
-            if (receiptImg) {
-                try {
-                    const response = await fetch(receiptImg.src);
-                    this.receiptBlob = await response.blob();
-                } catch (e) {
-                    console.error('Receipt preload failed:', e);
-                }
-            }
-
-            // 메인 버튼
+            // 메인 버튼 (이미지 준비 전에도 누를 수 있게 먼저 연결)
             mainBtn.addEventListener('click', (e) => this.handleMainAction(e));
 
             // 문구 재생성
             regenerateBtn?.addEventListener('click', () => this.regenerateText());
-        },
 
-        async handleMainAction(e) {
-            e.preventDefault();
+            // 문구 수정 → 서버 저장
+            const textEl = document.getElementById('reviewText');
+            textEl?.addEventListener('blur', () => this.saveEditedText());
 
-            const mainBtn = document.getElementById('mainAction');
-            const reviewText = document.getElementById('reviewText')?.textContent?.trim();
-            const naverUrl = window.NAVER_REVIEW_URL;
-
-            mainBtn.disabled = true;
-            mainBtn.innerHTML = '<span class="loading__spinner"></span> 처리 중...';
-
-            let copySuccess = false;
-            let saveSuccess = false;
-
-            // 1. 문구 복사
-            try {
-                copySuccess = await Clipboard.copy(reviewText);
-                if (copySuccess) {
-                    console.log('Text copied');
-                }
-            } catch (e) {
-                console.error('Copy failed:', e);
-            }
-
-            // 2. 이미지 저장
-            if (this.receiptBlob) {
+            // 영수증 이미지 미리 받아두기 (iOS 공유는 탭 순간에 파일이 준비돼 있어야 함)
+            if (receiptImg && receiptImg.getAttribute('src')) {
                 try {
-                    const result = await ImageSaver.saveBlob(
-                        this.receiptBlob,
-                        `receipt_${Date.now()}.png`
-                    );
-                    saveSuccess = !!result;
-
-                    // iOS 공유 시트가 열렸으면
-                    if (result === 'shared') {
-                        mainBtn.disabled = false;
-                        mainBtn.innerHTML = `
-                            <span>이미지 저장 후</span>
-                            <strong>네이버로 이동</strong>
-                        `;
-
-                        // 이동 버튼으로 변경
-                        mainBtn.onclick = () => {
-                            this.recordEvent('redirected');
-                            window.location.href = naverUrl;
-                        };
-
-                        Toast.show('이미지 저장 후 버튼을 다시 눌러주세요', 'info');
-                        return;
+                    const response = await fetch(receiptImg.getAttribute('src'), { credentials: 'same-origin' });
+                    if (response.ok) {
+                        this.receiptBlob = await response.blob();
+                        this.receiptFile = new File([this.receiptBlob], `receipt_${Date.now()}.png`, { type: 'image/png' });
                     }
                 } catch (e) {
-                    console.error('Save failed:', e);
+                    console.error('Receipt preload failed:', e);
                 }
             }
+        },
 
-            // 3. 이벤트 기록
-            this.recordEvent('downloaded');
-
-            // 4. 네이버로 이동 (Android)
-            if (BrowserDetect.isAndroid || !BrowserDetect.isIOS) {
-                Toast.show(
-                    copySuccess ? '문구가 복사되었습니다' : '이동 중...',
-                    copySuccess ? 'success' : 'info',
-                    1500
-                );
-
-                setTimeout(() => {
-                    this.recordEvent('redirected');
-                    window.location.href = naverUrl;
-                }, 1000);
+        async saveEditedText() {
+            const textEl = document.getElementById('reviewText');
+            const text = textEl?.innerText?.trim();
+            if (!text || text === this.lastSavedText) return;
+            this.lastSavedText = text;
+            try {
+                await fetch(`/api/v1/session/${currentSessionId()}/text`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+            } catch (e) {
+                console.error('Text save failed:', e);
             }
+        },
+
+        goNaver() {
+            const naverUrl = window.NAVER_REVIEW_URL;
+            if (!naverUrl) {
+                Toast.show('매장의 네이버 리뷰 주소가 아직 설정되지 않았어요. 직원에게 알려주세요.', 'error', 4000);
+                return;
+            }
+            this.recordEvent('redirected');
+            window.location.href = naverUrl;
+        },
+
+        handleMainAction(e) {
+            e.preventDefault();
+            const mainBtn = document.getElementById('mainAction');
+
+            // 두 번째 탭 (iOS: 저장 후 네이버로 이동)
+            if (this.readyToGo) {
+                this.goNaver();
+                return;
+            }
+
+            const reviewText = document.getElementById('reviewText')?.innerText?.trim() || '';
+
+            // ▼ 여기부터는 await 없이 탭 순간에 바로 시작해야 함 (iOS 제한)
+            const copyPromise = Clipboard.copySync(reviewText);
+
+            let sharePromise = null;
+            const canShareFile = BrowserDetect.isIOS && this.receiptFile && navigator.share && navigator.canShare
+                && navigator.canShare({ files: [this.receiptFile] });
+            if (canShareFile) {
+                sharePromise = navigator.share({ files: [this.receiptFile], title: '영수증' });
+            }
+            // ▲
+
+            this.saveEditedText();
+
+            if (sharePromise) {
+                // iOS: 공유창에서 "이미지 저장" → 닫히면 [네이버로 이동] 버튼
+                sharePromise.then(() => {
+                    this.recordEvent('downloaded');
+                }).catch((err) => {
+                    if (err && err.name !== 'AbortError') console.error('Share failed:', err);
+                }).finally(() => {
+                    this.readyToGo = true;
+                    mainBtn.disabled = false;
+                    mainBtn.innerHTML = '<span>영수증 저장했으면</span><strong>네이버로 이동</strong>';
+                    mainBtn.classList.add('btn--pulse');
+                    copyPromise.then((ok) => {
+                        Toast.show(ok ? '문구가 복사되었어요. 네이버 글 입력칸에 붙여넣으세요' : '문구를 길게 눌러 복사해 주세요', ok ? 'success' : 'info', 3000);
+                    });
+                });
+                return;
+            }
+
+            if (BrowserDetect.isIOS && !this.receiptFile) {
+                // 이미지 준비 실패 → 길게 눌러 저장 안내
+                Toast.show('영수증 이미지를 길게 눌러 "사진에 저장"을 선택해 주세요', 'info', 4000);
+                this.readyToGo = true;
+                mainBtn.innerHTML = '<span>영수증 저장했으면</span><strong>네이버로 이동</strong>';
+                return;
+            }
+
+            // Android / 기타: 다운로드 후 1초 뒤 네이버로
+            mainBtn.disabled = true;
+            mainBtn.innerHTML = '<span class="loading__spinner"></span> 저장 중...';
+            if (this.receiptBlob) {
+                ImageSaver.saveBlob(this.receiptBlob, `receipt_${Date.now()}.png`).then((r) => {
+                    if (r) this.recordEvent('downloaded');
+                    else Toast.show('영수증 이미지를 길게 눌러 저장해 주세요', 'info', 3000);
+                });
+            } else {
+                Toast.show('영수증 이미지를 길게 눌러 저장해 주세요', 'info', 3000);
+            }
+            copyPromise.then((ok) => {
+                Toast.show(ok ? '문구가 복사되었어요' : '이동 중...', ok ? 'success' : 'info', 1500);
+            });
+            setTimeout(() => {
+                mainBtn.disabled = false;
+                this.readyToGo = true;
+                mainBtn.innerHTML = '<span>다시</span><strong>네이버로 이동</strong>';
+                this.goNaver();
+            }, 1000);
         },
 
         async regenerateText() {
             const regenerateBtn = document.getElementById('regenerateText');
             const textEl = document.getElementById('reviewText');
-            const sessionId = sessionStorage.getItem('sessionId');
+            const sessionId = currentSessionId();
 
             regenerateBtn.disabled = true;
 
@@ -559,7 +624,8 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    textEl.textContent = data.text;
+                    textEl.textContent = data.generated_text;
+                    this.lastSavedText = data.generated_text;
                     Toast.show('새로운 문구가 생성되었습니다', 'success');
                 } else {
                     const data = await response.json();
@@ -573,12 +639,13 @@
         },
 
         async recordEvent(eventType) {
-            const sessionId = sessionStorage.getItem('sessionId');
+            const sessionId = currentSessionId();
             try {
                 await fetch(`/api/v1/session/${sessionId}/event`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ event_type: eventType })
+                    body: JSON.stringify({ event: eventType }),
+                    keepalive: true
                 });
             } catch (e) {
                 console.error('Event record failed:', e);
@@ -638,7 +705,7 @@
 
         async verifyPin() {
             const pinInput = document.getElementById('pinInput');
-            const sessionId = sessionStorage.getItem('sessionId');
+            const sessionId = currentSessionId();
 
             try {
                 const response = await fetch(`/api/v1/session/${sessionId}/benefit`, {

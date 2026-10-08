@@ -61,14 +61,20 @@ app = FastAPI(
 # CORS 미들웨어 (외부 사이트에서 API 호출 허용)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 세션 미들웨어 추가 (로그인용)
-app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
+# 세션 미들웨어 (점주·운영자 로그인, 12시간 유지)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.SECRET_KEY,
+    max_age=settings.SESSION_MAX_AGE,
+    https_only=settings.SESSION_HTTPS_ONLY,
+    same_site="lax",
+)
 
 app.include_router(auth.router)
 app.include_router(agent.router)

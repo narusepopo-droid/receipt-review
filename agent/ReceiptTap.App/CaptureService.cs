@@ -37,6 +37,8 @@ namespace ReceiptTap.App
         public event EventHandler<CapturedReceipt> ReceiptProcessed;
         /// <summary>영수증 프린터 포트를 자동으로 찾음</summary>
         public event EventHandler<string> PortDetected;
+        /// <summary>서버가 토큰을 거부함 → 다시 로그인 필요</summary>
+        public event EventHandler LoginRequired;
 
         public AgentStatus CurrentStatus { get; private set; } = AgentStatus.Idle;
         public string StatusDetail { get; private set; } = "";
@@ -176,12 +178,21 @@ namespace ReceiptTap.App
                     Log($"업로드 성공: {result.Response}");
                     MarkServer(true);
                 }
+                else if (ShouldRetry(result.StatusCode))
+                {
+                    receipt.UploadState = result.StatusCode == 401
+                        ? "로그인 만료 → 다시 로그인하면 자동 재전송"
+                        : "서버 전송 실패 → 나중에 자동 재전송";
+                    Log($"업로드 실패 (큐 저장, {result.StatusCode}): {result.Error}");
+                    _queue.Enqueue(e.RawData, e.CapturedAt, "serial");
+                    if (result.StatusCode == 401) MarkUnauthorized(); else MarkServer(false);
+                }
                 else
                 {
-                    receipt.UploadState = "서버 전송 실패 → 나중에 자동 재전송";
-                    Log($"업로드 실패 (큐 저장): {result.Error}");
-                    _queue.Enqueue(e.RawData, e.CapturedAt, "serial");
-                    MarkServer(false);
+                    // 서버가 내용을 거부 (재시도해도 같은 결과) → 보관하지 않음
+                    receipt.UploadState = $"서버가 거부함 ({result.StatusCode})";
+                    Log($"업로드 거부 ({result.StatusCode}): {result.Error}");
+                    MarkServer(true);
                 }
             }
             catch (Exception ex)
@@ -205,8 +216,15 @@ namespace ReceiptTap.App
             if (_uploader == null) return;
             try
             {
-                var ok = await _uploader.SendHeartbeatAsync(VERSION, "serial", LastReceipt?.CapturedAt, SafeQueueCount());
-                MarkServer(ok);
+                var hb = await _uploader.SendHeartbeatAsync(VERSION, "serial", LastReceipt?.CapturedAt, SafeQueueCount());
+                if (!string.IsNullOrEmpty(hb.NewToken))
+                {
+                    // 서버가 새 토큰 발급 → 저장 (토큰 만료로 수집이 멈추지 않도록)
+                    _config.AuthToken = hb.NewToken;
+                    try { _config.Save(); } catch { }
+                }
+                if (hb.Unauthorized) MarkUnauthorized();
+                else MarkServer(hb.Success);
             }
             catch
             {
@@ -214,30 +232,58 @@ namespace ReceiptTap.App
             }
         }
 
+        private int _retrying;
+
         private async void RetryQueue(object state)
         {
-            if (_uploader == null || SafeQueueCount() == 0) return;
+            if (_uploader == null || _unauthorized || SafeQueueCount() == 0) return;
+            if (Interlocked.CompareExchange(ref _retrying, 1, 0) != 0) return;
 
-            foreach (var item in _queue.GetPendingItems())
+            try
             {
-                try
+                foreach (var item in _queue.GetPendingItems())
                 {
                     var data = _queue.LoadData(item);
                     var result = await _uploader.UploadAsync(data, item.CapturedAt, item.CaptureMode, VERSION);
-                    if (!result.Success) break;
-                    _queue.Remove(item.Id);
-                    Log($"큐 재시도 성공: {item.Id}");
-                    MarkServer(true);
-                }
-                catch
-                {
+                    if (result.Success || !ShouldRetry(result.StatusCode))
+                    {
+                        _queue.Remove(item.Id);
+                        Log(result.Success ? $"큐 재시도 성공: {item.Id}" : $"큐 항목 서버 거부로 삭제 ({result.StatusCode}): {item.Id}");
+                        MarkServer(true);
+                        continue;
+                    }
+                    if (result.StatusCode == 401) MarkUnauthorized();
                     break;
                 }
             }
+            catch (Exception ex)
+            {
+                Log($"큐 재시도 오류: {ex.Message}");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _retrying, 0);
+            }
+        }
+
+        /// <summary>네트워크 오류·서버 오류·인증 만료는 다시 시도, 그 외 4xx 는 내용 문제라 재시도 안 함</summary>
+        private static bool ShouldRetry(int status) =>
+            status == 0 || status == 401 || status == 408 || status == 429 || status >= 500;
+
+        private bool _unauthorized;
+
+        /// <summary>토큰 거부 → 트레이에 "다시 로그인" 표시</summary>
+        private void MarkUnauthorized()
+        {
+            var first = !_unauthorized;
+            _unauthorized = true;
+            SetStatus(AgentStatus.LoginRequired, "로그인이 만료되었습니다. 트레이 아이콘을 눌러 다시 로그인해 주세요.");
+            if (first) LoginRequired?.Invoke(this, EventArgs.Empty);
         }
 
         private void MarkServer(bool ok)
         {
+            if (ok) _unauthorized = false;
             _serverOk = ok;
             if (ok) LastServerOkAt = DateTime.Now;
             RefreshStatus();
@@ -251,6 +297,11 @@ namespace ReceiptTap.App
             {
                 if (CurrentStatus != AgentStatus.CaptureError)
                     SetStatus(AgentStatus.CaptureError, "영수증 감시가 시작되지 않았습니다");
+                return;
+            }
+            if (_unauthorized)
+            {
+                SetStatus(AgentStatus.LoginRequired, "로그인이 만료되었습니다. 트레이 아이콘을 눌러 다시 로그인해 주세요.");
                 return;
             }
             if (!_serverOk)

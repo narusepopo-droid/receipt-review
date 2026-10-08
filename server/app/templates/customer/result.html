@@ -3,32 +3,38 @@
 {% block title %}영수증 준비 완료{% endblock %}
 
 {% block content %}
+{% if no_receipt %}
+<!-- 배정할 영수증이 없을 때 -->
+<div class="card" style="text-align: center; padding: 40px 24px;">
+    <div style="font-size: 48px; margin-bottom: 16px;">⏳</div>
+    <h2 class="card__title" style="margin-bottom: 12px;">영수증을 준비하고 있어요</h2>
+    <p style="font-size: 16px; color: var(--color-text-secondary); line-height: 1.6; margin-bottom: 24px;">
+        지금 바로 드릴 수 있는 영수증이 없습니다.<br>
+        잠시 후 다시 시도해 주세요.
+    </p>
+    <button type="button" class="btn btn--primary btn--large btn--full" onclick="location.reload()">다시 시도</button>
+</div>
+{% else %}
 <!-- 사진 확인 알림 -->
 <div class="photo-reminder">
     <span class="photo-reminder__icon">📷</span>
-    <span class="photo-reminder__text">음식·매장 사진 2장 찍어두셨나요?</span>
+    <span class="photo-reminder__text">음식·매장 사진 2장 찍어두셨나요? 아직이면 지금 찍고 돌아오세요</span>
 </div>
 
 <!-- 영수증 미리보기 -->
 <div class="card">
     <h2 class="card__title">영수증</h2>
     <div class="receipt-preview">
-        <img
-            id="receiptImage"
-            src="{{ receipt_image_url }}"
-            alt="영수증"
-            class="receipt-preview__image"
-            crossorigin="anonymous"
-        >
+        <img id="receiptImage" src="{{ receipt_image_url }}" alt="영수증" class="receipt-preview__image">
     </div>
     <p class="receipt-preview__label">이 영수증이 폰에 저장됩니다</p>
 </div>
 
-<!-- 문구 미리보기 -->
+<!-- 문구 미리보기 (눌러서 수정 가능) -->
 <div class="card">
-    <h2 class="card__title">리뷰 문구</h2>
+    <h2 class="card__title">리뷰 문구 <span style="font-size: 13px; font-weight: 400; color: var(--color-text-secondary);">눌러서 고칠 수 있어요</span></h2>
     <div class="text-preview">
-        <p id="reviewText" class="text-preview__content">{{ review_text }}</p>
+        <p id="reviewText" class="text-preview__content" contenteditable="true" spellcheck="false">{{ review_text }}</p>
     </div>
     <div class="text-center">
         <button type="button" id="regenerateText" class="text-preview__regenerate">
@@ -59,32 +65,21 @@
     <div class="step">
         <span class="step__number">3</span>
         <div class="step__content">
-            <p class="step__text">글 입력칸에 <strong>붙여넣기</strong> → 등록</p>
+            <p class="step__text">글 입력칸을 길게 눌러 <strong>붙여넣기</strong> → 등록</p>
         </div>
     </div>
 </div>
 
 <!-- 메인 액션 버튼 -->
 <button type="button" id="mainAction" class="btn btn--primary btn--large btn--full">
-    <span>영수증+리뷰글 자동저장</span>
-    <strong>확인</strong>
+    <span>영수증 저장 + 문구 복사하고</span>
+    <strong>네이버로 이동</strong>
 </button>
 
-{% endblock %}
-
-{% block scripts %}
-<script>
-// 영수증 이미지 미리 로드
-(async function() {
-    const img = document.getElementById('receiptImage');
-    if (img && img.src) {
-        try {
-            const response = await fetch(img.src);
-            window.preloadedReceiptBlob = await response.blob();
-        } catch (e) {
-            console.log('Preload failed:', e);
-        }
-    }
-})();
-</script>
+<!-- 네이버에서 등록을 마치고 돌아온 손님 -->
+<a href="/t/{{ store.store_code }}/{{ table_no }}/complete" id="doneButton"
+   class="btn btn--secondary btn--large btn--full" style="margin-top: 12px; text-decoration: none; text-align: center;">
+    네이버에 리뷰 등록을 마쳤어요
+</a>
+{% endif %}
 {% endblock %}

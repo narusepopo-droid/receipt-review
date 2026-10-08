@@ -54,20 +54,11 @@ class PaymentWebhook(BaseModel):
 
 # ============ 유틸리티 ============
 
-def hash_password(password: str) -> str:
-    """비밀번호 해시"""
-    salt = settings.SECRET_KEY[:16]
-    return hashlib.pbkdf2_hmac(
-        'sha256',
-        password.encode(),
-        salt.encode(),
-        100000
-    ).hex()
+from app.security import hash_password, verify_password  # noqa: E402  (bcrypt + 예전 방식 호환)
 
-
-def verify_password(password: str, password_hash: str) -> bool:
-    """비밀번호 검증"""
-    return hash_password(password) == password_hash
+# 에이전트 토큰 유효기간. 하트비트마다 하루 지난 토큰은 새로 발급되므로 켜져 있는 포스는 만료되지 않음
+TOKEN_MAX_AGE = timedelta(days=90)
+TOKEN_REFRESH_AFTER = timedelta(days=1)
 
 
 def generate_token(store_id: int) -> str:
@@ -101,14 +92,21 @@ def verify_token(token: str) -> Optional[int]:
         if signature != expected:
             return None
 
-        # 만료 검증 (7일)
         token_time = datetime.fromtimestamp(int(timestamp))
-        if datetime.now() - token_time > timedelta(days=7):
+        if datetime.now() - token_time > TOKEN_MAX_AGE:
             return None
 
         return int(store_id)
-    except:
+    except (ValueError, TypeError):
         return None
+
+
+def token_needs_refresh(token: str) -> bool:
+    try:
+        ts = int(token.split(":")[1])
+        return datetime.now() - datetime.fromtimestamp(ts) > TOKEN_REFRESH_AFTER
+    except (IndexError, ValueError):
+        return False
 
 
 def generate_store_code() -> str:
@@ -456,11 +454,14 @@ async def signup_page():
 # ============ API 엔드포인트 ============
 
 @router.post("/signup")
-async def signup(req: SignupRequest, db: AsyncSession = Depends(get_db)):
+async def signup(req: SignupRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """
     점주 회원가입 (결제 전 - pending 상태)
     결제 완료 후 active로 변경됨
     """
+    from app.security import rate_limiter, client_ip
+    if not rate_limiter.allow(f"signup:{client_ip(request)}", 10, 3600):
+        raise HTTPException(status_code=429, detail="가입 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.")
     # 이메일 중복 체크
     existing = await db.execute(
         select(Store).where(Store.admin_login_id == req.email)
@@ -516,18 +517,23 @@ async def signup(req: SignupRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
-    """점주 로그인 (에이전트/웹 공용)"""
+async def login(req: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """점주 로그인 (에이전트/웹 공용, 5회 실패 시 10분 잠금)"""
+    from app.security import login_limiter, client_ip
+    key = login_limiter.key("auth", client_ip(request), req.email)
+    left = login_limiter.remaining_lock(key)
+    if left:
+        return LoginResponse(success=False, message=f"로그인 시도가 너무 많습니다. {left // 60 + 1}분 후 다시 시도하세요.")
+
     result = await db.execute(
         select(Store).where(Store.admin_login_id == req.email)
     )
     store = result.scalar_one_or_none()
 
-    if not store:
-        return LoginResponse(success=False, message="등록되지 않은 이메일입니다")
-
-    if not verify_password(req.password, store.admin_password_hash):
-        return LoginResponse(success=False, message="비밀번호가 올바르지 않습니다")
+    if not store or not verify_password(req.password, store.admin_password_hash):
+        login_limiter.fail(key)
+        return LoginResponse(success=False, message="이메일 또는 비밀번호가 올바르지 않습니다")
+    login_limiter.success(key)
 
     if store.status == StoreStatus.PAUSED:
         return LoginResponse(success=False, message="승인 대기 중입니다. 담당자 승인 후 로그인 가능합니다.")

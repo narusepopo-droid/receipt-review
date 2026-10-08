@@ -40,19 +40,14 @@ class Store(Base, TimestampMixin):
     agents: Mapped[list["Agent"]] = relationship(back_populates="store")
 
     def set_password(self, password: str):
-        """비밀번호 해시 저장"""
-        self.admin_password_hash = bcrypt.hashpw(
-            password.encode(), bcrypt.gensalt()
-        ).decode()
+        """비밀번호 해시 저장 (bcrypt)"""
+        from app.security import hash_password
+        self.admin_password_hash = hash_password(password)
 
     def verify_password(self, password: str) -> bool:
-        """비밀번호 검증"""
-        if not self.admin_password_hash:
-            return False
-        return bcrypt.checkpw(
-            password.encode(),
-            self.admin_password_hash.encode()
-        )
+        """비밀번호 검증 (bcrypt / 예전 가입 방식 모두)"""
+        from app.security import verify_password
+        return verify_password(password, self.admin_password_hash or "")
 
 
 class StoreSettings(Base):

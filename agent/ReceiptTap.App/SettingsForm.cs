@@ -406,6 +406,7 @@ namespace ReceiptTap.App
                 case AgentStatus.Searching: return "프린터 찾는 중";
                 case AgentStatus.Disconnected: return "서버 연결 안 됨";
                 case AgentStatus.CaptureError: return "영수증 읽기 오류";
+                case AgentStatus.LoginRequired: return "다시 로그인 필요";
                 default: return "대기 중";
             }
         }

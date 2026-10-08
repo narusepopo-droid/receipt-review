@@ -84,8 +84,9 @@ class InstallerVersion(BaseModel):
 
 # ============ 운영자 인증 (간단 세션) ============
 
-OPS_USERNAME = "admin"
-OPS_PASSWORD_HASH = hashlib.sha256("ReceiptReview2026!".encode()).hexdigest()
+from app.config import settings as _settings  # noqa: E402
+from app.security import login_limiter, client_ip  # noqa: E402
+import hmac as _hmac  # noqa: E402
 
 
 def verify_ops_session(request: Request) -> bool:
@@ -122,12 +123,20 @@ async def login(
     username: str = Form(...),
     password: str = Form(...)
 ):
-    """운영자 로그인 처리"""
-    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    """운영자 로그인 처리 (5회 실패 시 10분 잠금)"""
+    key = login_limiter.key("ops", client_ip(request), username)
+    left = login_limiter.remaining_lock(key)
+    if left:
+        return templates.TemplateResponse(request=request, name="ops/login.html",
+                                          context={"error": f"로그인 시도가 너무 많습니다. {left // 60 + 1}분 후 다시 시도하세요."})
 
-    if username == OPS_USERNAME and password_hash == OPS_PASSWORD_HASH:
+    ok_user = _hmac.compare_digest(username, _settings.OPS_USERNAME)
+    ok_pass = _hmac.compare_digest(password, _settings.OPS_PASSWORD)
+    if ok_user and ok_pass:
+        login_limiter.success(key)
         request.session["ops_authenticated"] = True
         return RedirectResponse(url="/ops/dashboard", status_code=303)
+    login_limiter.fail(key)
 
     return templates.TemplateResponse(
         request=request,

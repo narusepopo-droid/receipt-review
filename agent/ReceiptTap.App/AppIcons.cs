@@ -21,7 +21,8 @@ namespace ReceiptTap.App
                 case AgentStatus.Connected: return Color.FromArgb(0, 200, 83);
                 case AgentStatus.Searching: return Color.FromArgb(41, 121, 255);
                 case AgentStatus.Disconnected: return Color.FromArgb(255, 179, 0);
-                case AgentStatus.CaptureError: return Color.FromArgb(229, 57, 53);
+                case AgentStatus.CaptureError:
+                case AgentStatus.LoginRequired: return Color.FromArgb(229, 57, 53);
                 default: return Color.FromArgb(158, 158, 158);
             }
         }

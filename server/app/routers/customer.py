@@ -6,8 +6,8 @@ import secrets as py_secrets
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Request, Query
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import APIRouter, Depends, HTTPException, Request, Query, Response
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -26,6 +26,45 @@ from ..review.text_generator import TextGenerator
 router = APIRouter(tags=["customer"])
 templates = Jinja2Templates(directory="app/templates")
 
+# 손님 진행 상태를 기억하는 쿠키 (QR 을 다시 찍어도 진행 중인 화면으로 복귀)
+SESSION_COOKIE = "rr_sid"
+SESSION_COOKIE_MAX_AGE = 24 * 3600
+
+
+def set_session_cookie(response: Response, session_id) -> None:
+    response.set_cookie(
+        SESSION_COOKIE, str(session_id), max_age=SESSION_COOKIE_MAX_AGE,
+        httponly=True, samesite="lax", secure=get_settings().SESSION_HTTPS_ONLY,
+    )
+
+
+async def current_session(request: Request, store_id: int, db: AsyncSession,
+                          sid: Optional[str] = None) -> Optional[ReviewSession]:
+    """쿠키(또는 ?sid=)의 세션 중 이 매장·오늘 영업일 것만 인정"""
+    raw = sid or request.cookies.get(SESSION_COOKIE)
+    if not raw:
+        return None
+    try:
+        session_id = UUID(raw)
+    except ValueError:
+        return None
+    session = (await db.execute(select(ReviewSession).where(ReviewSession.id == session_id))).scalar_one_or_none()
+    if not session or session.store_id != store_id:
+        return None
+    store_settings = await get_store_settings(store_id, db)
+    cutoff = store_settings.business_day_cutoff if store_settings else "05:00"
+    started = session.started_at
+    if started is not None and started.tzinfo is None:
+        started = started.replace(tzinfo=timezone.utc)
+    if started is None or started < AssignmentService(db).get_business_day_start(cutoff):
+        return None
+    return session
+
+
+def receipt_image_url(session: ReviewSession) -> str:
+    token = generate_image_token(session.id, session.receipt_id)
+    return f"/api/v1/receipt-image/{token}?session_id={session.id}&receipt_id={session.receipt_id}"
+
 
 # ============================================================
 # 페이지 라우트 (HTML 템플릿)
@@ -38,9 +77,13 @@ async def phone_input_page(
     table_no: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """화면 1: 전화번호 입력"""
+    """화면 1: 전화번호 입력 (오늘 이미 영수증을 받은 손님은 결과 화면으로)"""
     store = await get_store_by_code(store_code, db)
     store_settings = await get_store_settings(store.id, db)
+
+    session = await current_session(request, store.id, db)
+    if session and session.receipt_id:
+        return RedirectResponse(url=f"/t/{store_code}/{table_no}/result", status_code=302)
 
     store_data = {
         "id": store.id,
@@ -88,7 +131,8 @@ async def keywords_page(
     return templates.TemplateResponse(
         request=request,
         name="customer/keywords.html",
-        context={"store": store_data, "table_no": table_no, "keywords": keywords}
+        context={"store": store_data, "table_no": table_no, "keywords": keywords,
+                 "session_id": str(session.id) if (session := await current_session(request, store.id, db)) else ""}
     )
 
 
@@ -99,12 +143,26 @@ async def result_page(
     table_no: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """화면 3: 결과 (영수증 + 문구)"""
+    """화면 3: 결과 (실제 배정된 영수증 + 문구). 아직 배정 전이면 여기서 배정"""
     store = await get_store_by_code(store_code, db)
+    session = await current_session(request, store.id, db, sid=request.query_params.get("sid"))
+    if not session:
+        return RedirectResponse(url=f"/t/{store_code}/{table_no}", status_code=302)
 
-    # TODO: 세션에서 실제 데이터 가져오기
-    review_text = "정말 맛있었어요! 직원분들이 친절하셔서 기분 좋게 식사했습니다. 다음에 또 올게요."
-    receipt_image_url = "/static/images/sample_receipt.png"
+    no_receipt = False
+    if not session.receipt_id:
+        store_settings = await get_store_settings(store.id, db)
+        try:
+            await AssignmentService(db).assign_receipt(session, store_settings)
+            session.generated_text = await TextGenerator(db).generate(
+                store.id, session.selected_keywords or [], store_settings)
+            await db.commit()
+        except NoReceiptAvailableError:
+            # 배정 단계는 영수증을 못 찾으면 아무것도 바꾸지 않음 (롤백 불필요)
+            no_receipt = True
+
+    review_text = session.generated_text or ""
+    image_url = receipt_image_url(session) if session.receipt_id else ""
 
     store_data = {
         "id": store.id,
@@ -117,7 +175,8 @@ async def result_page(
     return templates.TemplateResponse(
         request=request,
         name="customer/result.html",
-        context={"store": store_data, "table_no": table_no, "review_text": review_text, "receipt_image_url": receipt_image_url}
+        context={"store": store_data, "table_no": table_no, "review_text": review_text,
+                 "receipt_image_url": image_url, "no_receipt": no_receipt, "session_id": str(session.id)}
     )
 
 
@@ -128,11 +187,16 @@ async def complete_page(
     table_no: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """화면 5: 완료"""
+    """화면 5: 완료 (손님이 [리뷰 등록 완료]를 누르면 들어옴 → completed 기록)"""
     store = await get_store_by_code(store_code, db)
     store_settings = await get_store_settings(store.id, db)
 
-    completion_code = ''.join([str(py_secrets.randbelow(10)) for _ in range(6)])
+    session = await current_session(request, store.id, db)
+    if session and session.receipt_id and session.status not in (SessionStatus.COMPLETED, SessionStatus.BENEFIT_GIVEN):
+        await AssignmentService(db).update_session_status(session, SessionStatus.COMPLETED)
+        await db.commit()
+    completion_code = (session.completion_code if session and session.completion_code
+                       else ''.join([str(py_secrets.randbelow(10)) for _ in range(6)]))
 
     store_data = {
         "id": store.id,
@@ -147,7 +211,8 @@ async def complete_page(
     return templates.TemplateResponse(
         request=request,
         name="customer/complete.html",
-        context={"store": store_data, "table_no": table_no, "completion_code": completion_code}
+        context={"store": store_data, "table_no": table_no, "completion_code": completion_code,
+                 "session_id": str(session.id) if session else ""}
     )
 
 
@@ -187,7 +252,12 @@ class RegenerateResponse(BaseModel):
 
 
 class EventRequest(BaseModel):
-    event: str  # downloaded, redirected, completed
+    event: Optional[str] = None       # downloaded, redirected, completed
+    event_type: Optional[str] = None  # (예전 스크립트 호환)
+
+
+class TextUpdateRequest(BaseModel):
+    text: str
 
 
 class BenefitRequest(BaseModel):
@@ -257,6 +327,7 @@ async def get_store_settings(store_id: int, db: AsyncSession) -> Optional[StoreS
 @router.post("/api/v1/session/start", response_model=SessionStartResponse)
 async def start_session(
     request: SessionStartRequest,
+    response: Response,
     store_code: str = Query(...),
     req: Request = None,
     db: AsyncSession = Depends(get_db)
@@ -265,6 +336,15 @@ async def start_session(
     세션 시작 - 전화번호 입력 + 동의
     같은 번호로 오늘 이미 참여한 경우 기존 세션 반환
     """
+    # 요청 횟수 제한 (IP당 10분 30회, 번호당 1시간 10회)
+    from app.security import rate_limiter, client_ip
+    import re as _re
+    ip = client_ip(req) if req else "unknown"
+    digits = _re.sub(r"\D", "", request.phone or "")
+    if not rate_limiter.allow(f"start:ip:{ip}", 30, 600) or \
+            not rate_limiter.allow(f"start:phone:{digits}", 10, 3600):
+        raise HTTPException(status_code=429, detail="요청이 너무 많습니다. 잠시 후 다시 시도해주세요.")
+
     store = await get_store_by_code(store_code, db)
     store_settings = await get_store_settings(store.id, db)
 
@@ -304,6 +384,7 @@ async def start_session(
 
     if existing:
         await db.commit()
+        set_session_cookie(response, existing.id)
         return SessionStartResponse(
             session_id=existing.id,
             is_returning=True,
@@ -318,6 +399,7 @@ async def start_session(
     )
 
     await db.commit()
+    set_session_cookie(response, session.id)
 
     return SessionStartResponse(
         session_id=session.id,
@@ -454,14 +536,33 @@ async def record_event(
         "completed": SessionStatus.COMPLETED,
     }
 
-    if request.event not in event_map:
+    event = request.event or request.event_type
+    if event not in event_map:
         raise HTTPException(status_code=400, detail="유효하지 않은 이벤트입니다")
 
     assignment_service = AssignmentService(db)
-    await assignment_service.update_session_status(session, event_map[request.event])
+    await assignment_service.update_session_status(session, event_map[event])
     await db.commit()
 
-    return {"status": "ok", "event": request.event}
+    return {"status": "ok", "event": event}
+
+
+@router.post("/api/v1/session/{session_id}/text")
+async def update_text(
+    session_id: UUID,
+    request: TextUpdateRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """손님이 직접 고친 문구 저장"""
+    text = (request.text or "").strip()
+    if not text or len(text) > 1000:
+        raise HTTPException(status_code=400, detail="문구는 1~1000자로 입력해주세요")
+    session = (await db.execute(select(ReviewSession).where(ReviewSession.id == session_id))).scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+    session.generated_text = text
+    await db.commit()
+    return {"status": "ok"}
 
 
 @router.post("/api/v1/session/{session_id}/benefit")
@@ -478,6 +579,11 @@ async def confirm_benefit(
 
     if not session:
         raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+
+    # 4자리 PIN 무작위 대입 방지: 세션당 10분에 5회
+    from app.security import rate_limiter
+    if not rate_limiter.allow(f"pin:{session_id}", 5, 600):
+        raise HTTPException(status_code=429, detail="PIN 입력 횟수를 초과했습니다. 10분 후 다시 시도해주세요.")
 
     assignment_service = AssignmentService(db)
 

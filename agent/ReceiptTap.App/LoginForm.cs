@@ -139,7 +139,7 @@ namespace ReceiptTap.App
             };
             _signupLink.Click += (s, e) =>
             {
-                System.Diagnostics.Process.Start("https://review.placemaster.co.kr/signup");
+                System.Diagnostics.Process.Start("https://placemaster.co.kr/receipt-signup.html");
             };
             Controls.Add(_signupLink);
         }

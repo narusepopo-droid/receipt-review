@@ -22,6 +22,19 @@ from app.models.session import SessionStatus
 
 templates = Jinja2Templates(directory="app/templates")
 
+
+def _kst(dt) -> str:
+    """화면 표시용 한국 시간 (DB 는 UTC)"""
+    from datetime import timezone as _tz, timedelta as _td
+    if dt is None:
+        return "-"
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_tz.utc)
+    return dt.astimezone(_tz(_td(hours=9))).strftime("%m-%d %H:%M")
+
+
+templates.env.filters["kst"] = _kst
+
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
@@ -90,6 +103,13 @@ async def login(
     password: str = Form(...),
     db: AsyncSession = Depends(get_db)
 ):
+    from app.security import login_limiter, client_ip
+    key = login_limiter.key("admin", client_ip(request), login_id)
+    left = login_limiter.remaining_lock(key)
+    if left:
+        return templates.TemplateResponse(request=request, name="admin/login.html",
+                                          context={"error": f"로그인 시도가 너무 많습니다. {left // 60 + 1}분 후 다시 시도하세요."})
+
     # DB에서 매장 조회
     result = await db.execute(
         select(Store).where(Store.admin_login_id == login_id)
@@ -97,8 +117,10 @@ async def login(
     store = result.scalar_one_or_none()
 
     if store and store.verify_password(password):
+        login_limiter.success(key)
         request.session["store_id"] = store.id
         return RedirectResponse(url="/admin/dashboard", status_code=302)
+    login_limiter.fail(key)
 
     return templates.TemplateResponse(
         request=request,
@@ -252,7 +274,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     agent_result = await db.execute(
         select(Agent).where(Agent.store_id == store.id).order_by(Agent.last_heartbeat_at.desc())
     )
-    agent = agent_result.scalar_one_or_none()
+    agent = agent_result.scalars().first()
 
     agent_online = False
     last_heartbeat = "연결 안됨"
@@ -261,7 +283,10 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     queue_length = 0
 
     if agent:
-        time_diff = datetime.now(timezone.utc) - agent.last_heartbeat_at if agent.last_heartbeat_at else timedelta(hours=999)
+        hb = agent.last_heartbeat_at
+        if hb is not None and hb.tzinfo is None:
+            hb = hb.replace(tzinfo=timezone.utc)
+        time_diff = datetime.now(timezone.utc) - hb if hb else timedelta(hours=999)
         agent_online = time_diff < timedelta(minutes=5)
 
         if agent.last_heartbeat_at:

@@ -40,6 +40,10 @@
                     <i data-feather="settings"></i>
                     <span>매장 설정</span>
                 </a>
+                <a href="{{ url_for('admin_receipts') }}" class="nav-item {% if active_menu == 'receipts' %}active{% endif %}">
+                    <i data-feather="file-text"></i>
+                    <span>영수증 현황</span>
+                </a>
                 <a href="{{ url_for('admin_customers') }}" class="nav-item {% if active_menu == 'customers' %}active{% endif %}">
                     <i data-feather="users"></i>
                     <span>고객 관리</span>

@@ -22,7 +22,7 @@ from app.receipt.masking import mask_parsed_receipt
 from app.receipt.renderer import render_receipt
 from app.services.disposal import dispose_by_approval_no
 from app.services.release import get_release, sha256_of, parse_version, MIN_AUTO_UPDATE_VERSION
-from app.routers.auth import verify_token
+from app.routers.auth import verify_token, generate_token, token_needs_refresh
 
 router = APIRouter(prefix="/agent/v1", tags=["agent"])
 settings = get_settings()
@@ -49,6 +49,8 @@ class HeartbeatRequest(BaseModel):
 class HeartbeatResponse(BaseModel):
     success: bool
     server_time: datetime
+    # 토큰이 하루 이상 지났으면 새 토큰 발급 (에이전트가 저장 → 만료 없이 계속 동작)
+    new_token: Optional[str] = None
 
 
 class ReceiptUploadResponse(BaseModel):
@@ -144,6 +146,7 @@ async def activate_agent(
 async def heartbeat(
     request: HeartbeatRequest,
     store: Store = Depends(verify_auth_token),
+    authorization: str = Header(None),
     db: AsyncSession = Depends(get_db)
 ):
     # 해당 매장의 에이전트 찾기 또는 생성
@@ -163,8 +166,13 @@ async def heartbeat(
 
     await db.commit()
 
+    new_token = None
+    if authorization and authorization.startswith("Bearer ") and token_needs_refresh(authorization[7:]):
+        new_token = generate_token(store.id)
+
     return HeartbeatResponse(
         success=True,
+        new_token=new_token,
         server_time=datetime.now(timezone.utc)
     )
 

@@ -53,6 +53,9 @@ namespace ReceiptTap.App
                 if (_settingsForm == null)
                     _trayIcon.ShowBalloonTip(2000, "영수증 읽음", $"{r.CapturedAt:HH:mm:ss} {r.Port} · {r.UploadState}", ToolTipIcon.None);
             });
+            _captureService.LoginRequired += (s, e) => OnUi(() =>
+                _trayIcon.ShowBalloonTip(5000, "다시 로그인해 주세요",
+                    "로그인이 만료되어 영수증을 서버로 보내지 못하고 있습니다.\n이 알림을 눌러 다시 로그인해 주세요.", ToolTipIcon.Warning));
             _captureService.Start();
             UpdateStatus(_captureService.CurrentStatus);
         }
@@ -88,6 +91,12 @@ namespace ReceiptTap.App
                     _config = AgentConfig.Load();
                     _config.Activated = true;
                     _config.Save();
+                    // 이미 실행 중이면 (로그인 만료 후 재로그인) 새 토큰으로 다시 시작
+                    if (_captureService != null)
+                    {
+                        _captureService.Dispose();
+                        _captureService = null;
+                    }
                     StartCaptureService();
 
                     _trayIcon.ShowBalloonTip(
@@ -125,13 +134,14 @@ namespace ReceiptTap.App
                 case AgentStatus.Searching: return "프린터 찾는 중";
                 case AgentStatus.Disconnected: return "서버 연결 안 됨";
                 case AgentStatus.CaptureError: return "영수증 읽기 오류";
+                case AgentStatus.LoginRequired: return "다시 로그인 필요";
                 default: return "대기 중";
             }
         }
 
         private void OnSettings(object sender, EventArgs e)
         {
-            if (string.IsNullOrEmpty(_config.AuthToken))
+            if (string.IsNullOrEmpty(_config.AuthToken) || _captureService?.CurrentStatus == AgentStatus.LoginRequired)
             {
                 ShowLoginDialog();
                 return;
@@ -182,6 +192,7 @@ namespace ReceiptTap.App
         Connected,
         Searching,
         Disconnected,
-        CaptureError
+        CaptureError,
+        LoginRequired
     }
 }

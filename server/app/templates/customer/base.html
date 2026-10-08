@@ -10,7 +10,7 @@
 
     <title>{% block title %}영수증리뷰{% endblock %} - {{ store.name }}</title>
 
-    <link rel="stylesheet" href="/static/css/customer.css">
+    <link rel="stylesheet" href="/static/css/customer.css?v=2">
 
     {% block head %}{% endblock %}
 </head>
@@ -22,11 +22,12 @@
     </div>
 
     <script>
-        window.STORE_CODE = '{{ store.store_code }}';
-        window.TABLE_NO = '{{ table_no }}';
-        window.NAVER_REVIEW_URL = '{{ store.naver_review_url }}';
+        window.STORE_CODE = {{ store.store_code | tojson }};
+        window.TABLE_NO = {{ table_no | tojson }};
+        window.NAVER_REVIEW_URL = {{ (store.naver_review_url or "") | tojson }};
+        window.SESSION_ID = {{ (session_id or "") | tojson }};
     </script>
-    <script src="/static/js/customer.js"></script>
+    <script src="/static/js/customer.js?v=2"></script>
 
     {% block scripts %}{% endblock %}
 </body>

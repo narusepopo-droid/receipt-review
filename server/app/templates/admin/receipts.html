@@ -1,0 +1,79 @@
+{% extends "admin/base.html" %}
+
+{% block title %}영수증 현황{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">영수증 현황</h1>
+        <p class="page-subtitle">포스에서 들어온 영수증입니다. 손님에게 배정되거나 24시간이 지나면 자동으로 폐기됩니다.</p>
+    </div>
+</div>
+
+<div class="stats-grid" style="grid-template-columns: repeat(4, 1fr);">
+    {% set tabs = [("all", "전체"), ("available", "사용 가능"), ("assigned", "배정됨"), ("disposed", "폐기됨")] %}
+    {% for key, label in tabs %}
+    <a href="?status={{ key }}" class="stat-card" style="text-decoration: none; color: inherit; {% if status_filter == key %}outline: 2px solid var(--primary, #03C75A);{% endif %}">
+        <div class="stat-label">{{ label }}</div>
+        <div class="stat-value">{{ counts[key] | default(0) }}건</div>
+    </a>
+    {% endfor %}
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">영수증 목록</h3>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>수신 시각</th>
+                        <th>결제 시각</th>
+                        <th>금액</th>
+                        <th>카드사</th>
+                        <th>상태</th>
+                        <th>폐기 사유</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in receipts %}
+                    <tr>
+                        <td>{{ r.created_at | kst if r.created_at else '-' }}</td>
+                        <td>{{ r.paid_at | kst if r.paid_at else '-' }}</td>
+                        <td style="font-weight: 600;">{{ "{:,}".format(r.amount) ~ "원" if r.amount is not none else '-' }}</td>
+                        <td>{{ r.card_issuer or '-' }}</td>
+                        <td>
+                            {% set st = r.status.value if r.status.value is defined else r.status %}
+                            {% if st == 'available' %}<span class="badge badge-success">사용 가능</span>
+                            {% elif st == 'assigned' %}<span class="badge badge-info">배정됨</span>
+                            {% else %}<span class="badge" style="background: var(--gray-200); color: var(--gray-700);">폐기됨</span>{% endif %}
+                        </td>
+                        <td style="color: var(--gray-600);">
+                            {% set reasons = {"cancelled": "결제 취소", "retention_expired": "보관 기한 경과", "created_24h_expired": "24시간 경과", "assigned_24h_expired": "배정 후 24시간 경과"} %}
+                            {{ reasons.get(r.dispose_reason, r.dispose_reason) if r.dispose_reason else '' }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: var(--gray-500); padding: 48px;">
+                            아직 들어온 영수증이 없습니다.<br>
+                            포스 프로그램이 켜져 있는지 확인해 주세요.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if total_pages and total_pages > 1 %}
+    <div style="display: flex; justify-content: center; gap: 8px; padding: 16px;">
+        {% if current_page > 1 %}<a class="btn btn-secondary" href="?status={{ status_filter }}&page={{ current_page - 1 }}">이전</a>{% endif %}
+        <span style="padding: 8px;">{{ current_page }} / {{ total_pages }}</span>
+        {% if current_page < total_pages %}<a class="btn btn-secondary" href="?status={{ status_filter }}&page={{ current_page + 1 }}">다음</a>{% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
