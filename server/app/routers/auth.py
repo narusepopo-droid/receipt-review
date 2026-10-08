@@ -116,6 +116,343 @@ def generate_store_code() -> str:
     return secrets.token_hex(3).upper()
 
 
+# ============ 가입 페이지 ============
+
+@router.get("/signup", response_class=HTMLResponse)
+async def signup_page():
+    """가입 신청 페이지"""
+    html = """
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>가입 신청 - 영수증리뷰</title>
+        <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
+        <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body {
+                font-family: 'Pretendard', sans-serif;
+                background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f2 100%);
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            }
+            .container {
+                background: white;
+                border-radius: 20px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+                max-width: 480px;
+                width: 100%;
+                padding: 48px 40px;
+            }
+            .logo {
+                text-align: center;
+                margin-bottom: 32px;
+            }
+            .logo-icon {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 56px;
+                height: 56px;
+                background: #03C75A;
+                border-radius: 14px;
+                margin-bottom: 12px;
+            }
+            .logo-icon span {
+                color: white;
+                font-size: 24px;
+                font-weight: 700;
+            }
+            .logo-text {
+                font-size: 24px;
+                font-weight: 700;
+                color: #1a1a1a;
+            }
+            .tabs {
+                display: flex;
+                margin-bottom: 24px;
+                background: #f5f5f5;
+                border-radius: 12px;
+                padding: 4px;
+            }
+            .tab {
+                flex: 1;
+                padding: 12px;
+                text-align: center;
+                border-radius: 10px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s;
+                border: none;
+                background: none;
+                font-size: 15px;
+            }
+            .tab.active {
+                background: #03C75A;
+                color: white;
+            }
+            .tab:not(.active) {
+                color: #666;
+            }
+            .error-box {
+                background: #fef2f2;
+                border: 1px solid #fecaca;
+                color: #dc2626;
+                padding: 12px 16px;
+                border-radius: 10px;
+                margin-bottom: 20px;
+                font-size: 14px;
+                display: none;
+            }
+            .success-box {
+                background: #f0fdf4;
+                border: 1px solid #bbf7d0;
+                color: #16a34a;
+                padding: 12px 16px;
+                border-radius: 10px;
+                margin-bottom: 20px;
+                font-size: 14px;
+                display: none;
+            }
+            .form-title {
+                font-size: 20px;
+                font-weight: 700;
+                margin-bottom: 8px;
+                text-align: center;
+            }
+            .form-subtitle {
+                color: #666;
+                font-size: 14px;
+                text-align: center;
+                margin-bottom: 28px;
+            }
+            .input-group {
+                margin-bottom: 20px;
+            }
+            .input-group label {
+                display: block;
+                font-size: 14px;
+                font-weight: 600;
+                margin-bottom: 8px;
+                color: #333;
+            }
+            .input-group label span {
+                color: #dc2626;
+            }
+            .input-group input {
+                width: 100%;
+                padding: 14px 16px;
+                border: 2px solid #e5e5e5;
+                border-radius: 12px;
+                font-size: 15px;
+                transition: all 0.2s;
+            }
+            .input-group input:focus {
+                outline: none;
+                border-color: #03C75A;
+            }
+            .btn {
+                width: 100%;
+                padding: 16px;
+                background: #03C75A;
+                color: white;
+                border: none;
+                border-radius: 12px;
+                font-size: 16px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .btn:hover {
+                background: #02a84d;
+            }
+            .btn:disabled {
+                background: #ccc;
+                cursor: not-allowed;
+            }
+            #signup-form, #login-form { display: none; }
+            #signup-form.active, #login-form.active { display: block; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="logo">
+                <div class="logo-icon"><span>N</span></div>
+                <div class="logo-text">영수증리뷰</div>
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('signup')">가입하기</button>
+                <button class="tab" onclick="showTab('login')">로그인</button>
+            </div>
+
+            <div class="error-box" id="error-box"></div>
+            <div class="success-box" id="success-box"></div>
+
+            <!-- 가입 폼 -->
+            <form id="signup-form" class="active" onsubmit="submitSignup(event)">
+                <h2 class="form-title">서비스 가입 신청</h2>
+                <p class="form-subtitle">가입 신청 후 담당자 승인이 필요합니다</p>
+
+                <div class="input-group">
+                    <label>매장명 <span>*</span></label>
+                    <input type="text" name="store_name" required placeholder="예: 맛있는 식당">
+                </div>
+
+                <div class="input-group">
+                    <label>대표자명 <span>*</span></label>
+                    <input type="text" name="owner_name" required placeholder="예: 홍길동">
+                </div>
+
+                <div class="input-group">
+                    <label>연락처 <span>*</span></label>
+                    <input type="tel" name="phone" required placeholder="010-0000-0000">
+                </div>
+
+                <div class="input-group">
+                    <label>이메일 (로그인 ID) <span>*</span></label>
+                    <input type="email" name="email" required placeholder="email@example.com">
+                </div>
+
+                <div class="input-group">
+                    <label>비밀번호 <span>*</span></label>
+                    <input type="password" name="password" required placeholder="비밀번호 입력">
+                </div>
+
+                <button type="submit" class="btn">가입 신청</button>
+            </form>
+
+            <!-- 로그인 폼 -->
+            <form id="login-form" onsubmit="submitLogin(event)">
+                <h2 class="form-title">로그인</h2>
+                <p class="form-subtitle">가입 시 등록한 이메일로 로그인하세요</p>
+
+                <div class="input-group">
+                    <label>이메일 <span>*</span></label>
+                    <input type="email" name="email" required placeholder="email@example.com">
+                </div>
+
+                <div class="input-group">
+                    <label>비밀번호 <span>*</span></label>
+                    <input type="password" name="password" required placeholder="비밀번호 입력">
+                </div>
+
+                <button type="submit" class="btn">로그인</button>
+            </form>
+        </div>
+
+        <script>
+            function showTab(tab) {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('form').forEach(f => f.classList.remove('active'));
+                event.target.classList.add('active');
+                document.getElementById(tab + '-form').classList.add('active');
+                hideMessages();
+            }
+
+            function showError(msg) {
+                const box = document.getElementById('error-box');
+                box.textContent = msg;
+                box.style.display = 'block';
+                document.getElementById('success-box').style.display = 'none';
+            }
+
+            function showSuccess(msg) {
+                const box = document.getElementById('success-box');
+                box.textContent = msg;
+                box.style.display = 'block';
+                document.getElementById('error-box').style.display = 'none';
+            }
+
+            function hideMessages() {
+                document.getElementById('error-box').style.display = 'none';
+                document.getElementById('success-box').style.display = 'none';
+            }
+
+            async function submitSignup(e) {
+                e.preventDefault();
+                const form = e.target;
+                const btn = form.querySelector('button');
+                btn.disabled = true;
+                btn.textContent = '처리 중...';
+                hideMessages();
+
+                try {
+                    const data = {
+                        store_name: form.store_name.value,
+                        owner_name: form.owner_name.value,
+                        phone: form.phone.value,
+                        email: form.email.value,
+                        password: form.password.value
+                    };
+
+                    const res = await fetch('/auth/signup', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+
+                    const result = await res.json();
+
+                    if (res.ok && result.success) {
+                        showSuccess(result.message || '가입 신청 완료! 담당자 승인 후 로그인 가능합니다.');
+                        form.reset();
+                    } else {
+                        showError(result.detail || result.message || '가입 신청에 실패했습니다.');
+                    }
+                } catch (err) {
+                    showError('서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.');
+                }
+
+                btn.disabled = false;
+                btn.textContent = '가입 신청';
+            }
+
+            async function submitLogin(e) {
+                e.preventDefault();
+                const form = e.target;
+                const btn = form.querySelector('button');
+                btn.disabled = true;
+                btn.textContent = '로그인 중...';
+                hideMessages();
+
+                try {
+                    const data = {
+                        email: form.email.value,
+                        password: form.password.value
+                    };
+
+                    const res = await fetch('/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+
+                    const result = await res.json();
+
+                    if (result.success) {
+                        showSuccess('로그인 성공! 프로그램에서 같은 계정으로 로그인하세요.');
+                    } else {
+                        showError(result.message || '로그인에 실패했습니다.');
+                    }
+                } catch (err) {
+                    showError('서버 연결에 실패했습니다.');
+                }
+
+                btn.disabled = false;
+                btn.textContent = '로그인';
+            }
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(html)
+
+
 # ============ API 엔드포인트 ============
 
 @router.post("/signup")
