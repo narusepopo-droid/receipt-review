@@ -276,66 +276,74 @@ async def upload_receipt(
 class VersionInfo(BaseModel):
     version: str
     download_url: str
-    checksum: str  # SHA256
-    file_size: int
-    release_notes: str
-    mandatory: bool = False  # 필수 업데이트 여부
+    checksum: str = ""  # SHA256 (GitHub에서 제공 안 하면 빈값)
+    file_size: int = 0
+    release_notes: str = ""
+    mandatory: bool = False
+
+
+# GitHub Release 정보 캐시 (5분)
+_github_cache = {"data": None, "expires": 0}
+GITHUB_REPO = "narusepopo-droid/receipt-review"
+
+
+async def get_github_release():
+    """GitHub에서 최신 릴리스 정보 가져오기 (5분 캐시)"""
+    import time
+    import aiohttp
+
+    now = time.time()
+    if _github_cache["data"] and _github_cache["expires"] > now:
+        return _github_cache["data"]
+
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers={"Accept": "application/vnd.github.v3+json"}) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    _github_cache["data"] = data
+                    _github_cache["expires"] = now + 300  # 5분 캐시
+                    return data
+                elif resp.status == 404:
+                    return None  # 릴리스 없음
+    except Exception:
+        pass
+
+    return _github_cache.get("data")  # 실패 시 이전 캐시 반환
 
 
 @router.get("/latest", response_model=VersionInfo)
 async def get_latest_version():
-    """최신 버전 정보 반환 - 에이전트가 6시간마다 확인"""
+    """최신 버전 정보 반환 - GitHub Release에서 자동 확인"""
 
-    # 설치 파일 경로
-    installer_path = os.path.join(settings.UPLOAD_DIR, "ReceiptTap_Setup.exe")
+    # GitHub Release 확인
+    release = await get_github_release()
 
-    # 버전 정보 파일
-    version_file = os.path.join(settings.UPLOAD_DIR, "version.json")
+    if release:
+        # 릴리스에서 .exe 파일 찾기
+        exe_asset = None
+        for asset in release.get("assets", []):
+            if asset["name"].endswith(".exe"):
+                exe_asset = asset
+                break
 
-    # 기본값
-    version_info = {
-        "version": "1.0.0",
-        "download_url": f"{settings.SERVER_URL}/download/agent/ReceiptTap_Setup.exe",
-        "checksum": "",
-        "file_size": 0,
-        "release_notes": "초기 버전",
-        "mandatory": False
-    }
+        if exe_asset:
+            # 버전: v1.0.0 → 1.0.0
+            version = release["tag_name"].lstrip("v")
 
-    # 버전 파일이 있으면 읽기
-    if os.path.exists(version_file):
-        import json
-        with open(version_file, "r", encoding="utf-8") as f:
-            version_info.update(json.load(f))
+            return VersionInfo(
+                version=version,
+                download_url=exe_asset["browser_download_url"],
+                file_size=exe_asset["size"],
+                release_notes=release.get("body", ""),
+                mandatory=False
+            )
 
-    # 설치 파일이 있으면 체크섬 계산
-    if os.path.exists(installer_path):
-        version_info["file_size"] = os.path.getsize(installer_path)
-
-        # 체크섬이 없으면 계산
-        if not version_info.get("checksum"):
-            with open(installer_path, "rb") as f:
-                version_info["checksum"] = hashlib.sha256(f.read()).hexdigest()
-
-    return VersionInfo(**version_info)
-
-
-@router.get("/download/agent/{filename}")
-async def download_agent(filename: str):
-    """에이전트 설치 파일 다운로드"""
-    from fastapi.responses import FileResponse
-
-    # 보안: 파일명 검증
-    if not filename.endswith(".exe") or "/" in filename or "\\" in filename:
-        raise HTTPException(status_code=400, detail="Invalid filename")
-
-    file_path = os.path.join(settings.UPLOAD_DIR, filename)
-
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
-
-    return FileResponse(
-        file_path,
-        media_type="application/octet-stream",
-        filename=filename
+    # GitHub Release 없으면 기본값 (현재 버전)
+    return VersionInfo(
+        version="1.0.0",
+        download_url="",
+        release_notes="초기 버전",
+        mandatory=False
     )
