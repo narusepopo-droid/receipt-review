@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>테이블 안내판 편집기</title>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@300;400;500;700;900&family=Gowun+Dodum&family=Jua&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f0f0f;
+  --card: #1a1a1a;
+  --text: #ffffff;
+  --text-secondary: #888;
+  --border: #333;
+  --primary: #03C75A;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Noto Sans KR', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* 사이드바 */
+.sidebar {
+  width: 360px;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  padding: 24px;
+  overflow-y: auto;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+}
+
+.sidebar h1 {
+  font-size: 18px;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.sidebar .subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+
+.section {
+  margin-bottom: 28px;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* 템플릿 선택 */
+.templates {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.template-btn {
+  padding: 14px 12px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.template-btn:hover { border-color: var(--primary); background: rgba(3, 199, 90, 0.1); }
+.template-btn.active { border-color: var(--primary); background: rgba(3, 199, 90, 0.15); }
+
+.template-btn .emoji { font-size: 20px; display: block; margin-bottom: 4px; }
+
+/* 사이즈 선택 */
+.sizes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.size-btn {
+  padding: 12px 8px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: center;
+  font-size: 11px;
+  transition: all 0.2s;
+}
+
+.size-btn:hover { border-color: var(--primary); }
+.size-btn.active { border-color: var(--primary); background: rgba(3, 199, 90, 0.15); }
+
+.size-btn strong { display: block; font-size: 13px; margin-bottom: 2px; }
+
+/* 커스텀 사이즈 */
+.custom-size {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: center;
+}
+
+.custom-size input {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: center;
+}
+
+.custom-size span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* 컬러 선택 */
+.colors {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.color-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.color-btn:hover { transform: scale(1.1); }
+.color-btn.active { border-color: #fff; box-shadow: 0 0 0 2px var(--primary); }
+
+/* 입력 필드 */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+}
+
+.form-group input, .form-group textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  background: transparent;
+  color: var(--text);
+}
+
+.form-group input:focus, .form-group textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 100px;
+  line-height: 1.6;
+}
+
+/* 로고 업로드 */
+.logo-upload {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-secondary);
+}
+
+.logo-upload:hover { border-color: var(--primary); background: rgba(3, 199, 90, 0.05); }
+
+.logo-upload input { display: none; }
+
+.logo-preview {
+  max-width: 140px;
+  max-height: 70px;
+  margin: 0 auto;
+  border-radius: 8px;
+}
+
+/* 버튼 */
+.buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  flex: 1;
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-primary:hover { background: #02a84d; }
+
+.btn-secondary {
+  background: #333;
+  color: white;
+}
+
+.btn-secondary:hover { background: #444; }
+
+/* 미리보기 영역 */
+.preview-area {
+  flex: 1;
+  padding: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.preview-area::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 20%, rgba(3, 199, 90, 0.1) 0%, transparent 50%),
+              radial-gradient(circle at 70% 80%, rgba(99, 102, 241, 0.1) 0%, transparent 50%);
+}
+
+/* ========== 안내판 공통 ========== */
+.sign {
+  background: white;
+  box-shadow: 0 25px 80px rgba(0,0,0,0.4);
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+  color: #1a1a1a;
+}
+
+/* 사이즈별 - mm 기준 (1mm = 3.78px @96dpi, 미리보기는 50% 스케일) */
+.sign.size-a6 { width: 397px; min-height: 559px; } /* 105x148mm */
+.sign.size-a5 { width: 559px; min-height: 793px; } /* 148x210mm */
+.sign.size-tablet { width: 454px; min-height: 302px; } /* 240x160mm (가로24cm x 세로16cm) */
+.sign.size-square { width: 378px; min-height: 378px; } /* 100x100mm */
+
+/* NAVER 브랜딩 */
+.naver-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.naver-badge .naver-logo {
+  background: #03C75A;
+  color: white;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.naver-badge span {
+  color: #666;
+}
+
+/* ===== 템플릿 1: 글래스모피즘 ===== */
+.sign.tpl-glass {
+  border-radius: 24px;
+  background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+  padding: 32px;
+}
+
+.sign.tpl-glass::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, var(--sign-accent, #03C75A) 0%, transparent 70%);
+  opacity: 0.08;
+}
+
+.sign.tpl-glass .sign-header {
+  text-align: center;
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.sign.tpl-glass .sign-logo {
+  max-width: 100px;
+  max-height: 50px;
+  margin-bottom: 8px;
+}
+
+.sign.tpl-glass .sign-store {
+  font-size: 22px;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--sign-accent, #03C75A) 0%, color-mix(in srgb, var(--sign-accent, #03C75A), #000 20%) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.sign.tpl-glass .sign-benefit-wrap {
+  background: linear-gradient(135deg, var(--sign-accent, #03C75A) 0%, color-mix(in srgb, var(--sign-accent, #03C75A), #000 15%) 100%);
+  border-radius: 20px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.sign.tpl-glass .sign-benefit-wrap::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 50%);
+}
+
+.sign.tpl-glass .sign-benefit {
+  color: white;
+  font-size: 20px;
+  font-weight: 800;
+  text-align: center;
+  position: relative;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.sign.tpl-glass .sign-qr-section {
+  background: rgba(0,0,0,0.03);
+  border-radius: 20px;
+  padding: 24px;
+  text-align: center;
+  margin-bottom: 20px;
+  border: 1px solid rgba(0,0,0,0.05);
+}
+
+.sign.tpl-glass .sign-qr {
+  width: 120px;
+  height: 120px;
+  background: white;
+  margin: 0 auto 12px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+.sign.tpl-glass .sign-qr-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--sign-accent, #03C75A);
+  margin-bottom: 8px;
+}
+
+.sign.tpl-glass .naver-badge {
+  justify-content: center;
+}
+
+.sign.tpl-glass .sign-steps {
+  background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%);
+  border-radius: 16px;
+  padding: 20px 24px;
+  font-size: 13px;
+  line-height: 2;
+  border: 1px solid rgba(0,0,0,0.05);
+}
+
+.sign.tpl-glass .sign-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.sign.tpl-glass .sign-steps .step-num {
+  width: 22px;
+  height: 22px;
+  background: var(--sign-accent, #03C75A);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.sign.tpl-glass .table-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(0,0,0,0.06);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+}
+
+/* ===== 템플릿 2: 네온 팝 ===== */
+.sign.tpl-neon {
+  border-radius: 28px;
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+  padding: 28px;
+  color: white;
+  position: relative;
+}
+
+.sign.tpl-neon::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 25px;
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+  z-index: 0;
+}
+
+.sign.tpl-neon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 28px;
+  padding: 3px;
+  background: linear-gradient(135deg, var(--sign-accent, #FF6B35) 0%, #FF2D92 50%, var(--sign-accent, #FF6B35) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: borderGlow 3s linear infinite;
+}
+
+@keyframes borderGlow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.sign.tpl-neon > * { position: relative; z-index: 1; }
+
+.sign.tpl-neon .sign-header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.sign.tpl-neon .sign-logo {
+  max-width: 80px;
+  max-height: 40px;
+  margin-bottom: 8px;
+  filter: brightness(0) invert(1);
+}
+
+.sign.tpl-neon .sign-title {
+  font-family: 'Black Han Sans', sans-serif;
+  font-size: 36px;
+  background: linear-gradient(135deg, var(--sign-accent, #FF6B35) 0%, #FF2D92 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 40px rgba(255, 107, 53, 0.5);
+  margin-bottom: 4px;
+}
+
+.sign.tpl-neon .sign-store {
+  font-size: 14px;
+  color: rgba(255,255,255,0.7);
+  font-weight: 500;
+}
+
+.sign.tpl-neon .sign-benefit-wrap {
+  background: linear-gradient(135deg, var(--sign-accent, #FF6B35) 0%, #FF2D92 100%);
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 32px rgba(255, 107, 53, 0.3);
+}
+
+.sign.tpl-neon .sign-benefit {
+  font-size: 20px;
+  font-weight: 800;
+  text-align: center;
+  color: white;
+}
+
+.sign.tpl-neon .sign-qr-section {
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 20px;
+  text-align: center;
+  margin-bottom: 16px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.sign.tpl-neon .sign-qr {
+  width: 100px;
+  height: 100px;
+  background: white;
+  margin: 0 auto 12px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sign.tpl-neon .sign-qr-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 6px;
+}
+
+.sign.tpl-neon .naver-badge {
+  justify-content: center;
+}
+
+.sign.tpl-neon .naver-badge span {
+  color: rgba(255,255,255,0.6);
+}
+
+.sign.tpl-neon .sign-steps {
+  font-size: 12px;
+  line-height: 1.8;
+  color: rgba(255,255,255,0.8);
+  padding: 0 8px;
+}
+
+.sign.tpl-neon .sign-steps li {
+  margin-bottom: 4px;
+  padding-left: 20px;
+  position: relative;
+}
+
+.sign.tpl-neon .sign-steps li::before {
+  content: '▸';
+  position: absolute;
+  left: 0;
+  color: var(--sign-accent, #FF6B35);
+}
+
+.sign.tpl-neon .table-badge {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(255,255,255,0.1);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.8);
+  z-index: 2;
+}
+
+/* ===== 템플릿 3: 클린 미니멀 ===== */
+.sign.tpl-minimal {
+  border-radius: 0;
+  padding: 36px;
+  border: 4px solid var(--sign-accent, #1a1a1a);
+}
+
+.sign.tpl-minimal .sign-header {
+  text-align: center;
+  padding-bottom: 24px;
+  border-bottom: 2px solid var(--sign-accent, #1a1a1a);
+  margin-bottom: 28px;
+}
+
+.sign.tpl-minimal .sign-logo {
+  max-width: 80px;
+  max-height: 40px;
+  margin-bottom: 12px;
+}
+
+.sign.tpl-minimal .sign-store {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--sign-accent, #1a1a1a);
+}
+
+.sign.tpl-minimal .sign-benefit {
+  font-size: 26px;
+  font-weight: 900;
+  text-align: center;
+  margin-bottom: 32px;
+  color: var(--sign-accent, #1a1a1a);
+  line-height: 1.3;
+}
+
+.sign.tpl-minimal .sign-qr-section {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.sign.tpl-minimal .sign-qr {
+  width: 110px;
+  height: 110px;
+  border: 3px solid var(--sign-accent, #1a1a1a);
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sign.tpl-minimal .sign-qr-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.sign.tpl-minimal .naver-badge {
+  justify-content: center;
+}
+
+.sign.tpl-minimal .sign-steps {
+  font-size: 12px;
+  line-height: 2;
+  padding-top: 24px;
+  border-top: 1px solid #ddd;
+  color: #444;
+}
+
+.sign.tpl-minimal .sign-steps li {
+  margin-bottom: 2px;
+}
+
+.sign.tpl-minimal .table-badge {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #999;
+  letter-spacing: 1px;
+}
+
+/* ===== 템플릿 4: 프리미엄 럭셔리 ===== */
+.sign.tpl-luxury {
+  border-radius: 4px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 100%);
+  color: white;
+}
+
+.sign.tpl-luxury .sign-header {
+  background: linear-gradient(135deg, var(--sign-accent, #C9A962) 0%, color-mix(in srgb, var(--sign-accent, #C9A962), #fff 30%) 50%, var(--sign-accent, #C9A962) 100%);
+  padding: 28px 32px;
+  text-align: center;
+}
+
+.sign.tpl-luxury .sign-logo {
+  max-width: 100px;
+  max-height: 50px;
+  margin-bottom: 8px;
+}
+
+.sign.tpl-luxury .sign-store {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  color: #1a1a1a;
+}
+
+.sign.tpl-luxury .sign-body {
+  padding: 32px;
+  text-align: center;
+}
+
+.sign.tpl-luxury .sign-benefit {
+  font-size: 22px;
+  font-weight: 300;
+  margin-bottom: 28px;
+  color: white;
+  line-height: 1.4;
+}
+
+.sign.tpl-luxury .sign-benefit strong {
+  font-weight: 700;
+  color: var(--sign-accent, #C9A962);
+}
+
+.sign.tpl-luxury .sign-qr-section {
+  display: inline-block;
+  padding: 20px;
+  border: 1px solid rgba(255,255,255,0.2);
+  margin-bottom: 24px;
+}
+
+.sign.tpl-luxury .sign-qr {
+  width: 100px;
+  height: 100px;
+  background: white;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sign.tpl-luxury .sign-qr-label {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: rgba(255,255,255,0.6);
+  margin-bottom: 8px;
+}
+
+.sign.tpl-luxury .naver-badge {
+  justify-content: center;
+}
+
+.sign.tpl-luxury .naver-badge span {
+  color: rgba(255,255,255,0.5);
+}
+
+.sign.tpl-luxury .sign-steps {
+  font-size: 12px;
+  line-height: 1.9;
+  color: rgba(255,255,255,0.7);
+  text-align: left;
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+.sign.tpl-luxury .sign-steps li {
+  margin-bottom: 4px;
+  padding-left: 16px;
+  position: relative;
+}
+
+.sign.tpl-luxury .sign-steps li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  color: var(--sign-accent, #C9A962);
+}
+
+.sign.tpl-luxury .sign-footer {
+  background: rgba(0,0,0,0.3);
+  padding: 16px;
+  text-align: center;
+  font-size: 10px;
+  color: rgba(255,255,255,0.4);
+  letter-spacing: 1px;
+}
+
+@media print {
+  .sidebar { display: none; }
+  .preview-area { background: white !important; padding: 0; }
+  .preview-area::before { display: none; }
+  .sign { box-shadow: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="sidebar">
+    <h1>테이블 안내판 에디터</h1>
+    <p class="subtitle">디자인을 커스터마이징하고 출력하세요</p>
+
+    <div class="section">
+      <div class="section-title">템플릿</div>
+      <div class="templates">
+        <button class="template-btn active" data-tpl="glass">
+          <span class="emoji">✨</span>글래스
+        </button>
+        <button class="template-btn" data-tpl="neon">
+          <span class="emoji">🔥</span>네온팝
+        </button>
+        <button class="template-btn" data-tpl="minimal">
+          <span class="emoji">◻️</span>미니멀
+        </button>
+        <button class="template-btn" data-tpl="luxury">
+          <span class="emoji">👑</span>럭셔리
+        </button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">사이즈</div>
+      <div class="sizes">
+        <button class="size-btn active" data-size="a6">
+          <strong>A6</strong>
+          105×148mm
+        </button>
+        <button class="size-btn" data-size="a5">
+          <strong>A5</strong>
+          148×210mm
+        </button>
+        <button class="size-btn" data-size="tablet">
+          <strong>태블릿</strong>
+          240×160mm
+          <small style="display:block;font-size:9px;color:#888;margin-top:2px">테이블오더 대기화면용</small>
+        </button>
+        <button class="size-btn" data-size="square">
+          <strong>정사각</strong>
+          100×100mm
+        </button>
+      </div>
+      <p class="size-note" id="sizeNote" style="font-size:10px;color:#666;margin-top:8px;line-height:1.4;display:none"></p>
+      <div class="custom-size">
+        <input type="number" id="customW" placeholder="가로" min="50" max="500">
+        <span>×</span>
+        <input type="number" id="customH" placeholder="세로" min="50" max="500">
+        <span>mm</span>
+        <button class="btn btn-secondary" style="flex:0;padding:10px 14px;font-size:12px" onclick="applyCustomSize()">적용</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">컬러</div>
+      <div class="colors">
+        <button class="color-btn active" data-color="#03C75A" style="background:linear-gradient(135deg,#03C75A,#00a648)"></button>
+        <button class="color-btn" data-color="#FF6B35" style="background:linear-gradient(135deg,#FF6B35,#e55a2b)"></button>
+        <button class="color-btn" data-color="#5856D6" style="background:linear-gradient(135deg,#5856D6,#4745b5)"></button>
+        <button class="color-btn" data-color="#FF2D55" style="background:linear-gradient(135deg,#FF2D55,#e02448)"></button>
+        <button class="color-btn" data-color="#FF9500" style="background:linear-gradient(135deg,#FF9500,#e08600)"></button>
+        <button class="color-btn" data-color="#007AFF" style="background:linear-gradient(135deg,#007AFF,#0066d6)"></button>
+        <button class="color-btn" data-color="#C9A962" style="background:linear-gradient(135deg,#C9A962,#b8954d)"></button>
+        <button class="color-btn" data-color="#1a1a1a" style="background:linear-gradient(135deg,#1a1a1a,#333)"></button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">내용</div>
+
+      <div class="form-group">
+        <label>매장명</label>
+        <input type="text" id="storeName" value="맛있는식당 강남점" placeholder="매장명 입력">
+      </div>
+
+      <div class="form-group">
+        <label>혜택 문구</label>
+        <input type="text" id="benefit" value="리뷰 작성하면 음료 무료!" placeholder="리뷰 혜택 입력">
+      </div>
+
+      <div class="form-group">
+        <label>매장 로고 (선택)</label>
+        <label class="logo-upload" id="logoUpload">
+          <input type="file" accept="image/*" id="logoInput">
+          <span id="logoText">클릭하여 로고 업로드<br><small style="opacity:0.6">PNG, JPG 권장</small></span>
+          <img id="logoPreview" class="logo-preview" style="display:none">
+        </label>
+      </div>
+
+      <div class="form-group">
+        <label>이용 안내</label>
+        <textarea id="steps">음식/매장 사진 2장 먼저 촬영
+QR 스캔 → 번호 입력
+영수증 저장 후 네이버로 이동
+앨범에서 영수증+사진 첨부
+글 붙여넣기 → 등록 완료!</textarea>
+      </div>
+
+      <div class="form-group">
+        <label>테이블 번호 (선택)</label>
+        <input type="text" id="tableNo" value="" placeholder="예: TABLE 1">
+      </div>
+    </div>
+
+    <div class="buttons">
+      <button class="btn btn-primary" onclick="downloadPNG()">다운로드</button>
+      <button class="btn btn-secondary" onclick="window.print()">인쇄</button>
+    </div>
+  </div>
+
+  <div class="preview-area">
+    <div class="sign tpl-glass size-a6" id="sign"></div>
+  </div>
+</div>
+
+<script>
+// 상태
+let state = {
+  template: 'glass',
+  size: 'a6',
+  color: '#03C75A',
+  storeName: '맛있는식당 강남점',
+  benefit: '리뷰 작성하면 음료 무료!',
+  logo: null,
+  steps: `음식/매장 사진 2장 먼저 촬영
+QR 스캔 → 번호 입력
+영수증 저장 후 네이버로 이동
+앨범에서 영수증+사진 첨부
+글 붙여넣기 → 등록 완료!`,
+  tableNo: ''
+};
+
+// QR 코드 SVG
+const qrSvg = `<svg viewBox="0 0 100 100" width="80" height="80">
+  <rect fill="#000" x="5" y="5" width="28" height="28" rx="2"/>
+  <rect fill="#fff" x="10" y="10" width="18" height="18" rx="1"/>
+  <rect fill="#000" x="14" y="14" width="10" height="10"/>
+  <rect fill="#000" x="67" y="5" width="28" height="28" rx="2"/>
+  <rect fill="#fff" x="72" y="10" width="18" height="18" rx="1"/>
+  <rect fill="#000" x="76" y="14" width="10" height="10"/>
+  <rect fill="#000" x="5" y="67" width="28" height="28" rx="2"/>
+  <rect fill="#fff" x="10" y="72" width="18" height="18" rx="1"/>
+  <rect fill="#000" x="14" y="76" width="10" height="10"/>
+  <rect fill="#000" x="40" y="5" width="6" height="6"/>
+  <rect fill="#000" x="50" y="5" width="6" height="6"/>
+  <rect fill="#000" x="40" y="15" width="6" height="6"/>
+  <rect fill="#000" x="55" y="15" width="6" height="6"/>
+  <rect fill="#000" x="40" y="40" width="20" height="20" rx="2"/>
+  <rect fill="#000" x="5" y="45" width="6" height="6"/>
+  <rect fill="#000" x="15" y="50" width="6" height="6"/>
+  <rect fill="#000" x="67" y="40" width="6" height="6"/>
+  <rect fill="#000" x="77" y="50" width="6" height="6"/>
+  <rect fill="#000" x="87" y="45" width="8" height="6"/>
+  <rect fill="#000" x="67" y="67" width="6" height="6"/>
+  <rect fill="#000" x="80" y="67" width="6" height="6"/>
+  <rect fill="#000" x="67" y="80" width="6" height="6"/>
+  <rect fill="#000" x="87" y="77" width="8" height="6"/>
+  <rect fill="#000" x="77" y="87" width="6" height="8"/>
+</svg>`;
+
+// NAVER 뱃지
+const naverBadge = `<div class="naver-badge"><span class="naver-logo">N</span><span>영수증리뷰</span></div>`;
+
+// 템플릿 렌더러
+const templates = {
+  glass: () => `
+    ${state.tableNo ? `<div class="table-badge">${state.tableNo}</div>` : ''}
+    <div class="sign-header">
+      ${state.logo ? `<img src="${state.logo}" class="sign-logo">` : ''}
+      <div class="sign-store">${state.storeName}</div>
+    </div>
+    <div class="sign-benefit-wrap">
+      <div class="sign-benefit">${state.benefit}</div>
+    </div>
+    <div class="sign-qr-section">
+      <div class="sign-qr">${qrSvg}</div>
+      <div class="sign-qr-label">QR 스캔하고 참여하기</div>
+      ${naverBadge}
+    </div>
+    <ol class="sign-steps">${state.steps.split('\n').map((s, i) => `<li><span class="step-num">${i+1}</span>${s}</li>`).join('')}</ol>
+  `,
+
+  neon: () => `
+    ${state.tableNo ? `<div class="table-badge">${state.tableNo}</div>` : ''}
+    <div class="sign-header">
+      ${state.logo ? `<img src="${state.logo}" class="sign-logo">` : ''}
+      <div class="sign-title">리뷰 이벤트</div>
+      <div class="sign-store">${state.storeName}</div>
+    </div>
+    <div class="sign-benefit-wrap">
+      <div class="sign-benefit">${state.benefit}</div>
+    </div>
+    <div class="sign-qr-section">
+      <div class="sign-qr">${qrSvg}</div>
+      <div class="sign-qr-label">👆 QR 스캔하기</div>
+      ${naverBadge}
+    </div>
+    <ol class="sign-steps">${state.steps.split('\n').map(s => `<li>${s}</li>`).join('')}</ol>
+  `,
+
+  minimal: () => `
+    ${state.tableNo ? `<div class="table-badge">${state.tableNo}</div>` : ''}
+    <div class="sign-header">
+      ${state.logo ? `<img src="${state.logo}" class="sign-logo">` : ''}
+      <div class="sign-store">${state.storeName}</div>
+    </div>
+    <div class="sign-benefit">${state.benefit}</div>
+    <div class="sign-qr-section">
+      <div class="sign-qr">${qrSvg}</div>
+      <div class="sign-qr-label">SCAN TO REVIEW</div>
+      ${naverBadge}
+    </div>
+    <ol class="sign-steps">${state.steps.split('\n').map((s, i) => `<li>${i+1}. ${s}</li>`).join('')}</ol>
+  `,
+
+  luxury: () => `
+    <div class="sign-header">
+      ${state.logo ? `<img src="${state.logo}" class="sign-logo" style="filter:none">` : ''}
+      <div class="sign-store">${state.storeName}</div>
+    </div>
+    <div class="sign-body">
+      <div class="sign-benefit">${state.benefit.replace(/(.+?)(!|$)/, '<strong>$1</strong>$2')}</div>
+      <div class="sign-qr-section">
+        <div class="sign-qr">${qrSvg}</div>
+        <div class="sign-qr-label">SCAN QR CODE</div>
+        ${naverBadge}
+      </div>
+      <ol class="sign-steps">${state.steps.split('\n').map(s => `<li>${s}</li>`).join('')}</ol>
+    </div>
+    <div class="sign-footer">${state.tableNo || 'NAVER 영수증리뷰 서비스'}</div>
+  `
+};
+
+function render() {
+  const sign = document.getElementById('sign');
+  sign.className = `sign tpl-${state.template} size-${state.size}`;
+  sign.style.setProperty('--sign-accent', state.color);
+  sign.innerHTML = templates[state.template]();
+}
+
+// 이벤트 바인딩
+document.querySelectorAll('.template-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.template-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.template = btn.dataset.tpl;
+    render();
+  };
+});
+
+document.querySelectorAll('.size-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.size = btn.dataset.size;
+
+    // 사이즈별 안내 문구
+    const noteEl = document.getElementById('sizeNote');
+    if (btn.dataset.size === 'tablet') {
+      noteEl.innerHTML = '💡 테이블오더 담당자에게 이미지 파일로 전달하면<br>태블릿PC 대기화면에 노출할 수 있습니다.';
+      noteEl.style.display = 'block';
+    } else {
+      noteEl.style.display = 'none';
+    }
+
+    render();
+  };
+});
+
+document.querySelectorAll('.color-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.color = btn.dataset.color;
+    render();
+  };
+});
+
+function applyCustomSize() {
+  const w = parseInt(document.getElementById('customW').value);
+  const h = parseInt(document.getElementById('customH').value);
+  if (w && h) {
+    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+    const sign = document.getElementById('sign');
+    sign.style.width = (w * 3.78) + 'px';
+    sign.style.minHeight = (h * 3.78) + 'px';
+    state.size = 'custom';
+  }
+}
+
+document.getElementById('storeName').oninput = e => { state.storeName = e.target.value; render(); };
+document.getElementById('benefit').oninput = e => { state.benefit = e.target.value; render(); };
+document.getElementById('steps').oninput = e => { state.steps = e.target.value; render(); };
+document.getElementById('tableNo').oninput = e => { state.tableNo = e.target.value; render(); };
+
+document.getElementById('logoInput').onchange = e => {
+  const file = e.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      state.logo = ev.target.result;
+      document.getElementById('logoPreview').src = state.logo;
+      document.getElementById('logoPreview').style.display = 'block';
+      document.getElementById('logoText').style.display = 'none';
+      render();
+    };
+    reader.readAsDataURL(file);
+  }
+};
+
+function downloadPNG() {
+  alert('PNG 다운로드 기능은 html2canvas 라이브러리로 구현됩니다.\n실제 서비스에서는 고해상도 PNG/PDF로 다운로드됩니다.');
+}
+
+// 초기 렌더
+render();
+</script>
+</body>
+</html>
