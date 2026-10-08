@@ -7,6 +7,7 @@
     <RootNamespace>ReceiptTap.App</RootNamespace>
     <AssemblyName>ReceiptTap</AssemblyName>
     <UseWindowsForms>true</UseWindowsForms>
+    <PlatformTarget>x86</PlatformTarget>
   </PropertyGroup>
 
   <ItemGroup>

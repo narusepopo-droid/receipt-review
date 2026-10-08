@@ -28,7 +28,14 @@ namespace ReceiptTap.App
 
             _captureService = new CaptureService(_config);
             _captureService.StatusChanged += (s, status) => UpdateStatus(status);
-            _captureService.LogMessage += (s, msg) => System.Diagnostics.Debug.WriteLine(msg);
+            _captureService.LogMessage += (s, msg) => {
+                System.Diagnostics.Debug.WriteLine(msg);
+                // 캡처 성공 시 알림
+                if (msg.Contains("영수증 캡처"))
+                {
+                    _trayIcon.ShowBalloonTip(2000, "영수증 캡처!", msg, ToolTipIcon.Info);
+                }
+            };
             _captureService.Start();
         }
 

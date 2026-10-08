@@ -5,6 +5,8 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>ReceiptTap.Core</RootNamespace>
     <AssemblyName>ReceiptTap.Core</AssemblyName>
+    <PlatformTarget>x86</PlatformTarget>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
