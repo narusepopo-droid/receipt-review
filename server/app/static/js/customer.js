@@ -348,13 +348,13 @@
             submitBtn.innerHTML = '<span class="loading__spinner"></span> 처리 중...';
 
             try {
-                const response = await fetch('/api/v1/session/start', {
+                const url = `/api/v1/session/start?store_code=${encodeURIComponent(window.STORE_CODE)}`;
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        store_code: window.STORE_CODE,
-                        table_no: window.TABLE_NO,
                         phone,
+                        table_no: window.TABLE_NO,
                         marketing_opt_in: marketingOptIn
                     })
                 });
@@ -372,10 +372,12 @@
                         window.location.href = `/t/${window.STORE_CODE}/${window.TABLE_NO}/keywords`;
                     }
                 } else {
-                    throw new Error(data.detail || '오류가 발생했습니다');
+                    const errMsg = typeof data.detail === 'string' ? data.detail :
+                                   (data.detail?.msg || data.message || JSON.stringify(data.detail) || '오류가 발생했습니다');
+                    throw new Error(errMsg);
                 }
             } catch (e) {
-                errorEl.textContent = e.message;
+                errorEl.textContent = e.message || '오류가 발생했습니다';
                 errorEl.classList.add('visible');
                 submitBtn.disabled = false;
                 submitBtn.textContent = '다음';

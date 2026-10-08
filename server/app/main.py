@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -55,6 +56,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan
 )
+
+# 세션 미들웨어 추가 (로그인용)
+app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
 app.include_router(auth.router)
 app.include_router(agent.router)
