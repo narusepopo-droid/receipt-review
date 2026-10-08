@@ -14,6 +14,7 @@ class Customer(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     phone_enc: Mapped[str] = mapped_column(String(200), nullable=False)
     phone_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    phone_last4: Mapped[Optional[str]] = mapped_column(String(4))
 
 
 class StoreCustomer(Base):
@@ -38,6 +39,9 @@ class StoreCustomer(Base):
     marketing_opt_in: Mapped[bool] = mapped_column(Boolean, default=False)
     opt_in_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     opt_out_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    total_amount: Mapped[Optional[int]] = mapped_column(Integer, default=0)
+    review_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class ConsentType(str, enum.Enum):
