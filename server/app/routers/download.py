@@ -26,8 +26,9 @@ class VersionInfo(BaseModel):
 
 # ============ 설정 ============
 
-INSTALLER_DIR = "uploads/installers"
-CURRENT_VERSION = "1.0.0"  # TODO: DB에서 조회
+INSTALLER_DIR = "app/static/downloads"
+CURRENT_VERSION = "1.0.0"
+CURRENT_FILENAME = "ReceiptTap_v1.0.0.zip"
 
 
 # ============ 다운로드 페이지 ============
@@ -277,15 +278,15 @@ async def download_page():
                     <div class="step">
                         <div class="step-number">2</div>
                         <div class="step-content">
-                            <h4>설치 실행</h4>
-                            <p>다운로드한 파일을 실행하고 안내에 따라 설치합니다.</p>
+                            <h4>압축 풀기</h4>
+                            <p>다운로드한 ZIP 파일의 압축을 풉니다.</p>
                         </div>
                     </div>
                     <div class="step">
                         <div class="step-number">3</div>
                         <div class="step-content">
-                            <h4>활성화 코드 입력</h4>
-                            <p>광고토대왕 담당자에게 받은 8자리 활성화 코드를 입력합니다.</p>
+                            <h4>실행 및 로그인</h4>
+                            <p>ReceiptTap.exe를 실행하고 발급받은 계정으로 로그인합니다.</p>
                         </div>
                     </div>
                 </div>
@@ -313,9 +314,7 @@ async def download_page():
 async def download_latest():
     """최신 설치 파일 다운로드"""
 
-    # TODO: DB에서 최신 버전 파일명 조회
-    filename = f"ReceiptTap_{CURRENT_VERSION}.exe"
-    filepath = os.path.join(INSTALLER_DIR, filename)
+    filepath = os.path.join(INSTALLER_DIR, CURRENT_FILENAME)
 
     if not os.path.exists(filepath):
         raise HTTPException(
@@ -323,12 +322,10 @@ async def download_latest():
             detail="설치 파일을 찾을 수 없습니다. 관리자에게 문의하세요."
         )
 
-    # TODO: 다운로드 카운트 증가
-
     return FileResponse(
         path=filepath,
-        filename=filename,
-        media_type="application/octet-stream"
+        filename=CURRENT_FILENAME,
+        media_type="application/zip"
     )
 
 
