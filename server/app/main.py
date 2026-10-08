@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -55,6 +56,15 @@ app = FastAPI(
     description="포스 영수증 캡처 및 리뷰 자동화 서비스",
     version="0.1.0",
     lifespan=lifespan
+)
+
+# CORS 미들웨어 (외부 사이트에서 API 호출 허용)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # 세션 미들웨어 추가 (로그인용)
