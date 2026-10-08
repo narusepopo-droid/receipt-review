@@ -1,7 +1,7 @@
 """
-점주 관리자 웹 라우터
+점주 관리자 웹 라우터 - 실제 DB 연동
 """
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import Optional
 import secrets
 import hashlib
@@ -12,8 +12,14 @@ from fastapi import APIRouter, Request, Response, Depends, HTTPException, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+from sqlalchemy import select, func, and_
+from sqlalchemy.ext.asyncio import AsyncSession
 
-# 템플릿 설정
+from app.db import get_db
+from app.models import Store, StoreSettings, Receipt, ReviewSession, Customer, StoreCustomer
+from app.models.receipt import ReceiptStatus
+from app.models.session import SessionStatus
+
 templates = Jinja2Templates(directory="app/templates")
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -44,39 +50,32 @@ class SettingsUpdate(BaseModel):
 
 # ============ Session Management ============
 
-def get_current_store(request: Request):
+async def get_current_store(request: Request, db: AsyncSession):
     """세션에서 현재 로그인된 매장 정보를 가져옵니다."""
     store_id = request.session.get("store_id")
     if not store_id:
         return None
 
-    # TODO: DB에서 매장 정보 조회
-    # 임시로 더미 데이터 반환
-    return {
-        "id": store_id,
-        "name": "맛있는 식당",
-        "biz_no": "123-45-67890",
-        "store_code": "tasty123",
-        "naver_review_url": "https://naver.me/xOmvlCzr",
-        "paper_width": 576,
-        "admin_login_id": "admin",
-        "staff_pin": "1234"
-    }
+    result = await db.execute(
+        select(Store).where(Store.id == store_id)
+    )
+    store = result.scalar_one_or_none()
 
+    if store:
+        # settings도 함께 조회
+        settings_result = await db.execute(
+            select(StoreSettings).where(StoreSettings.store_id == store_id)
+        )
+        settings = settings_result.scalar_one_or_none()
+        return {"store": store, "settings": settings}
 
-def require_login(request: Request):
-    """로그인 필수 체크"""
-    store = get_current_store(request)
-    if not store:
-        raise HTTPException(status_code=302, headers={"Location": "/admin/login"})
-    return store
+    return None
 
 
 # ============ Auth Routes ============
 
 @router.get("/login", response_class=HTMLResponse, name="admin_login")
 async def login_page(request: Request, error: Optional[str] = None):
-    """로그인 페이지"""
     return templates.TemplateResponse("admin/login.html", {
         "request": request,
         "error": error
@@ -84,12 +83,20 @@ async def login_page(request: Request, error: Optional[str] = None):
 
 
 @router.post("/login", name="admin_login_post")
-async def login(request: Request, login_id: str = Form(...), password: str = Form(...)):
-    """로그인 처리"""
-    # TODO: 실제 DB에서 검증
-    # 임시로 admin/admin으로 로그인
-    if login_id == "admin" and password == "admin":
-        request.session["store_id"] = 1
+async def login(
+    request: Request,
+    login_id: str = Form(...),
+    password: str = Form(...),
+    db: AsyncSession = Depends(get_db)
+):
+    # DB에서 매장 조회
+    result = await db.execute(
+        select(Store).where(Store.admin_login_id == login_id)
+    )
+    store = result.scalar_one_or_none()
+
+    if store and store.verify_password(password):
+        request.session["store_id"] = store.id
         return RedirectResponse(url="/admin/dashboard", status_code=302)
 
     return templates.TemplateResponse("admin/login.html", {
@@ -100,7 +107,6 @@ async def login(request: Request, login_id: str = Form(...), password: str = For
 
 @router.get("/logout", name="admin_logout")
 async def logout(request: Request):
-    """로그아웃"""
     request.session.clear()
     return RedirectResponse(url="/admin/login", status_code=302)
 
@@ -108,210 +114,514 @@ async def logout(request: Request):
 # ============ Dashboard ============
 
 @router.get("/dashboard", response_class=HTMLResponse, name="admin_dashboard")
-async def dashboard(request: Request):
-    """대시보드"""
-    store = get_current_store(request)
-    if not store:
+async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
+    store_data = await get_current_store(request, db)
+    if not store_data:
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    # TODO: 실제 통계 데이터 조회
-    stats = {
-        "today_sessions": 23,
-        "sessions_change": 15,
-        "available_receipts": 12,
-        "completed": 18,
-        "benefits_given": 15,
-        "step_phone": 45,
-        "step_keyword": 42,
-        "step_assign": 40,
-        "step_download": 35,
-        "step_redirect": 32,
-        "step_complete": 25,
-        "step_benefit": 18
-    }
+    store = store_data["store"]
+    settings = store_data["settings"]
 
-    recent_activities = [
-        {"time": "14:32", "phone_masked": "010-****-1234", "amount": 28000, "status_class": "success", "status_text": "혜택지급"},
-        {"time": "14:28", "phone_masked": "010-****-5678", "amount": 35000, "status_class": "info", "status_text": "리뷰완료"},
-        {"time": "14:15", "phone_masked": "010-****-9012", "amount": 22000, "status_class": "warning", "status_text": "진행중"},
-    ]
+    # 오늘 날짜 (영업일 기준)
+    now = datetime.now(timezone.utc)
+    cutoff = settings.business_day_cutoff if settings else "05:00"
+    h, m = map(int, cutoff.split(":"))
+    today_start = now.replace(hour=h, minute=m, second=0, microsecond=0)
+    if now < today_start:
+        today_start -= timedelta(days=1)
+
+    # 어제 시작
+    yesterday_start = today_start - timedelta(days=1)
+
+    # 오늘 세션 수
+    today_sessions_result = await db.execute(
+        select(func.count(ReviewSession.id)).where(
+            ReviewSession.store_id == store.id,
+            ReviewSession.started_at >= today_start
+        )
+    )
+    today_sessions = today_sessions_result.scalar() or 0
+
+    # 어제 세션 수 (비교용)
+    yesterday_sessions_result = await db.execute(
+        select(func.count(ReviewSession.id)).where(
+            ReviewSession.store_id == store.id,
+            ReviewSession.started_at >= yesterday_start,
+            ReviewSession.started_at < today_start
+        )
+    )
+    yesterday_sessions = yesterday_sessions_result.scalar() or 0
+    sessions_change = today_sessions - yesterday_sessions
+
+    # 사용 가능한 영수증 수
+    available_result = await db.execute(
+        select(func.count(Receipt.id)).where(
+            Receipt.store_id == store.id,
+            Receipt.status == ReceiptStatus.AVAILABLE
+        )
+    )
+    available_receipts = available_result.scalar() or 0
+
+    # 오늘 완료된 리뷰 수
+    completed_result = await db.execute(
+        select(func.count(ReviewSession.id)).where(
+            ReviewSession.store_id == store.id,
+            ReviewSession.completed_at >= today_start
+        )
+    )
+    completed = completed_result.scalar() or 0
+
+    # 혜택 지급 수
+    benefits_result = await db.execute(
+        select(func.count(ReviewSession.id)).where(
+            ReviewSession.store_id == store.id,
+            ReviewSession.benefit_given_at >= today_start
+        )
+    )
+    benefits_given = benefits_result.scalar() or 0
+
+    # 단계별 통계
+    step_stats = {}
+    for status_name, status_val in [
+        ("phone", SessionStatus.STARTED),
+        ("keyword", SessionStatus.STARTED),
+        ("assign", SessionStatus.ASSIGNED),
+        ("download", SessionStatus.DOWNLOADED),
+        ("redirect", SessionStatus.REDIRECTED),
+        ("complete", SessionStatus.COMPLETED),
+        ("benefit", SessionStatus.BENEFIT_GIVEN)
+    ]:
+        if status_name in ["phone", "keyword"]:
+            # started 이상 = phone/keyword 단계 도달
+            result = await db.execute(
+                select(func.count(ReviewSession.id)).where(
+                    ReviewSession.store_id == store.id,
+                    ReviewSession.started_at >= today_start
+                )
+            )
+        else:
+            result = await db.execute(
+                select(func.count(ReviewSession.id)).where(
+                    ReviewSession.store_id == store.id,
+                    ReviewSession.started_at >= today_start,
+                    ReviewSession.status >= status_val
+                )
+            )
+        step_stats[f"step_{status_name}"] = result.scalar() or 0
+
+    # 최근 활동
+    recent_result = await db.execute(
+        select(ReviewSession, Receipt, Customer)
+        .outerjoin(Receipt, ReviewSession.receipt_id == Receipt.id)
+        .outerjoin(Customer, ReviewSession.customer_id == Customer.id)
+        .where(ReviewSession.store_id == store.id)
+        .order_by(ReviewSession.started_at.desc())
+        .limit(10)
+    )
+
+    recent_activities = []
+    for session, receipt, customer in recent_result.fetchall():
+        phone_masked = "010-****-****"
+        if customer and customer.phone_last4:
+            phone_masked = f"010-****-{customer.phone_last4}"
+
+        status_class = "secondary"
+        status_text = "시작"
+        if session.status == SessionStatus.BENEFIT_GIVEN:
+            status_class = "success"
+            status_text = "혜택지급"
+        elif session.status == SessionStatus.COMPLETED:
+            status_class = "info"
+            status_text = "리뷰완료"
+        elif session.status >= SessionStatus.ASSIGNED:
+            status_class = "warning"
+            status_text = "진행중"
+
+        recent_activities.append({
+            "time": session.started_at.strftime("%H:%M") if session.started_at else "",
+            "phone_masked": phone_masked,
+            "amount": receipt.amount if receipt else 0,
+            "status_class": status_class,
+            "status_text": status_text
+        })
+
+    # 에이전트 상태
+    from app.models import Agent
+    agent_result = await db.execute(
+        select(Agent).where(Agent.store_id == store.id).order_by(Agent.last_heartbeat_at.desc())
+    )
+    agent = agent_result.scalar_one_or_none()
+
+    agent_online = False
+    last_heartbeat = "연결 안됨"
+    agent_version = "-"
+    capture_mode = "-"
+    queue_length = 0
+
+    if agent:
+        time_diff = datetime.now(timezone.utc) - agent.last_heartbeat_at if agent.last_heartbeat_at else timedelta(hours=999)
+        agent_online = time_diff < timedelta(minutes=5)
+
+        if agent.last_heartbeat_at:
+            if time_diff < timedelta(minutes=1):
+                last_heartbeat = "방금 전"
+            elif time_diff < timedelta(hours=1):
+                last_heartbeat = f"{int(time_diff.total_seconds() // 60)}분 전"
+            else:
+                last_heartbeat = f"{int(time_diff.total_seconds() // 3600)}시간 전"
+
+        agent_version = agent.version or "-"
+        capture_mode = agent.capture_mode or "-"
+        queue_length = agent.queue_length or 0
+
+    # 오늘 수신된 영수증 수
+    today_receipts_result = await db.execute(
+        select(func.count(Receipt.id)).where(
+            Receipt.store_id == store.id,
+            Receipt.created_at >= today_start
+        )
+    )
+    today_receipts = today_receipts_result.scalar() or 0
 
     return templates.TemplateResponse("admin/dashboard.html", {
         "request": request,
-        "store": store,
+        "store": {
+            "id": store.id,
+            "name": store.name,
+            "biz_no": store.biz_no,
+            "store_code": store.store_code
+        },
         "active_menu": "dashboard",
         "today": date.today(),
-        "stats": stats,
-        "agent_online": True,
-        "last_heartbeat": "방금 전",
-        "agent_version": "1.0.0",
-        "capture_mode": "시리얼(COM)",
-        "queue_length": 0,
-        "today_receipts": 45,
+        "stats": {
+            "today_sessions": today_sessions,
+            "sessions_change": sessions_change,
+            "available_receipts": available_receipts,
+            "completed": completed,
+            "benefits_given": benefits_given,
+            **step_stats
+        },
+        "agent_online": agent_online,
+        "last_heartbeat": last_heartbeat,
+        "agent_version": agent_version,
+        "capture_mode": capture_mode,
+        "queue_length": queue_length,
+        "today_receipts": today_receipts,
         "recent_activities": recent_activities
+    })
+
+
+# ============ Customers ============
+
+@router.get("/customers", response_class=HTMLResponse, name="admin_customers")
+async def customers_page(request: Request, page: int = 1, db: AsyncSession = Depends(get_db)):
+    store_data = await get_current_store(request, db)
+    if not store_data:
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    store = store_data["store"]
+    per_page = 20
+    offset = (page - 1) * per_page
+
+    # 고객 목록 조회
+    customers_result = await db.execute(
+        select(StoreCustomer, Customer)
+        .join(Customer, StoreCustomer.customer_id == Customer.id)
+        .where(StoreCustomer.store_id == store.id)
+        .order_by(StoreCustomer.last_visit_at.desc())
+        .offset(offset)
+        .limit(per_page)
+    )
+
+    customers = []
+    for sc, customer in customers_result.fetchall():
+        phone_masked = "010-****-****"
+        if customer.phone_last4:
+            phone_masked = f"010-****-{customer.phone_last4}"
+
+        customers.append({
+            "id": customer.id,
+            "phone_masked": phone_masked,
+            "first_visit_at": sc.first_visit_at,
+            "last_visit_at": sc.last_visit_at,
+            "visit_count": sc.visit_count,
+            "marketing_opt_in": sc.marketing_opt_in,
+            "total_amount": sc.total_amount or 0,
+            "review_count": sc.review_count or 0
+        })
+
+    # 통계
+    total_result = await db.execute(
+        select(func.count(StoreCustomer.customer_id)).where(
+            StoreCustomer.store_id == store.id
+        )
+    )
+    total = total_result.scalar() or 0
+
+    opted_in_result = await db.execute(
+        select(func.count(StoreCustomer.customer_id)).where(
+            StoreCustomer.store_id == store.id,
+            StoreCustomer.marketing_opt_in == True
+        )
+    )
+    opted_in = opted_in_result.scalar() or 0
+
+    returning_result = await db.execute(
+        select(func.count(StoreCustomer.customer_id)).where(
+            StoreCustomer.store_id == store.id,
+            StoreCustomer.visit_count > 1
+        )
+    )
+    returning = returning_result.scalar() or 0
+
+    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    new_this_month_result = await db.execute(
+        select(func.count(StoreCustomer.customer_id)).where(
+            StoreCustomer.store_id == store.id,
+            StoreCustomer.first_visit_at >= month_start
+        )
+    )
+    new_this_month = new_this_month_result.scalar() or 0
+
+    total_pages = (total + per_page - 1) // per_page
+
+    return templates.TemplateResponse("admin/customers.html", {
+        "request": request,
+        "store": {"id": store.id, "name": store.name},
+        "active_menu": "customers",
+        "customers": customers,
+        "stats": {
+            "total": total,
+            "opted_in": opted_in,
+            "returning": returning,
+            "new_this_month": new_this_month
+        },
+        "current_page": page,
+        "total_pages": total_pages
+    })
+
+
+# ============ Receipts ============
+
+@router.get("/receipts", response_class=HTMLResponse, name="admin_receipts")
+async def receipts_page(request: Request, page: int = 1, status: str = "all", db: AsyncSession = Depends(get_db)):
+    """영수증 목록 - 상태별 조회"""
+    store_data = await get_current_store(request, db)
+    if not store_data:
+        return RedirectResponse(url="/admin/login", status_code=302)
+
+    store = store_data["store"]
+    per_page = 30
+    offset = (page - 1) * per_page
+
+    # 필터 조건
+    conditions = [Receipt.store_id == store.id]
+    if status == "available":
+        conditions.append(Receipt.status == ReceiptStatus.AVAILABLE)
+    elif status == "assigned":
+        conditions.append(Receipt.status == ReceiptStatus.ASSIGNED)
+    elif status == "disposed":
+        conditions.append(Receipt.status == ReceiptStatus.DISPOSED)
+
+    # 영수증 목록
+    receipts_result = await db.execute(
+        select(Receipt)
+        .where(and_(*conditions))
+        .order_by(Receipt.created_at.desc())
+        .offset(offset)
+        .limit(per_page)
+    )
+    receipts = receipts_result.scalars().all()
+
+    # 상태별 카운트
+    available_count = (await db.execute(
+        select(func.count(Receipt.id)).where(
+            Receipt.store_id == store.id,
+            Receipt.status == ReceiptStatus.AVAILABLE
+        )
+    )).scalar() or 0
+
+    assigned_count = (await db.execute(
+        select(func.count(Receipt.id)).where(
+            Receipt.store_id == store.id,
+            Receipt.status == ReceiptStatus.ASSIGNED
+        )
+    )).scalar() or 0
+
+    disposed_count = (await db.execute(
+        select(func.count(Receipt.id)).where(
+            Receipt.store_id == store.id,
+            Receipt.status == ReceiptStatus.DISPOSED
+        )
+    )).scalar() or 0
+
+    total = available_count + assigned_count + disposed_count
+    total_pages = (total + per_page - 1) // per_page if status == "all" else 1
+
+    return templates.TemplateResponse("admin/receipts.html", {
+        "request": request,
+        "store": {"id": store.id, "name": store.name},
+        "active_menu": "receipts",
+        "receipts": receipts,
+        "status_filter": status,
+        "counts": {
+            "all": total,
+            "available": available_count,
+            "assigned": assigned_count,
+            "disposed": disposed_count
+        },
+        "current_page": page,
+        "total_pages": total_pages
     })
 
 
 # ============ Phrases ============
 
 @router.get("/phrases", response_class=HTMLResponse, name="admin_phrases")
-async def phrases_page(request: Request):
-    """문구 설정 페이지"""
-    store = get_current_store(request)
-    if not store:
+async def phrases_page(request: Request, db: AsyncSession = Depends(get_db)):
+    store_data = await get_current_store(request, db)
+    if not store_data:
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    # TODO: DB에서 설정 조회
-    keywords = [
+    store = store_data["store"]
+    settings = store_data["settings"]
+
+    keywords = settings.keywords if settings and settings.keywords else [
         {"label": "맛있어요", "default": True},
         {"label": "친절해요", "default": True},
-        {"label": "분위기 좋아요", "default": False},
-        {"label": "가성비 좋아요", "default": False},
-        {"label": "재방문 의사 있어요", "default": False}
+        {"label": "분위기 좋아요", "default": False}
     ]
 
-    signature_menus = ["돼지김치찌개", "계란말이", "된장찌개"]
-
-    templates_list = [
-        "{메뉴} 정말 맛있었어요! {키워드1} 다음에 또 올게요.",
-        "오늘 {메뉴} 먹었는데 {키워드1} {키워드2} 추천합니다.",
-        "{키워드1} 분위기도 좋고 {메뉴}도 최고였어요."
-    ]
+    signature_menus = settings.signature_menus if settings and settings.signature_menus else []
+    templates_list = settings.templates if settings and settings.templates else []
 
     return templates.TemplateResponse("admin/phrases.html", {
         "request": request,
-        "store": store,
+        "store": {"id": store.id, "name": store.name},
         "active_menu": "phrases",
         "keywords": keywords,
         "signature_menus": signature_menus,
         "templates": templates_list,
-        "text_min_len": 30,
-        "text_max_len": 150
+        "text_min_len": settings.text_min_len if settings else 30,
+        "text_max_len": settings.text_max_len if settings else 150
     })
 
 
 @router.post("/phrases/save", name="admin_save_phrases")
-async def save_phrases(request: Request, data: PhrasesUpdate):
-    """문구 설정 저장"""
-    store = get_current_store(request)
-    if not store:
+async def save_phrases(request: Request, data: PhrasesUpdate, db: AsyncSession = Depends(get_db)):
+    store_data = await get_current_store(request, db)
+    if not store_data:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다")
 
-    # TODO: DB에 저장
+    store = store_data["store"]
+
+    # settings 조회 또는 생성
+    result = await db.execute(
+        select(StoreSettings).where(StoreSettings.store_id == store.id)
+    )
+    settings = result.scalar_one_or_none()
+
+    if not settings:
+        settings = StoreSettings(store_id=store.id)
+        db.add(settings)
+
+    settings.keywords = data.keywords
+    settings.signature_menus = data.signature_menus
+    settings.templates = data.templates
+    settings.text_min_len = data.text_min_len
+    settings.text_max_len = data.text_max_len
+
+    await db.commit()
     return JSONResponse({"success": True})
 
 
 # ============ Settings ============
 
 @router.get("/settings", response_class=HTMLResponse, name="admin_settings")
-async def settings_page(request: Request):
-    """매장 설정 페이지"""
-    store = get_current_store(request)
-    if not store:
+async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
+    store_data = await get_current_store(request, db)
+    if not store_data:
         return RedirectResponse(url="/admin/login", status_code=302)
 
-    # TODO: DB에서 설정 조회
-    settings = {
-        "benefit_text": "리뷰 작성 시 음료 1잔 서비스",
-        "primary_color": "#03C75A",
-        "assignment_policy": "latest_same_day",
-        "business_day_cutoff": "05:00",
-        "hourly_assign_limit": 50,
-        "daily_assign_limit": 200
-    }
+    store = store_data["store"]
+    settings = store_data["settings"] or {}
 
     return templates.TemplateResponse("admin/settings.html", {
         "request": request,
-        "store": store,
+        "store": {"id": store.id, "name": store.name, "naver_review_url": store.naver_review_url, "staff_pin": store.staff_pin},
         "active_menu": "settings",
-        "settings": settings
+        "settings": {
+            "benefit_text": settings.benefit_text if settings else "",
+            "primary_color": settings.primary_color if settings else "#03C75A",
+            "assignment_policy": settings.assignment_policy if settings else "latest_same_day",
+            "business_day_cutoff": settings.business_day_cutoff if settings else "05:00",
+            "hourly_assign_limit": settings.hourly_assign_limit if settings else 50,
+            "daily_assign_limit": settings.daily_assign_limit if settings else 200
+        }
     })
 
 
 @router.post("/settings/save", name="admin_save_settings")
-async def save_settings(request: Request, data: SettingsUpdate):
-    """매장 설정 저장"""
-    store = get_current_store(request)
-    if not store:
+async def save_settings(request: Request, data: SettingsUpdate, db: AsyncSession = Depends(get_db)):
+    store_data = await get_current_store(request, db)
+    if not store_data:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다")
 
-    # TODO: DB에 저장
-    # 비밀번호 변경 시 해시 처리
+    store = store_data["store"]
+
+    # Store 업데이트
+    if data.naver_review_url:
+        store.naver_review_url = data.naver_review_url
+    if data.staff_pin:
+        store.staff_pin = data.staff_pin
     if data.new_password:
-        # password_hash = hashlib.sha256(data.new_password.encode()).hexdigest()
-        pass
+        store.set_password(data.new_password)
 
+    # Settings 업데이트
+    result = await db.execute(
+        select(StoreSettings).where(StoreSettings.store_id == store.id)
+    )
+    settings = result.scalar_one_or_none()
+
+    if not settings:
+        settings = StoreSettings(store_id=store.id)
+        db.add(settings)
+
+    if data.benefit_text:
+        settings.benefit_text = data.benefit_text
+    if data.primary_color:
+        settings.primary_color = data.primary_color
+    if data.assignment_policy:
+        settings.assignment_policy = data.assignment_policy
+    if data.business_day_cutoff:
+        settings.business_day_cutoff = data.business_day_cutoff
+    if data.hourly_assign_limit:
+        settings.hourly_assign_limit = data.hourly_assign_limit
+    if data.daily_assign_limit:
+        settings.daily_assign_limit = data.daily_assign_limit
+
+    await db.commit()
     return JSONResponse({"success": True})
-
-
-# ============ Customers ============
-
-@router.get("/customers", response_class=HTMLResponse, name="admin_customers")
-async def customers_page(request: Request, page: int = 1):
-    """고객 목록 페이지"""
-    store = get_current_store(request)
-    if not store:
-        return RedirectResponse(url="/admin/login", status_code=302)
-
-    # TODO: DB에서 고객 목록 조회
-    customers = [
-        {
-            "phone_masked": "010-****-1234",
-            "first_visit_at": datetime(2026, 10, 1),
-            "last_visit_at": datetime(2026, 10, 7),
-            "visit_count": 3,
-            "marketing_opt_in": True
-        },
-        {
-            "phone_masked": "010-****-5678",
-            "first_visit_at": datetime(2026, 10, 5),
-            "last_visit_at": datetime(2026, 10, 5),
-            "visit_count": 1,
-            "marketing_opt_in": False
-        },
-        {
-            "phone_masked": "010-****-9012",
-            "first_visit_at": datetime(2026, 10, 7),
-            "last_visit_at": datetime(2026, 10, 7),
-            "visit_count": 1,
-            "marketing_opt_in": True
-        }
-    ]
-
-    stats = {
-        "total": 156,
-        "opted_in": 98,
-        "returning": 45,
-        "new_this_month": 32
-    }
-
-    return templates.TemplateResponse("admin/customers.html", {
-        "request": request,
-        "store": store,
-        "active_menu": "customers",
-        "customers": customers,
-        "stats": stats,
-        "current_page": page,
-        "total_pages": 5
-    })
 
 
 # ============ Tables ============
 
 @router.get("/tables", response_class=HTMLResponse, name="admin_tables")
-async def tables_page(request: Request):
-    """테이블 안내판 페이지"""
-    store = get_current_store(request)
-    if not store:
+async def tables_page(request: Request, db: AsyncSession = Depends(get_db)):
+    store_data = await get_current_store(request, db)
+    if not store_data:
         return RedirectResponse(url="/admin/login", status_code=302)
+
+    store = store_data["store"]
+    settings = store_data["settings"]
 
     return templates.TemplateResponse("admin/tables.html", {
         "request": request,
-        "store": store,
+        "store": {"id": store.id, "name": store.name, "store_code": store.store_code},
         "active_menu": "tables",
         "table_count": 10,
         "start_number": 1,
-        "benefit_text": "리뷰 작성 시 음료 1잔 서비스"
+        "benefit_text": settings.benefit_text if settings else "리뷰 작성 시 음료 1잔 서비스"
     })
 
 
@@ -321,19 +631,22 @@ async def download_tables(
     format: str = "pdf",
     count: int = 10,
     start: int = 1,
-    size: str = "A6"
+    size: str = "A6",
+    db: AsyncSession = Depends(get_db)
 ):
-    """테이블 안내판 다운로드"""
-    store = get_current_store(request)
-    if not store:
+    store_data = await get_current_store(request, db)
+    if not store_data:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+
+    store = store_data["store"]
+    settings = store_data["settings"]
 
     from app.services.signage import SignageConfig, generate_signage_pdf, generate_signage_png
 
     config = SignageConfig(
-        store_name=store.get("name", "매장명"),
-        store_code=store.get("store_code", "TEST"),
-        benefit_text=store.get("benefit_text", "리뷰 작성 시 음료 1잔 서비스"),
+        store_name=store.name,
+        store_code=store.store_code,
+        benefit_text=settings.benefit_text if settings else "리뷰 작성 시 음료 1잔 서비스",
         table_count=count,
         size=size
     )
