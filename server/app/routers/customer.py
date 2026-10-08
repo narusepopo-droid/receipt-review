@@ -24,7 +24,7 @@ from ..review.text_generator import TextGenerator
 
 
 router = APIRouter(tags=["customer"])
-templates = Jinja2Templates(directory="server/app/templates")
+templates = Jinja2Templates(directory="app/templates")
 
 
 # ============================================================
@@ -52,11 +52,11 @@ async def phone_input_page(
         }
     }
 
-    return templates.TemplateResponse("customer/phone.html", {
-        "request": request,
-        "store": store_data,
-        "table_no": table_no,
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="customer/phone.html",
+        context={"store": store_data, "table_no": table_no}
+    )
 
 
 @router.get("/t/{store_code}/{table_no}/keywords", response_class=HTMLResponse)
@@ -85,12 +85,11 @@ async def keywords_page(
         "settings": {}
     }
 
-    return templates.TemplateResponse("customer/keywords.html", {
-        "request": request,
-        "store": store_data,
-        "table_no": table_no,
-        "keywords": keywords,
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="customer/keywords.html",
+        context={"store": store_data, "table_no": table_no, "keywords": keywords}
+    )
 
 
 @router.get("/t/{store_code}/{table_no}/result", response_class=HTMLResponse)
@@ -115,13 +114,11 @@ async def result_page(
         "settings": {}
     }
 
-    return templates.TemplateResponse("customer/result.html", {
-        "request": request,
-        "store": store_data,
-        "table_no": table_no,
-        "review_text": review_text,
-        "receipt_image_url": receipt_image_url,
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="customer/result.html",
+        context={"store": store_data, "table_no": table_no, "review_text": review_text, "receipt_image_url": receipt_image_url}
+    )
 
 
 @router.get("/t/{store_code}/{table_no}/complete", response_class=HTMLResponse)
@@ -147,12 +144,11 @@ async def complete_page(
         }
     }
 
-    return templates.TemplateResponse("customer/complete.html", {
-        "request": request,
-        "store": store_data,
-        "table_no": table_no,
-        "completion_code": completion_code,
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="customer/complete.html",
+        context={"store": store_data, "table_no": table_no, "completion_code": completion_code}
+    )
 
 
 # ============================================================
