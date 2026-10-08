@@ -70,6 +70,7 @@ class StoreSettings(Base):
     text_min_len: Mapped[int] = mapped_column(Integer, default=30)
     text_max_len: Mapped[int] = mapped_column(Integer, default=150)
     benefit_text: Mapped[Optional[str]] = mapped_column(String(200))
+    primary_color: Mapped[Optional[str]] = mapped_column(String(7), default="#03C75A")
 
     assignment_policy: Mapped[str] = mapped_column(
         String(30),
