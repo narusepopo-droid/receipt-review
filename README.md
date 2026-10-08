@@ -110,25 +110,24 @@ agent/
 
 ```bash
 # 필수
-DATABASE_URL=postgresql://user:password@localhost:5432/receipt_review
-SECRET_KEY=your-secret-key-at-least-32-characters
+DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/receiptreview
+SECRET_KEY=32자 이상 무작위 문자열        # 바꾸면 기존 로그인 토큰·가입 비밀번호(예전 방식) 무효
+PHONE_ENC_KEY=32바이트 키                 # 바꾸면 기존 고객 번호 복호화 불가 — 절대 변경 금지
+PHONE_HMAC_KEY=무작위 문자열              # 바꾸면 기존 고객 조회 불가 — 절대 변경 금지
 
-# 휴대폰 번호 암호화 키 (32바이트 base64)
-PHONE_ENC_KEY=your-32-byte-base64-encoded-key
-PHONE_HMAC_KEY=your-hmac-secret-key
+# 운영 서버
+SESSION_HTTPS_ONLY=true
+OPS_USERNAME=admin
+OPS_PASSWORD=운영자 비밀번호              # 기본값 사용 중이면 반드시 변경
 
-# 선택
-DEBUG=false
-LOG_LEVEL=INFO
-
-# 알리고 문자 발송 (Phase 8)
-ALIGO_API_KEY=
-ALIGO_SENDER=
-
-# AWS S3 백업 (Phase 6)
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-AWS_DEFAULT_REGION=ap-northeast-2
+# 홍보 문자·운영 알림 (알리고) — 비어 있으면 모의 발송
+ALIGO_KEY=
+ALIGO_USER_ID=
+ALIGO_SENDER=                              # 알리고에 등록된 발신번호
+ALIGO_OPTOUT_080=                          # 080 무료수신거부 번호
+SMS_COST_SMS=20
+SMS_COST_LMS=50
+OPS_ALERT_PHONE=                           # 에이전트 끊김 알림 받을 번호
 ```
 
 ## 서버 배포 (Ubuntu 24.04)
@@ -209,16 +208,26 @@ sudo crontab -e
 # 추가: 0 3 * * * /var/www/receipt-review/deploy/backup.sh
 ```
 
-## 배포 업데이트
+## 배포 업데이트 (운영 서버)
 
 ```bash
-cd /var/www/receipt-review
-sudo -u www-data git pull
-cd server
-sudo -u www-data .venv/bin/pip install -r requirements.txt
-sudo -u www-data .venv/bin/alembic upgrade head
+# 이 PC에서 (열쇠: ~/.ssh/receipt-review)
+ssh -i ~/.ssh/receipt-review ubuntu@13.124.130.55
+cd ~/receipt-review && git pull origin main
 sudo systemctl restart receipt-review
+cd server && venv/bin/python scripts/e2e_smoke.py      # 10개 항목 점검 (임시 매장 만들고 지움)
 ```
+- 새 테이블은 서버 시작 시 자동 생성. 기존 테이블 칼럼이 모델과 다르면 로그에 "DB 칼럼 누락" 경고
+- DB 백업: 매일 04:30 (KST) `/home/ubuntu/backups`, 14일 보관 (`deploy/backup.sh`)
+
+## 에이전트 빌드·배포
+
+```powershell
+# 버전: agent\ReceiptTap.App\ReceiptTap.App.csproj 의 <Version>
+.\scripts\release.ps1                                   # dist\ 에 Setup.exe + zip
+.\scripts\release.ps1 -Publish -ZipOnly -Notes "내용"     # 서버 업로드 + 최신 지정 (자동 업데이트 반영)
+```
+설치·문제 해결: `docs/pos-install-guide.md`
 
 ## API 문서
 
@@ -230,7 +239,8 @@ sudo systemctl restart receipt-review
 
 ```bash
 cd server
-pytest
+pytest                                     # 서버 전체 (SQLite 메모리 DB)
+python scripts/make_sample_escpos.py -o out/sample.bin   # 샘플 ESC/POS 영수증
 ```
 
 ## 라이선스
