@@ -37,6 +37,9 @@ apscheduler>=3.10.0
 # HTTP Client (for external APIs)
 httpx>=0.25.0
 
+# AI 리뷰 문장 (Phase 9)
+anthropic>=1.0.0
+
 # File handling
 python-multipart>=0.0.6
 aiofiles>=23.2.0

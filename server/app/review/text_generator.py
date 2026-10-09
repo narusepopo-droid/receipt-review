@@ -221,6 +221,23 @@ class TextGenerator:
 
         custom_templates = bool(settings and settings.templates)
 
+        # AI 문장 (매장에서 켠 경우) → 실패하면 아래 기존 방식
+        try:
+            from app.services.otp import get_options
+            from app.review import ai_text
+            if self.db is not None and (await get_options(self.db, store_id)).ai_text and ai_text.is_available():
+                phrases = [self._keyword_to_phrase(k, keyword_phrases) for k in (selected_keywords or [])[:3]]
+                for _ in range(2):   # 두 번째 시도는 문장이 겹쳤을 때만 (실패면 바로 기존 방식 → 손님 대기 최소화)
+                    text = await ai_text.generate(menus, phrases, min_len, max_len)
+                    if not text:
+                        break
+                    if not await self.is_duplicate(store_id, text):
+                        await self.record_text(store_id, text)
+                        return text
+        except Exception as e:  # AI 쪽 문제로 손님 흐름이 멈추면 안 됨
+            import logging
+            logging.getLogger(__name__).warning("AI text failed: %s", e)
+
         def make() -> str:
             if custom_templates:
                 tpl = random.choice(templates)
