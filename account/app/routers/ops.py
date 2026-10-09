@@ -7,6 +7,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import licensing, orders, payments
+from app.config import settings
 from app.db import get_db
 from app.models import (Account, License, LicenseLog, LicenseStatus, NotificationLog, Order, OrderItem, OrderStatus,
                         Plan, PlanKind, Product, Promotion, SignupPolicy, Store, Unit, now_utc)
@@ -188,6 +189,7 @@ async def license_action(request: Request, lid: int, db: AsyncSession = Depends(
     f = await request.form()
     action = f.get("action")
     actor = f"operator:{op.email}"
+    account_id = lic.account_id
     reason = str(f.get("reason", "")).strip()
     try:
         if action == "approve":                  # 승인 = 무료(무제한) 지급
@@ -195,6 +197,15 @@ async def license_action(request: Request, lid: int, db: AsyncSession = Depends(
                                                         Plan.kind == PlanKind.FREE))).scalars().first()
             await licensing.apply_plan(db, lic, plan, actor)
             msg = "승인했습니다 (무료·무제한)."
+            acc_ = await db.get(Account, lic.account_id)
+            prod_ = await db.get(Product, lic.product_id)
+            store_ = await db.get(Store, lic.store_id) if lic.store_id else None
+            if acc_ and acc_.phone:
+                from app.notify import send_sms
+                target = prod_.name + (f"({store_.name})" if store_ else "")
+                await send_sms(acc_.phone, f"[광고토대왕] {target} 이용이 승인되었습니다. "
+                                           f"마이페이지에서 설치 파일을 받아 이용해 주세요. {settings.BASE_URL}/my")
+                msg += " 승인 안내 문자를 보냈습니다."
         elif action == "grant":                  # 요금제 지급 (결제 없이)
             plan = await db.get(Plan, _int(f.get("plan_id")))
             if not plan or plan.product_id != lic.product_id:
@@ -205,7 +216,7 @@ async def license_action(request: Request, lid: int, db: AsyncSession = Depends(
             months, days = _int(f.get("months"), 0), _int(f.get("days"), 0)
             base = licensing.aware(lic.expires_at) if lic.expires_at else None
             if base is None:
-                raise licensing.LicenseError("무제한 이용권은 연장할 필요가 없습니다")
+                raise licensing.LicenseError("무제한 이용권은 연장할 필요가 없어요. 기간을 정하려면 '만료일 지정'이나 '요금제 지급'을 쓰세요.")
             base = max(base, now_utc())
             new = licensing._add_months(base, months) + timedelta(days=days)
             await licensing.set_expiry(db, lic, new, actor, reason or f"+{months}개월 {days}일")
@@ -243,7 +254,7 @@ async def license_action(request: Request, lid: int, db: AsyncSession = Depends(
     except licensing.LicenseError as e:
         await db.rollback()
         flash(request, str(e), "err")
-    return RedirectResponse(url(f"/ops/accounts/{lic.account_id}#lic{lid}"), status_code=303)
+    return RedirectResponse(url(f"/ops/accounts/{account_id}#lic{lid}"), status_code=303)
 
 
 async def _sync_plma(db: AsyncSession, lic: License):

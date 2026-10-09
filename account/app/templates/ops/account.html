@@ -24,7 +24,7 @@
           {% if l.next_charge_at %} · 다음 청구 {{ l.next_charge_at|kst }}{% endif %}
           {% if l.commitment_ends_at %} · 약정 {{ l.commitment_ends_at|kst }}까지{% endif %}</div>
         <div class="meta">PC: {{ l.device_name or ('등록됨' if l.device_id else '미등록') }}{% if l.device_bound_at %} ({{ l.device_bound_at|kst }}){% endif %}
-          {% if l.store and l.store.review_store_id %} · 영수증리뷰 매장 #{{ l.store.review_store_id }}{% endif %}</div>
+          {% if l.store and l.store.review_store_id %} · <a href="{{ settings.REVIEW_PUBLIC_URL }}/ops/stores/{{ l.store.review_store_id }}" target="_blank">영수증리뷰 매장 #{{ l.store.review_store_id }} ↗</a>{% elif l.store %} · <span class="faint">포스 첫 로그인 때 영수증리뷰 매장이 자동으로 만들어져요</span>{% endif %}</div>
       </div>
       <div class="acts">
         {% if st == 'pending' %}<form method="post" action="{{ url('/ops/licenses/' ~ l.id) }}"><input type="hidden" name="action" value="approve"><button class="btn sm brand">승인</button></form>{% endif %}
@@ -35,7 +35,7 @@
       <div class="card-head"><h2>{{ l.product.name }}{% if l.store %} · {{ l.store.name }}{% endif %}</h2><button class="btn sm ghost" onclick="this.closest('.modal').classList.remove('open')">닫기</button></div>
       <div class="card-body stack">
         <form method="post" action="{{ url('/ops/licenses/' ~ l.id) }}" class="row"><input type="hidden" name="action" value="grant">
-          <select class="in sm" name="plan_id" style="flex:1">{% for p in plans if p.product_id == l.product_id %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select>
+          <select class="in sm" name="plan_id" style="flex:1">{% for p in plans if p.product_id == l.product_id %}<option value="{{ p.id }}" {{ 'selected' if p.kind.value == 'prepaid' and p.months == 12 }}>{{ p.name }}{{ '' if p.public else ' (비공개)' }}</option>{% endfor %}</select>
           <button class="btn sm primary">요금제 지급</button></form>
         <p class="small faint">결제 없이 요금제를 지급합니다. 기간권은 남은 기간 뒤에 이어 붙어요.</p>
         <form method="post" action="{{ url('/ops/licenses/' ~ l.id) }}" class="row"><input type="hidden" name="action" value="extend">

@@ -50,7 +50,7 @@
       </div>
       <div class="grid g2">
         <div class="field"><label class="f">쿠폰 코드 (선택)</label><input class="in" name="code" placeholder="비우면 자동 적용" style="text-transform:uppercase"></div>
-        <div class="field" id="minField"><label class="f">최소 상품 수</label><input class="in" name="min_products" type="number" min="2"></div>
+        <div class="field" id="minField"><label class="f">최소 상품 수</label><input class="in" name="min_products" type="number" min="1"></div>
       </div>
       <div class="field"><label class="f">대상 상품 (선택 안 하면 전체)</label><div class="row">
         {% for p in products %}<label class="check"><input type="checkbox" name="product_codes" value="{{ p.code }}"><span>{{ p.name }}</span></label>{% endfor %}</div></div>
@@ -73,7 +73,8 @@
 <script>
 const pr = document.getElementById('prModal'), g = document.getElementById('prForm');
 function syncK(){ const k = g.kind.value; document.getElementById('valLabel').textContent = k === 'amount' ? '할인 금액 (원)' : '할인율 (%)';
-  document.getElementById('minField').style.display = k === 'bundle' ? '' : 'none'; }
+  document.getElementById('minField').style.display = k === 'bundle' ? '' : 'none';
+  if (k === 'bundle' && (+g.min_products.value || 0) < 2) g.min_products.value = 2; }
 function editPromo(p){
   document.getElementById('prTitle').textContent = p.id ? '프로모션 수정' : '프로모션 만들기';
   for (const k of ['id','name','code','kind','value','min_products','starts_at','ends_at','max_uses']) g[k].value = p[k] ?? '';

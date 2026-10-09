@@ -128,9 +128,10 @@ async def apply_plan(db: AsyncSession, lic: License, plan: Plan, actor: str, *, 
         if not lic.commitment_ends_at or aware(lic.commitment_ends_at) < now:
             lic.commitment_ends_at = _add_months(now, plan.months or 1)
     else:  # PREPAID or FREE N개월
-        if lic.expires_at is None and lic.status == LicenseStatus.ACTIVE and lic.plan and \
-                lic.plan.kind in (PlanKind.LIFETIME, PlanKind.FREE):
-            pass  # 이미 무제한이면 그대로 (기간권을 사도 줄어들지 않음)
+        cur_plan = await db.get(Plan, lic.plan_id) if lic.plan_id else None
+        if lic.expires_at is None and lic.status == LicenseStatus.ACTIVE and cur_plan and \
+                cur_plan.kind == PlanKind.LIFETIME:
+            pass  # 영구권이면 그대로 (기간권을 사도 줄어들지 않음). 무료 무제한은 기간권으로 바뀜
         else:
             lic.expires_at = _add_months(base, months or plan.months or 1)
         lic.autopay = False
@@ -149,6 +150,8 @@ async def apply_plan(db: AsyncSession, lic: License, plan: Plan, actor: str, *, 
 async def set_expiry(db: AsyncSession, lic: License, expires_at: Optional[datetime], actor: str, reason: str = ""):
     before = _snap(lic)
     lic.expires_at = expires_at
+    if lic.note == "plma-import":
+        lic.note = ""
     if lic.status in (LicenseStatus.PENDING, LicenseStatus.SUSPENDED) and lic.note == "auto-expired":
         lic.status = LicenseStatus.ACTIVE
         lic.note = ""
@@ -158,6 +161,8 @@ async def set_expiry(db: AsyncSession, lic: License, expires_at: Optional[dateti
 async def set_status(db: AsyncSession, lic: License, status: LicenseStatus, actor: str, reason: str = ""):
     before = _snap(lic)
     lic.status = status
+    if lic.note == "plma-import":
+        lic.note = ""
     if status == LicenseStatus.ACTIVE and lic.note == "auto-expired":
         lic.note = ""
     if status == LicenseStatus.ACTIVE and not lic.starts_at:
@@ -207,6 +212,8 @@ async def run_expiry_jobs(db: AsyncSession, send_sms, now: Optional[datetime] = 
     for lic in rows:
         st = state(lic, now)
         if st == "expired":
+            if lic.note == "plma-import":
+                continue   # 플마에서 가져온 이용권은 다음 로그인 때 플마 기준으로 다시 맞춤
             if lic.autopay and not lic.autopay_cancel_requested:
                 continue   # 자동결제 매장은 청구 작업이 처리 (실패 시 그쪽에서 정지)
             lic.status = LicenseStatus.SUSPENDED

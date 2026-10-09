@@ -156,6 +156,33 @@ async def login(
     )
 
 
+@router.get("/sso", name="admin_sso")
+async def sso(request: Request, t: str = "", db: AsyncSession = Depends(get_db)):
+    """계정 마이페이지 [매장 관리] → 다시 로그인 없이 점주 관리 화면 (1분짜리 서명 토큰)"""
+    from itsdangerous import BadSignature, URLSafeTimedSerializer
+    from app.config import settings as _cfg
+    from app.services import account_link
+    if not _cfg.INTERNAL_SECRET:
+        return RedirectResponse(url="/admin/login", status_code=302)
+    try:
+        data = URLSafeTimedSerializer(_cfg.INTERNAL_SECRET, salt="review-sso").loads(t, max_age=60)
+    except BadSignature:
+        return templates.TemplateResponse(request=request, name="admin/login.html",
+                                          context={"error": "바로가기 링크가 만료되었습니다. 마이페이지에서 다시 눌러 주세요."})
+    ids, pick = [], None
+    for s_ in data.get("stores", []):
+        st = await account_link.ensure_review_store(db, s_, data.get("email", ""))
+        ids.append(st.id)
+        if s_["id"] == data.get("pick"):
+            pick = st.id
+    if not ids:
+        return RedirectResponse(url="/admin/login", status_code=302)
+    request.session.clear()
+    request.session["owner_store_ids"] = ids
+    request.session["store_id"] = pick or ids[0]
+    return RedirectResponse(url="/admin/dashboard", status_code=302)
+
+
 @router.get("/choose-store", response_class=HTMLResponse, name="admin_choose_store")
 async def choose_store(request: Request, db: AsyncSession = Depends(get_db)):
     ids = request.session.get("owner_store_ids") or []

@@ -316,6 +316,40 @@ async def download(request: Request, license_id: int, db: AsyncSession = Depends
     return RedirectResponse(product.download_url, status_code=303)
 
 
+@router.get("/manage/{license_id}")
+async def manage_store(request: Request, license_id: int, db: AsyncSession = Depends(get_db)):
+    """영수증리뷰 점주 관리 화면으로 바로 이동 (다시 로그인 없이). 1분짜리 서명 토큰"""
+    from itsdangerous import URLSafeTimedSerializer
+    acc = await require_account(request, db)
+    lic = await _my_license(db, acc, license_id)
+    product = await db.get(Product, lic.product_id)
+    if product.code != "receipt_review" or not licensing.usable(lic) or not lic.store_id:
+        flash(request, "이용 중인 영수증리뷰 매장만 관리할 수 있어요.", "err")
+        return RedirectResponse(url("/my"), status_code=303)
+    rows = (await db.execute(select(License).where(License.account_id == acc.id,
+                                                   License.product_id == product.id))).scalars().all()
+    stores = []
+    for l in rows:
+        st = await db.get(Store, l.store_id) if l.store_id else None
+        if st and not st.archived and licensing.usable(l):
+            stores.append({"id": st.id, "name": st.name, "review_store_id": st.review_store_id, "usable": True})
+    token = URLSafeTimedSerializer(settings.INTERNAL_SECRET, salt="review-sso").dumps(
+        {"email": acc.email, "stores": stores, "pick": lic.store_id})
+    return RedirectResponse(f"{settings.REVIEW_PUBLIC_URL.rstrip('/')}/admin/sso?t={token}", status_code=303)
+
+
+@router.post("/password-reset")
+async def password_reset(request: Request, db: AsyncSession = Depends(get_db)):
+    from app import firebase
+    acc = await require_account(request, db)
+    try:
+        await firebase.send_password_reset(acc.email)
+        flash(request, f"{acc.email} 로 비밀번호 재설정 메일을 보냈어요. 메일함(스팸함 포함)을 확인해 주세요.")
+    except firebase.FirebaseError as e:
+        flash(request, str(e), "err")
+    return RedirectResponse(url("/my/profile"), status_code=303)
+
+
 @router.get("/orders")
 async def order_list(request: Request, db: AsyncSession = Depends(get_db)):
     acc = await require_account(request, db)

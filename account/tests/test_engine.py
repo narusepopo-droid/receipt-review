@@ -130,7 +130,11 @@ async def test_lifetime_and_free_unlimited(db):
     lic = await licensing.get_or_create(db, acc, pm, None)
     await licensing.apply_plan(db, lic, await _plan(db, pm, PlanKind.FREE), "test")
     assert lic.expires_at is None and licensing.state(lic) == "active"
-    # 무제한 상태에서 기간권을 사도 줄어들지 않음
+    # 무료 무제한에서 기간권을 사면 기간권으로 바뀜 (유료 전환)
+    await licensing.apply_plan(db, lic, await _plan(db, pm, PlanKind.PREPAID, 12), "test")
+    assert lic.expires_at is not None
+    # 영구권은 기간권을 사도 줄어들지 않음
+    await licensing.apply_plan(db, lic, await _plan(db, pm, PlanKind.LIFETIME), "test")
     await licensing.apply_plan(db, lic, await _plan(db, pm, PlanKind.PREPAID, 12), "test")
     assert lic.expires_at is None
 

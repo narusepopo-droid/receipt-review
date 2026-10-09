@@ -80,6 +80,9 @@ async def login(request: Request, email: str = Form(...), password: str = Form(.
     acc = await upsert_account(db, res["localId"], res.get("email", email))
     if acc.blocked:
         return render(request, "auth/login.html", next=next, email=email, error="사용이 중지된 계정입니다.")
+    if res.get("idToken"):
+        from app.plma import import_plma
+        await import_plma(db, acc, res["localId"], res["idToken"])
     await db.commit()
     request.session.clear()
     request.session["aid"] = acc.id
@@ -95,6 +98,9 @@ async def logout(request: Request):
 
 @router.get("/signup")
 async def signup_page(request: Request, product: str = "", db: AsyncSession = Depends(get_db)):
+    if await current_account(request, db):
+        flash(request, "이미 로그인되어 있어요. 다른 상품은 아래에서 바로 신청할 수 있어요.", "info")
+        return RedirectResponse(url("/my"), status_code=303)
     products = (await db.execute(select(Product).where(Product.active.is_(True)).order_by(Product.sort))).scalars().all()
     return render(request, "auth/signup.html", products=products, pre=product, form={})
 
@@ -154,6 +160,16 @@ async def signup(request: Request, db: AsyncSession = Depends(get_db)):
         return RedirectResponse(url(f"/my/buy/{lic.id}"), status_code=303)
     flash(request, "가입이 완료되었습니다. 담당자 승인 후 바로 이용하실 수 있어요.", "ok")
     return RedirectResponse(url("/my"), status_code=303)
+
+
+@router.get("/terms")
+async def terms(request: Request):
+    return render(request, "auth/terms.html")
+
+
+@router.get("/privacy")
+async def privacy(request: Request):
+    return render(request, "auth/privacy.html")
 
 
 @router.get("/reset")

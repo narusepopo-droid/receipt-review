@@ -43,6 +43,7 @@ h3 { font-size: 16px; font-weight: 700; }
 .nowrap { white-space: nowrap; }
 .num { font-variant-numeric: tabular-nums; }
 .hidden { display: none !important; }
+.mobile-only { display: none; }
 
 /* ── 상단바 (점주) ── */
 .topbar { background: rgba(255,255,255,.85); backdrop-filter: saturate(180%) blur(12px); border-bottom: 1px solid var(--line);
@@ -127,6 +128,7 @@ h3 { font-size: 16px; font-weight: 700; }
 .btn.lg { height: 52px; padding: 0 24px; font-size: 16px; border-radius: 12px; }
 .btn.block { width: 100%; }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
+.btn[disabled]:hover { background: #fff; }
 
 /* 폼 */
 label.f { display: block; font-size: 13px; font-weight: 650; color: var(--ink-2); margin-bottom: 6px; }
@@ -261,7 +263,12 @@ table.t tr.link:hover td { background: #fafbff; }
   .side .logo { padding: 6px 10px; width: 100%; }
   .ops { flex-direction: column; }
   .ops-main { margin-left: 0; }
-  .topnav { display: none; }
+  .topbar .inner { flex-wrap: wrap; height: auto; padding: 10px 16px 0; gap: 6px 14px; }
+  .topnav { order: 3; flex: 0 0 100%; overflow-x: auto; padding-bottom: 6px; }
+  .topnav a { white-space: nowrap; }
+  .topbar .me { margin-left: auto; }
+  .topbar .me .nowrap { display: none; }
+  .auth-form .mobile-only { display: inline-flex; margin-bottom: 26px; }
   .summary { position: static; }
 }
 @media (max-width: 560px) {

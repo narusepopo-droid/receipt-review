@@ -99,10 +99,12 @@ async function refresh() {
     $('#monthlyNote').classList.toggle('hidden', !q.lines.some(l => l.monthly));
     $('#promoMsg').textContent = promo ? (q.promo_error || '쿠폰이 적용되었어요') : '';
     $('#promoMsg').style.color = q.promo_error ? 'var(--red)' : 'var(--green)';
+    if (q.promo_error) promo = '';   // 잘못된 쿠폰은 빼고 결제 진행
   } catch (e) { $('#promoMsg').textContent = e.message; }
 }
 document.addEventListener('change', e => { if (e.target.matches('.plan input')) refresh(); });
 $('#applyPromo').onclick = () => { promo = $('#promo').value.trim(); refresh(); };
+$('#promo').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#applyPromo').click(); } });
 $('#payBtn').onclick = async () => {
   const btn = $('#payBtn'); btn.disabled = true;
   try {

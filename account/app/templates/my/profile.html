@@ -19,7 +19,7 @@
   <div>
     <div class="card"><div class="card-head"><h2>비밀번호</h2></div><div class="card-body">
       <p class="small muted mb">비밀번호는 플레이스마스터 PRO·영수증리뷰 프로그램에서도 똑같이 쓰여요.</p>
-      <form method="post" action="{{ url('/reset') }}"><input type="hidden" name="email" value="{{ acc.email }}">
+      <form method="post" action="{{ url('/my/password-reset') }}">
         <button class="btn">비밀번호 재설정 메일 받기</button></form>
     </div></div>
     <div class="card"><div class="card-head"><h2>자동결제 카드</h2></div><div class="card-body">

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+{% include "_head.html" %}
+<title>플레이스 마스터 · 네이버 플레이스 순위 추적 & 영수증 리뷰 자동화</title>
+<meta name="description" content="네이버 플레이스 순위 추적(플레이스 마스터 PRO)과 영수증 리뷰 자동화(영수증리뷰)를 하나의 계정으로.">
+{% set PLMA_URL = 'https://placemaster.co.kr/' %}
+{% set RR_URL = 'https://placemaster.co.kr/receipt-review.html' %}
+<style>
+  :root { --g: #03C75A; --g2: #00d68f; --gold: #FFC93C; --night: #07110c; }
+  body { background: var(--night); }
+  .h-top { position: absolute; inset: 0 0 auto 0; z-index: 30; }
+  .h-top .inner { max-width: 1200px; margin: 0 auto; padding: 0 24px; height: 72px; display: flex; align-items: center; gap: 28px; }
+  .h-logo { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 800; font-size: 18px; letter-spacing: -0.03em; }
+  .h-logo:hover { text-decoration: none; }
+  .h-logo .mk { width: 32px; height: 32px; border-radius: 10px; background: var(--g); display: grid; place-items: center; font-weight: 900; color: #fff; box-shadow: 0 6px 18px rgba(3,199,90,.4); }
+  .h-nav { display: flex; gap: 6px; flex: 1; }
+  .h-nav a { color: rgba(255,255,255,.72); font-weight: 600; font-size: 14px; padding: 8px 12px; border-radius: 8px; }
+  .h-nav a:hover { color: #fff; background: rgba(255,255,255,.08); text-decoration: none; }
+  .h-act { display: flex; gap: 8px; align-items: center; }
+  .h-btn { display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 18px; border-radius: 11px; font-weight: 700; font-size: 14px; border: 1px solid rgba(255,255,255,.18); color: #fff; transition: all .2s; }
+  .h-btn:hover { text-decoration: none; background: rgba(255,255,255,.08); }
+  .h-btn.solid { background: var(--g); border-color: var(--g); box-shadow: 0 8px 24px rgba(3,199,90,.35); }
+  .h-btn.solid:hover { filter: brightness(1.08); background: var(--g); }
+  .h-btn.lg { height: 54px; padding: 0 26px; font-size: 16px; border-radius: 14px; }
+  .h-btn.white { background: #fff; color: #0b0f0d; border-color: #fff; }
+  .h-btn.white:hover { background: #f1f5f2; }
+  .h-btn .arr { transition: transform .2s; }
+  .h-btn:hover .arr { transform: translateX(3px); }
+
+  /* ── 히어로 슬라이더 ── */
+  .hero { position: relative; min-height: 100vh; min-height: 100svh; overflow: hidden; color: #fff; }
+  .slide { position: absolute; inset: 0; display: flex; align-items: center; opacity: 0; visibility: hidden; transition: opacity .9s ease, visibility 0s .9s; }
+  .slide.on { opacity: 1; visibility: visible; transition: opacity .9s ease; z-index: 2; }
+  .slide .bg { position: absolute; inset: 0; transform: scale(1.08); transition: transform 7s ease-out; }
+  .slide.on .bg { transform: scale(1); }
+  .s-plma .bg { background: radial-gradient(900px 600px at 15% 20%, rgba(3,199,90,.35), transparent 60%), radial-gradient(800px 600px at 90% 90%, rgba(0,214,143,.22), transparent 60%), linear-gradient(160deg, #06140d, #0a1f15 55%, #04100a); }
+  .s-rr .bg { background: radial-gradient(900px 600px at 85% 15%, rgba(255,201,60,.26), transparent 60%), radial-gradient(800px 600px at 10% 90%, rgba(3,199,90,.25), transparent 60%), linear-gradient(160deg, #14110a, #1a1608 50%, #0b0d08); }
+  .grid-lines { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px); background-size: 56px 56px; mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%); -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%); }
+  .s-wrap { position: relative; max-width: 1200px; margin: 0 auto; padding: 110px 24px 120px; width: 100%; display: grid; grid-template-columns: 1.05fr 1fr; gap: 56px; align-items: center; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--g2); background: rgba(3,199,90,.12); border: 1px solid rgba(3,199,90,.3); padding: 6px 12px; border-radius: 99px; }
+  .s-rr .eyebrow { color: var(--gold); background: rgba(255,201,60,.1); border-color: rgba(255,201,60,.3); }
+  .eyebrow i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 0 currentColor; animation: ping 2s infinite; }
+  @keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(3,199,90,.6); } 100% { box-shadow: 0 0 0 10px rgba(3,199,90,0); } }
+  .s-title { font-size: clamp(36px, 5.2vw, 64px); line-height: 1.12; font-weight: 900; letter-spacing: -0.045em; margin-top: 20px; }
+  .s-title em { font-style: normal; background: linear-gradient(90deg, #03C75A, #7cf5b9); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .s-rr .s-title em { background: linear-gradient(90deg, #FFC93C, #ffe9a6); -webkit-background-clip: text; background-clip: text; }
+  .s-sub { font-size: 18px; color: rgba(255,255,255,.72); margin-top: 20px; max-width: 520px; line-height: 1.7; }
+  .s-cta { display: flex; gap: 12px; margin-top: 34px; flex-wrap: wrap; }
+  .s-chips { display: flex; gap: 18px; margin-top: 34px; flex-wrap: wrap; color: rgba(255,255,255,.6); font-size: 14px; }
+  .s-chips b { color: #fff; font-size: 20px; display: block; letter-spacing: -0.02em; }
+  /* 글자 등장 */
+  .rise { opacity: 0; transform: translateY(26px); }
+  .slide.on .rise { animation: rise .8s cubic-bezier(.2,.8,.2,1) forwards; }
+  .slide.on .rise.d1 { animation-delay: .1s; } .slide.on .rise.d2 { animation-delay: .22s; } .slide.on .rise.d3 { animation-delay: .34s; }
+  .slide.on .rise.d4 { animation-delay: .46s; } .slide.on .rise.d5 { animation-delay: .58s; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+  .vis { opacity: 0; transform: translateY(30px) scale(.97); }
+  .slide.on .vis { animation: rise 1s .25s cubic-bezier(.2,.8,.2,1) forwards; }
+
+  /* 플마 비주얼: 순위 보드 */
+  .board { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 22px; padding: 22px; backdrop-filter: blur(14px); box-shadow: 0 30px 80px rgba(0,0,0,.45); }
+  .board-h { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 15px; }
+  .live { font-size: 12px; color: var(--g2); display: flex; align-items: center; gap: 6px; }
+  .live i { width: 7px; height: 7px; border-radius: 50%; background: var(--g2); animation: blink 1.2s infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  .rows { position: relative; margin-top: 16px; height: 300px; }
+  .rk { position: absolute; left: 0; right: 0; height: 52px; display: flex; align-items: center; gap: 14px; padding: 0 14px; border-radius: 12px; background: rgba(255,255,255,.04); transition: top .8s cubic-bezier(.3,.9,.3,1), background .4s; }
+  .rk.up { background: rgba(3,199,90,.16); }
+  .rk .no { width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,.08); display: grid; place-items: center; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .rk.top .no { background: var(--g); }
+  .rk .kw { flex: 1; font-weight: 650; font-size: 14px; }
+  .rk .kw small { display: block; color: rgba(255,255,255,.5); font-weight: 500; font-size: 12px; }
+  .rk .chg { font-size: 12px; font-weight: 800; min-width: 52px; text-align: right; }
+  .chg.u { color: #4ade80; } .chg.d { color: #f87171; } .chg.n { color: var(--gold); }
+  .spark { margin-top: 16px; height: 70px; }
+  .spark path { stroke-dasharray: 600; stroke-dashoffset: 600; }
+  .slide.on .spark path { animation: draw 2.4s .6s ease forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+
+  /* 영수증리뷰 비주얼: 폰 + 영수증 + 리뷰 */
+  .rr-vis { position: relative; height: 520px; }
+  .phone { position: absolute; right: 40px; top: 0; width: 260px; height: 520px; border-radius: 40px; background: #0d0d0d; border: 1px solid rgba(255,255,255,.14); box-shadow: 0 40px 90px rgba(0,0,0,.6), inset 0 0 0 7px #1d1d1d; padding: 16px; overflow: hidden; }
+  .phone .notch { width: 90px; height: 22px; border-radius: 0 0 14px 14px; background: #1d1d1d; margin: -16px auto 10px; }
+  .scr { background: #fff; border-radius: 24px; height: calc(100% - 16px); color: #111; padding: 16px 14px; overflow: hidden; position: relative; }
+  .scr .nv { display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 13px; color: var(--g); }
+  .scr .nv b { background: var(--g); color: #fff; border-radius: 4px; padding: 1px 5px; font-size: 11px; }
+  .stars { margin-top: 12px; color: #f5b700; font-size: 20px; letter-spacing: 2px; }
+  .stars span { display: inline-block; opacity: 0; transform: scale(.3); }
+  .slide.on .stars span { animation: pop .4s cubic-bezier(.3,1.6,.5,1) forwards; }
+  .slide.on .stars span:nth-child(1) { animation-delay: 1.6s; } .slide.on .stars span:nth-child(2) { animation-delay: 1.7s; }
+  .slide.on .stars span:nth-child(3) { animation-delay: 1.8s; } .slide.on .stars span:nth-child(4) { animation-delay: 1.9s; }
+  .slide.on .stars span:nth-child(5) { animation-delay: 2s; }
+  @keyframes pop { to { opacity: 1; transform: none; } }
+  .photos { display: flex; gap: 6px; margin-top: 12px; }
+  .photos div { flex: 1; height: 62px; border-radius: 10px; background: linear-gradient(135deg, #ffd9a8, #ff9f6b); opacity: 0; }
+  .photos div:nth-child(2) { background: linear-gradient(135deg, #c8f3d9, #5fd49a); }
+  .slide.on .photos div { animation: pop .5s 2.2s forwards; }
+  .slide.on .photos div:nth-child(2) { animation-delay: 2.35s; }
+  .typed { margin-top: 12px; font-size: 13px; line-height: 1.6; min-height: 84px; border: 1.5px solid #e7e7e7; border-radius: 12px; padding: 10px; }
+  .typed .cur { display: inline-block; width: 2px; height: 14px; background: var(--g); vertical-align: -2px; animation: blink .8s infinite; }
+  .submit { margin-top: 12px; height: 42px; border-radius: 10px; background: var(--g); color: #fff; font-weight: 800; display: grid; place-items: center; font-size: 14px; transform: scale(.98); opacity: .5; transition: all .3s; }
+  .submit.ready { opacity: 1; transform: none; box-shadow: 0 8px 20px rgba(3,199,90,.35); }
+  .done { position: absolute; inset: 0; background: rgba(255,255,255,.96); display: grid; place-items: center; text-align: center; opacity: 0; transition: opacity .4s; }
+  .done.show { opacity: 1; }
+  .done .ck { width: 64px; height: 64px; border-radius: 50%; background: var(--g); color: #fff; font-size: 32px; display: grid; place-items: center; margin: 0 auto 10px; transform: scale(.5); transition: transform .5s cubic-bezier(.3,1.6,.5,1); }
+  .done.show .ck { transform: none; }
+  .receipt { position: absolute; left: 10px; top: 60px; width: 210px; background: #fffdf7; color: #222; font-family: 'D2Coding', ui-monospace, Consolas, monospace; font-size: 11.5px; line-height: 1.7; padding: 16px 16px 22px; border-radius: 4px; box-shadow: 0 30px 60px rgba(0,0,0,.5); transform: rotate(-6deg); clip-path: inset(0 0 100% 0); }
+  .slide.on .receipt { animation: print 1.4s .5s steps(14) forwards; }
+  @keyframes print { to { clip-path: inset(0 0 0 0); } }
+  .receipt::after { content: ""; position: absolute; left: 0; right: 0; bottom: -8px; height: 10px; background: radial-gradient(circle at 5px 0, transparent 5px, #fffdf7 5.5px) -5px 0/10px 10px repeat-x; }
+  .receipt .c { text-align: center; font-weight: 700; }
+  .receipt .r { display: flex; justify-content: space-between; }
+  .receipt hr { border: 0; border-top: 1px dashed #bbb; margin: 6px 0; }
+  .qr-chip { position: absolute; left: 60px; bottom: 30px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(10px); border-radius: 16px; padding: 12px 14px; display: flex; gap: 12px; align-items: center; font-size: 13px; opacity: 0; }
+  .slide.on .qr-chip { animation: rise .8s 1.2s forwards; }
+  .qr-chip .q { width: 44px; height: 44px; border-radius: 8px; background: conic-gradient(#fff 0 25%, #111 0 50%, #fff 0 75%, #111 0) 0 0/11px 11px; border: 3px solid #fff; }
+
+  /* 슬라이드 표시 */
+  .tabs-h { position: absolute; left: 0; right: 0; bottom: 34px; z-index: 10; }
+  .tabs-h .inner { max-width: 1200px; margin: 0 auto; padding: 0 24px; display: flex; gap: 12px; align-items: center; }
+  .tab-h { flex: 0 0 220px; text-align: left; background: none; border: 0; color: rgba(255,255,255,.55); font: inherit; font-weight: 700; font-size: 14px; cursor: pointer; padding: 0 0 10px; position: relative; }
+  .tab-h.on { color: #fff; }
+  .tab-h::before, .tab-h i { content: ""; position: absolute; left: 0; bottom: 0; height: 3px; border-radius: 3px; }
+  .tab-h::before { right: 0; background: rgba(255,255,255,.15); }
+  .tab-h i { width: 0; background: var(--g); }
+  .tab-h[data-i="1"] i { background: var(--gold); }
+  .tab-h.on i { animation: fill var(--dur, 7s) linear forwards; }
+  .hero.paused .tab-h.on i { animation-play-state: paused; }
+  @keyframes fill { to { width: 100%; } }
+  .arrows { margin-left: auto; display: flex; gap: 8px; }
+  .arrows button { width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.04); color: #fff; font-size: 18px; cursor: pointer; transition: background .2s; }
+  .arrows button:hover { background: rgba(255,255,255,.12); }
+
+  .h-foot { background: #050a07; color: rgba(255,255,255,.45); font-size: 13px; }
+  .h-foot .inner { max-width: 1200px; margin: 0 auto; padding: 28px 24px; display: flex; gap: 18px; flex-wrap: wrap; justify-content: space-between; }
+  .h-foot a { color: rgba(255,255,255,.65); }
+
+  @media (max-width: 960px) {
+    .h-nav { display: none; }
+    .s-wrap { grid-template-columns: 1fr; gap: 34px; padding: 96px 20px 120px; text-align: left; }
+    .s-sub { font-size: 16px; }
+    .board .rows { height: 250px; }
+    .rk { height: 44px; }
+    .rr-vis { height: 400px; }
+    .phone { width: 210px; height: 400px; right: 0; }
+    .receipt { width: 175px; font-size: 10px; left: 0; top: 30px; }
+    .qr-chip { display: none; }
+    .tab-h { flex: 1; }
+    .arrows { display: none; }
+    .hero { min-height: auto; }
+    .slide { position: relative; display: none; }
+    .slide.on { display: flex; }
+    .s-chips { gap: 14px; }
+  }
+  @media (max-width: 520px) {
+    .h-act .h-btn { height: 38px; padding: 0 12px; font-size: 13px; }
+    .h-logo { font-size: 16px; }
+    .s-cta .h-btn { flex: 1; justify-content: center; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+<body>
+<header class="h-top"><div class="inner">
+  <a class="h-logo" href="{{ url('/') }}"><span class="mk">P</span>플레이스 마스터</a>
+  <nav class="h-nav">
+    <a href="{{ PLMA_URL }}">플레이스 순위추적</a>
+    <a href="{{ RR_URL }}">영수증리뷰</a>
+  </nav>
+  <div class="h-act">
+    {% if acc %}
+      <a class="h-btn" href="{{ url('/ops') if acc.is_operator else url('/my') }}">{{ '운영자 화면' if acc.is_operator else '마이페이지' }}</a>
+      {% if acc.is_operator %}<a class="h-btn solid" href="{{ url('/my') }}">마이페이지</a>{% endif %}
+    {% else %}
+      <a class="h-btn" href="{{ url('/login') }}">로그인</a>
+      <a class="h-btn solid" href="{{ url('/signup') }}">무료로 시작하기</a>
+    {% endif %}
+  </div>
+</div></header>
+
+<section class="hero" id="hero" aria-roledescription="carousel">
+  <!-- 슬라이드 1: 플레이스 마스터 PRO -->
+  <article class="slide s-plma on" data-i="0" aria-label="플레이스 마스터 PRO">
+    <div class="bg"></div><div class="grid-lines"></div>
+    <div class="s-wrap">
+      <div>
+        <span class="eyebrow rise d1"><i></i>플레이스 마스터 PRO · 네이버 플레이스 순위 추적</span>
+        <h1 class="s-title rise d2">우리 매장 순위,<br><em>자동으로</em> 매일 확인.</h1>
+        <p class="s-sub rise d3">키워드 100개의 플레이스·블로그 순위를 한 번에 분석하고, 오르내린 순위를 카톡 보고서로 바로 정리해 드려요.</p>
+        <div class="s-cta rise d4">
+          <a class="h-btn lg solid" href="{{ PLMA_URL }}">자세히 보기 <span class="arr">→</span></a>
+          <a class="h-btn lg" href="{{ url('/signup?product=plma') }}">무료로 시작하기</a>
+        </div>
+        <div class="s-chips rise d5"><span><b>100+</b>키워드 동시 분석</span><span><b>~2분</b>평균 분석 시간</span><span><b>50+</b>지원 업종</span></div>
+      </div>
+      <div class="vis">
+        <div class="board">
+          <div class="board-h"><span>📍 우리 매장 키워드 순위</span><span class="live"><i></i>실시간</span></div>
+          <div class="rows" id="rows"></div>
+          <svg class="spark" viewBox="0 0 400 70" preserveAspectRatio="none" width="100%">
+            <defs><linearGradient id="sg" x1="0" x2="1"><stop offset="0" stop-color="#03C75A" stop-opacity=".3"/><stop offset="1" stop-color="#7cf5b9"/></linearGradient></defs>
+            <path d="M0 60 C40 58 60 50 90 52 S150 40 180 42 S240 26 270 30 S330 12 360 14 S390 6 400 4" fill="none" stroke="url(#sg)" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- 슬라이드 2: 영수증리뷰 -->
+  <article class="slide s-rr" data-i="1" aria-label="영수증리뷰">
+    <div class="bg"></div><div class="grid-lines"></div>
+    <div class="s-wrap">
+      <div>
+        <span class="eyebrow rise d1"><i></i>영수증리뷰 · 네이버 영수증 리뷰 자동화</span>
+        <h1 class="s-title rise d2">QR 한 번이면<br><em>영수증 리뷰</em> 끝.</h1>
+        <p class="s-sub rise d3">결제 영수증이 손님 폰에 바로 저장되고, 리뷰 문구까지 자동으로 복사돼요. 손님은 네이버에서 붙여넣기만 하면 됩니다.</p>
+        <div class="s-cta rise d4">
+          <a class="h-btn lg white" href="{{ RR_URL }}">자세히 보기 <span class="arr">→</span></a>
+          <a class="h-btn lg" href="{{ url('/signup?product=receipt_review') }}">무료로 시작하기</a>
+        </div>
+        <div class="s-chips rise d5"><span><b>앱 설치 0</b>손님은 QR만</span><span><b>문구 자동</b>붙여넣기 한 번</span><span><b>고객 DB</b>자동 적립</span></div>
+      </div>
+      <div class="vis rr-vis">
+        <div class="phone"><div class="notch"></div>
+          <div class="scr">
+            <div class="nv"><b>N</b>영수증 리뷰 쓰기</div>
+            <div class="stars"><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></div>
+            <div class="photos"><div></div><div></div></div>
+            <div class="typed"><span id="typed"></span><span class="cur"></span></div>
+            <div class="submit" id="submit">등록하기</div>
+            <div class="done" id="done"><div><div class="ck">✓</div><b>리뷰 등록 완료!</b><div style="font-size:12px;color:#777;margin-top:4px">직원에게 보여주고 혜택 받기</div></div></div>
+          </div>
+        </div>
+        <div class="receipt">
+          <div class="c">수작나베 석촌점</div>
+          <div style="text-align:center;font-size:10px">2026-10-09 19:42</div><hr>
+          <div class="r"><span>모듬 나베 2</span><span>58,000</span></div>
+          <div class="r"><span>하이볼</span><span>9,000</span></div>
+          <div class="r"><span>계란말이</span><span>12,000</span></div><hr>
+          <div class="r" style="font-weight:700"><span>합계</span><span>79,000</span></div>
+          <div class="r"><span>승인번호</span><span>30481927</span></div>
+        </div>
+        <div class="qr-chip"><div class="q"></div><div><b>테이블 QR 스캔</b><div style="color:rgba(255,255,255,.6)">번호 입력 → 영수증 저장</div></div></div>
+      </div>
+    </div>
+  </article>
+
+  <div class="tabs-h"><div class="inner">
+    <button class="tab-h on" data-i="0" aria-label="플레이스 마스터 PRO 보기">플레이스 마스터 PRO<i></i></button>
+    <button class="tab-h" data-i="1" aria-label="영수증리뷰 보기">영수증리뷰<i></i></button>
+    <div class="arrows"><button id="prev" aria-label="이전">←</button><button id="next" aria-label="다음">→</button></div>
+  </div></div>
+</section>
+
+<footer class="h-foot"><div class="inner">
+  <span>© 광고토대왕 · 플레이스 마스터</span>
+  <span><a href="{{ url('/terms') }}">이용약관</a> · <a href="{{ url('/privacy') }}">개인정보 처리 안내</a> · <a href="{{ url('/login') }}">로그인</a></span>
+</div></footer>
+
+<script>
+(() => {
+  const DUR = 7000;
+  const hero = document.getElementById('hero');
+  const slides = [...hero.querySelectorAll('.slide')];
+  const tabs = [...hero.querySelectorAll('.tab-h')];
+  let cur = 0, timer = null, paused = false;
+  hero.style.setProperty('--dur', DUR + 'ms');
+
+  function restart(el) { el.classList.remove('on'); void el.offsetWidth; el.classList.add('on'); }
+  function show(i) {
+    cur = (i + slides.length) % slides.length;
+    slides.forEach((s, k) => { if (k === cur) restart(s); else s.classList.remove('on'); });
+    tabs.forEach((t, k) => { if (k === cur) restart(t); else t.classList.remove('on'); });
+    if (cur === 0) startRanks(); else startReview();
+    schedule();
+  }
+  function schedule() { clearTimeout(timer); if (!paused) timer = setTimeout(() => show(cur + 1), DUR); }
+  tabs.forEach(t => t.addEventListener('click', () => show(+t.dataset.i)));
+  document.getElementById('prev').onclick = () => show(cur - 1);
+  document.getElementById('next').onclick = () => show(cur + 1);
+  document.addEventListener('keydown', e => { if (e.key === 'ArrowRight') show(cur + 1); if (e.key === 'ArrowLeft') show(cur - 1); });
+  hero.addEventListener('mouseenter', () => { paused = true; hero.classList.add('paused'); clearTimeout(timer); });
+  hero.addEventListener('mouseleave', () => { paused = false; hero.classList.remove('paused'); schedule(); });
+  let sx = null;
+  hero.addEventListener('touchstart', e => { sx = e.touches[0].clientX; }, {passive: true});
+  hero.addEventListener('touchend', e => { if (sx === null) return; const dx = e.changedTouches[0].clientX - sx;
+    if (Math.abs(dx) > 50) show(cur + (dx < 0 ? 1 : -1)); sx = null; });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(timer); else schedule(); });
+
+  // 플마: 순위가 오르내리는 보드
+  const KW = [['석촌 맛집', '방이동 · 음식점'], ['송파 나베', '송파구 · 일식'], ['잠실 회식', '잠실 · 단체석'],
+              ['석촌호수 데이트', '석촌호수 · 분위기'], ['방이동 술집', '방이동 · 주점']];
+  const rowsEl = document.getElementById('rows');
+  const rowH = () => (rowsEl.clientHeight - 8) / KW.length;
+  let ranks = [8, 5, 11, 14, 6], rankTimer = null;
+  const rowEls = KW.map(([k, s]) => { const d = document.createElement('div'); d.className = 'rk';
+    d.innerHTML = `<span class="no">-</span><span class="kw">${k}<small>${s}</small></span><span class="chg"></span>`; rowsEl.appendChild(d); return d; });
+  function layout(changes) {
+    const order = ranks.map((r, i) => [r, i]).sort((a, b) => a[0] - b[0]);
+    order.forEach(([r, i], pos) => {
+      const el = rowEls[i]; el.style.top = (pos * rowH()) + 'px';
+      el.querySelector('.no').textContent = r; el.classList.toggle('top', r <= 3);
+      const c = changes ? changes[i] : 0, ce = el.querySelector('.chg');
+      el.classList.toggle('up', c > 0);
+      ce.className = 'chg ' + (c > 0 ? 'u' : c < 0 ? 'd' : '');
+      ce.textContent = c > 0 ? '▲ ' + c : c < 0 ? '▼ ' + (-c) : '';
+    });
+  }
+  // 순위가 겹치지 않는 단계별 순위 (오를수록 ▲)
+  const STATES = [[8, 5, 11, 14, 6], [5, 4, 9, 12, 7], [3, 2, 6, 10, 8], [1, 2, 4, 7, 9]];
+  function startRanks() {
+    clearInterval(rankTimer); ranks = STATES[0].slice(); layout();
+    let step = 1;
+    rankTimer = setInterval(() => {
+      if (step >= STATES.length) { clearInterval(rankTimer); return; }
+      const next = STATES[step++], ch = next.map((r, i) => ranks[i] - r);
+      ranks = next.slice(); layout(ch);
+    }, 1600);
+  }
+
+  // 영수증리뷰: 리뷰 문구 타이핑 → 등록 완료
+  const TEXT = '모듬 나베가 정말 맛있었어요! 직원분들도 친절하시고 분위기도 좋아서 다음에 또 올게요 😊';
+  let typeTimer = null;
+  function startReview() {
+    clearTimeout(typeTimer);
+    const t = document.getElementById('typed'), sub = document.getElementById('submit'), done = document.getElementById('done');
+    t.textContent = ''; sub.classList.remove('ready'); done.classList.remove('show');
+    let i = 0;
+    const tick = () => { t.textContent = TEXT.slice(0, ++i);
+      if (i < TEXT.length) typeTimer = setTimeout(tick, 38);
+      else { sub.classList.add('ready'); typeTimer = setTimeout(() => done.classList.add('show'), 900); } };
+    typeTimer = setTimeout(tick, 2600);
+  }
+
+  window.addEventListener('resize', () => layout());
+  show(0);
+})();
+</script>
+</body>
+</html>

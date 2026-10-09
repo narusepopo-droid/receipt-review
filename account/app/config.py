@@ -32,6 +32,8 @@ class Settings(BaseSettings):
 
     # 영수증리뷰 서버 연동 (서버끼리 공유 비밀)
     REVIEW_API_URL: str = "http://127.0.0.1:8000"
+    REVIEW_PUBLIC_URL: str = "https://review.placemaster.co.kr"
+    SUPPORT_PHONE: str = ""         # 고객센터 번호 (화면 안내용)
     INTERNAL_SECRET: str = "change-me-internal"
 
     SESSION_HTTPS_ONLY: bool = False

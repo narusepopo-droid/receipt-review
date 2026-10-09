@@ -79,6 +79,7 @@ async def license_login(request: Request, db: AsyncSession = Depends(get_db)):
         if not info:
             return _fail("로그인이 만료되었습니다. 다시 로그인해 주세요.", "bad_token", 401)
         acc = await upsert_account(db, info["uid"], info["email"])
+        res = {}
     else:
         email = (body.get("email") or "").strip().lower()
         if _limited(f"api-login:{_ip(request)}:{email}", 10, 600):
@@ -95,6 +96,10 @@ async def license_login(request: Request, db: AsyncSession = Depends(get_db)):
         acc = await upsert_account(db, res["localId"], res.get("email", email))
     if acc.blocked:
         return _fail("사용이 중지된 계정입니다.", "blocked")
+    if code == "plma":
+        from app.plma import import_plma
+        tok = body.get("id_token") or (res.get("idToken") if not body.get("id_token") else None)
+        await import_plma(db, acc, acc.firebase_uid, tok)
 
     # 2) 이용권 찾기 (매장 단위면 매장 선택)
     lics = (await db.execute(select(License).where(License.account_id == acc.id, License.product_id == product.id)

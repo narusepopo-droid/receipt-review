@@ -7,7 +7,7 @@ from app.models import Plan, PlanKind, Product, Promotion, SignupPolicy, Unit
 # 가격은 임시값 — 운영자 화면 > 상품·요금제에서 설정
 PRODUCTS = [
     {"code": "plma", "name": "플레이스마스터 PRO", "tagline": "네이버 플레이스 순위 분석기",
-     "unit": Unit.ACCOUNT, "monthly_price": 29000, "sort": 1, "download_url": ""},
+     "unit": Unit.ACCOUNT, "monthly_price": 29000, "sort": 1, "download_url": "https://placemaster.co.kr/#download"},
     {"code": "receipt_review", "name": "영수증리뷰", "tagline": "포스 영수증으로 네이버 영수증 리뷰 자동화",
      "unit": Unit.STORE, "monthly_price": 39000, "sort": 2,
      "download_url": "https://review.placemaster.co.kr/download/latest"},

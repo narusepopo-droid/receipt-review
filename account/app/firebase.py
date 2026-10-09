@@ -189,3 +189,23 @@ async def list_plma_users() -> list[dict]:
             if not page:
                 break
     return out
+
+
+async def get_own_user_doc(uid: str, id_token: str) -> Optional[dict]:
+    """플마 회원 본인 문서 users/{uid} (본인 로그인 토큰으로 읽기 — 서비스 계정 키 불필요). 없으면 None"""
+    if not uid or not id_token or not settings.FIREBASE_PROJECT_ID:
+        return None
+    url = (f"https://firestore.googleapis.com/v1/projects/{settings.FIREBASE_PROJECT_ID}"
+           f"/databases/(default)/documents/users/{uid}")
+    async with httpx.AsyncClient(timeout=10) as c:
+        r = await c.get(url, headers={"Authorization": f"Bearer {id_token}"})
+    if r.status_code != 200:
+        return None
+    f = r.json().get("fields", {})
+    return {
+        "active": f.get("active", {}).get("booleanValue", False),
+        "expires_at": f.get("expires_at", {}).get("stringValue", ""),
+        "device_id": f.get("device_id", {}).get("stringValue", ""),
+        "name": f.get("name", {}).get("stringValue", ""),
+        "role": f.get("role", {}).get("stringValue", "member"),
+    }

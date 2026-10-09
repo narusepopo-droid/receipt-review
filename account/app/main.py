@@ -81,8 +81,12 @@ async def http_error(request: Request, exc: StarletteHTTPException):
 
 
 @app.get("/")
-async def home():
-    return RedirectResponse(url("/my"), status_code=303)
+async def home(request: Request):
+    from app.db import SessionLocal as _S
+    from app.web import current_account
+    async with _S() as db:
+        acc = await current_account(request, db)
+    return render(request, "home.html", acc=acc)
 
 
 @app.get("/health")

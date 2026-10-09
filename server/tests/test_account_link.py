@@ -124,3 +124,17 @@ async def test_heartbeat_reports_license(web, linked):
     r = (await web.post("/agent/v1/heartbeat", headers={"Authorization": f"Bearer {tok}"},
                         json={"version": "1.2.0", "capture_mode": "spmc", "queue_length": 0})).json()
     assert r["success"] and r["license_ok"] is False
+
+
+@pytest.mark.asyncio
+async def test_sso_from_account_mypage(web, linked):
+    from itsdangerous import URLSafeTimedSerializer
+    tok = URLSafeTimedSerializer("s", salt="review-sso").dumps(
+        {"email": "a@b.com", "pick": 9, "stores": [{"id": 8, "name": "1호점", "review_store_id": None},
+                                                    {"id": 9, "name": "2호점", "review_store_id": None}]})
+    r = await web.get(f"/admin/sso?t={tok}")
+    assert r.status_code == 302 and r.headers["location"] == "/admin/dashboard"
+    page = (await web.get("/admin/dashboard")).text
+    assert "2호점" in page and "매장 바꾸기" in page
+    r = await web.get("/admin/sso?t=bad")
+    assert "만료" in r.text
