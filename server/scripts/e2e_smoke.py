@@ -10,7 +10,7 @@
 
 사용법 (서버에서):
     cd ~/receipt-review/server && venv/bin/python scripts/e2e_smoke.py
-    venv/bin/python scripts/e2e_smoke.py --base https://review.placemaster.co.kr
+    venv/bin/python scripts/e2e_smoke.py --base https://review.placemaster.co.kr   (쿠키 화면까지 확인하려면 HTTPS)
 """
 import argparse
 import asyncio
@@ -122,6 +122,16 @@ async def run(base: str, keep: bool):
                                   params={"session_id": sid, "receipt_id": a["receipt_id"]})
                 check("영수증 이미지 받기 (PNG)", img.status_code == 200 and img.content[:8] == b"\x89PNG\r\n\x1a\n",
                       f"{len(img.content)} bytes")
+
+            # 손님 화면 (쿠키): 결과 화면에 실제 영수증 이미지 주소, QR 재접속 시 결과 화면 복귀
+            pc = httpx.AsyncClient(base_url=base, timeout=30)
+            await pc.post(f"/api/v1/session/start?store_code={code}", json={"phone": phone, "marketing_opt_in": False})
+            page = await pc.get(f"/t/{code}/1/result")
+            check("결과 화면 (쿠키 세션, 실제 영수증)", page.status_code == 200 and "/api/v1/receipt-image/" in page.text,
+                  f"{page.status_code} {'쿠키 미전달 - HTTPS 주소로 실행 필요' if page.status_code in (302, 307) or 'receipt-image' not in page.text else ''}")
+            back = await pc.get(f"/t/{code}/1", follow_redirects=False)
+            check("QR 재접속 → 결과 화면", back.status_code == 302 and back.headers.get("location", "").endswith("/result"))
+            await pc.aclose()
 
             r = await c.post(f"/api/v1/session/start?store_code={code}", json={"phone": phone, "marketing_opt_in": False})
             check("같은 번호 재입장 → 기존 세션", r.status_code == 200 and r.json().get("is_returning") is True, r.text[:160])
