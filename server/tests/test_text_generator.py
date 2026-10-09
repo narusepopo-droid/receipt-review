@@ -128,3 +128,20 @@ class TestTextGenerator:
         c = candidates_for("맛있어요", {"맛있어요": ["국물이 진했어요."]}, ["갈비탕"])
         assert "국물이 진했어요." in c and len(c) == 26
         assert all("{메뉴}" not in p for p in candidates_for("맛있어요", {}, []))
+
+
+@pytest.mark.asyncio
+async def test_flow_order_and_connectors(db_session):
+    """음식 → 서비스 → 매장 순서, 이어주는 말 최대 2개"""
+    import re
+    from app.review.phrase_bank import BANK
+    store = Store(name="흐름", store_code="gen009")
+    db_session.add(store)
+    await db_session.flush()
+    gen = TextGenerator(db_session)
+    for _ in range(30):
+        text, picked = await gen.compose(store.id, ["주차하기 편해요", "친절해요", "맛있어요"], [], {}, 400, mark=True)
+        kinds = [next(k for k, v in BANK.items() if p in v) for p in picked]
+        assert kinds == ["맛있어요", "친절해요", "주차하기 편해요"]
+        assert len(re.findall(r"(특히|참,|그리고|게다가) ", text)) <= 2
+        assert "무엇보다" not in text
