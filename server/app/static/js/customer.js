@@ -61,12 +61,15 @@
             const currentUrl = window.location.href;
 
             if (BrowserDetect.isKakaoTalk) {
-                // 카카오톡 외부 브라우저 열기
+                // 카카오톡 외부 브라우저 열기 — 탭당 1번만 시도 (안 열리면 카톡 안에서 그대로 진행)
+                if (sessionStorage.getItem('kakaoExternalTried')) return true;
+                sessionStorage.setItem('kakaoExternalTried', '1');
                 window.location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent(currentUrl)}`;
                 return true;
             }
 
             if (BrowserDetect.isLine) {
+                if (/openExternalBrowser=1/.test(currentUrl)) return true;
                 // 라인 외부 브라우저
                 const newUrl = currentUrl.includes('?')
                     ? `${currentUrl}&openExternalBrowser=1`
