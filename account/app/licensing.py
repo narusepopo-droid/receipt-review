@@ -235,7 +235,7 @@ async def run_expiry_jobs(db: AsyncSession, send_sms, now: Optional[datetime] = 
             product = await db.get(Product, lic.product_id)
             store = await db.get(Store, lic.store_id) if lic.store_id else None
             target = f"{product.name}" + (f" ({store.name})" if store else "")
-            msg = (f"[광고토대왕] {target} 이용 기간이 {dl}일 후({ref}) 끝납니다. "
+            msg = (f"[플레이스마스터] {target} 이용 기간이 {dl}일 후({ref}) 끝납니다. "
                    f"연장하시려면 마이페이지에서 결제해 주세요. (만료 다음 날까지 이용 가능)")
             ok = await send_sms(account.phone, msg) if account and account.phone else False
             db.add(NotificationLog(license_id=lic.id, kind=f"d{dl}", ref=ref, message=msg, sent=bool(ok)))

@@ -2,11 +2,11 @@
 <html lang="ko">
 <head>
 {% include "_head.html" %}
-<title>{% block title %}마이페이지{% endblock %} · 광고토대왕</title>
+<title>{% block title %}마이페이지{% endblock %} · 플레이스 마스터</title>
 </head>
 <body>
 <header class="topbar"><div class="inner">
-  <a class="logo" href="{{ url('/my') }}"><span class="mark">P</span>광고토대왕</a>
+  <a class="logo" href="{{ url('/my') }}"><span class="mark">P</span>플레이스 마스터</a>
   <nav class="topnav">
     <a href="{{ url('/my') }}" class="{{ 'on' if nav == 'home' }}">내 상품</a>
     <a href="{{ url('/my/orders') }}" class="{{ 'on' if nav == 'orders' }}">결제 내역</a>

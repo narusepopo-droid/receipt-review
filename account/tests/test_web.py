@@ -64,7 +64,7 @@ async def login(c, email, pw="password1"):
 
 @pytest.mark.asyncio
 async def test_signup_login_dashboard(client):
-    r = await signup(client, products=("receipt_review", "plma"))
+    r = await signup(client, products=("receipt_review",))
     assert r.status_code == 200 and "담당자 승인 후" in r.text
     assert "테스트 매장" in r.text and "승인 대기" in r.text
     r = await client.get("/my/orders")
@@ -105,7 +105,7 @@ async def test_operator_full_flow(client):
     assert "2호점" in r.text
     await client.get("/logout")
     # 운영자
-    await signup(client, email="ops@test.com", products=("plma",))
+    await signup(client, email="ops@test.com", products=("receipt_review",))
     for path in ("/ops", "/ops/accounts", "/ops/products", "/ops/promotions", "/ops/orders", "/ops/notifications"):
         r = await client.get(path)
         assert r.status_code == 200, path
@@ -163,7 +163,7 @@ async def test_purchase_manual_then_operator_confirms(client):
     r = (await client.post("/my/checkout", json={"items": [{"license_id": lic.id, "plan_id": y1.id}]})).json()
     assert r["manual"]       # 토스 키 없음 → 입금 신청
     await client.get("/logout")
-    await signup(client, email="ops@test.com", products=("plma",))
+    await signup(client, email="ops@test.com", products=("receipt_review",))
     async with SessionLocal() as db:
         order = (await db.execute(select(Order))).scalars().first()
     r = await client.post(f"/ops/orders/{order.id}", data={"action": "mark_paid"})
@@ -252,3 +252,16 @@ async def test_internal_owner_login(client):
     assert r.json()["ok"]
     r = (await client.post("/internal/review-store", json={"review_store_id": 77}, headers=h)).json()
     assert r["state"] == "pending" and r["usable"] is False
+
+
+
+@pytest.mark.asyncio
+async def test_plma_signup_goes_to_plma_site_until_key(client):
+    r = await client.get("/signup?product=plma,receipt_review")
+    assert "signup.html" in r.text and 'name="p_plma"' not in r.text
+    r = await signup(client, products=("receipt_review", "plma"))
+    assert "따로 신청" in r.text
+    r = await client.get("/api/v1/pricing", headers={"Origin": "https://placemaster.co.kr"})
+    d = r.json()
+    assert r.headers.get("access-control-allow-origin") == "https://placemaster.co.kr"
+    assert all(not p["enabled"] and p["plans"] == [] for p in d["products"]) and d["bundle_pct"] == 10

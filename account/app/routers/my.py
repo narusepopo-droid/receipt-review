@@ -34,8 +34,10 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     for l in lics:
         await db.refresh(l, ["product", "store", "plan"])
     by_product = {p.id: [l for l in lics if l.product_id == p.id] for p in products}
+    from app import firebase
+    plma_hint = request.session.pop("_plma_hint", False)
     return render(request, "my/dashboard.html", acc=acc, products=products, by_product=by_product, stores=stores,
-                  Unit=Unit)
+                  Unit=Unit, plma_ready=firebase.sa_available(), plma_hint=plma_hint)
 
 
 @router.get("/stores/new")
@@ -71,6 +73,9 @@ async def apply_product(request: Request, code: str, db: AsyncSession = Depends(
     product = (await db.execute(select(Product).where(Product.code == code))).scalar_one_or_none()
     if not product or product.unit != Unit.ACCOUNT:
         raise HTTPException(404)
+    from app import firebase
+    if product.code == "plma" and not firebase.sa_available():
+        return RedirectResponse(settings.PLMA_SIGNUP_URL, status_code=303)
     lic = await licensing.get_or_create(db, acc, product, None)
     await db.commit()
     if product.signup_policy == SignupPolicy.PAYMENT:

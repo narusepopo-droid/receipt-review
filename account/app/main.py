@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown(wait=False)
 
 
-app = FastAPI(title="광고토대왕 계정", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title="플레이스 마스터 계정", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY, session_cookie="acct_session",
                    max_age=60 * 60 * 12, same_site="lax", https_only=settings.SESSION_HTTPS_ONLY)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -82,11 +82,14 @@ async def http_error(request: Request, exc: StarletteHTTPException):
 
 @app.get("/")
 async def home(request: Request):
+    """첫 화면은 placemaster.co.kr (슬라이드). 로그인한 사람은 마이페이지로"""
     from app.db import SessionLocal as _S
     from app.web import current_account
     async with _S() as db:
         acc = await current_account(request, db)
-    return render(request, "home.html", acc=acc)
+    if acc:
+        return RedirectResponse(url("/ops" if acc.is_operator else "/my"), status_code=303)
+    return RedirectResponse(settings.SITE_URL, status_code=303)
 
 
 @app.get("/health")

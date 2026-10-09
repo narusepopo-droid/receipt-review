@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     REVIEW_API_URL: str = "http://127.0.0.1:8000"
     REVIEW_PUBLIC_URL: str = "https://review.placemaster.co.kr"
     SUPPORT_PHONE: str = ""         # 고객센터 번호 (화면 안내용)
+    SITE_URL: str = "https://placemaster.co.kr/"
+    PLMA_SIGNUP_URL: str = "https://placemaster.co.kr/signup.html"   # 서비스 계정 키 연결 전 플마 가입 경로
     INTERNAL_SECRET: str = "change-me-internal"
 
     SESSION_HTTPS_ONLY: bool = False

@@ -247,3 +247,41 @@ async def internal_owner_login(request: Request, x_internal_secret: str = Header
             stores.append({"id": s.id, "name": s.name, "review_store_id": s.review_store_id,
                            "state": licensing.state(l), "usable": licensing.usable(l)})
     return {"ok": True, "email": acc.email, "stores": stores}
+
+
+PUBLIC_ORIGINS = {"https://placemaster.co.kr", "https://www.placemaster.co.kr", "http://localhost:8765",
+                  "http://127.0.0.1:8765"}
+
+
+@router.get("/api/v1/pricing")
+async def public_pricing(request: Request, db: AsyncSession = Depends(get_db)):
+    """사이트 요금제 표. 상품이 '가입 → 결제' 로 바뀐 경우에만 가격 공개 (그 전엔 enabled=false)"""
+    from app.models import Plan, PlanKind, SignupPolicy
+    from app.orders import get_setting
+    from app.pricing import effective_monthly, list_price, plan_price
+    out = []
+    for p in (await db.execute(select(Product).where(Product.active.is_(True)).order_by(Product.sort))).scalars():
+        enabled = p.signup_policy == SignupPolicy.PAYMENT
+        plans = []
+        if enabled:
+            for pl in (await db.execute(select(Plan).where(Plan.product_id == p.id, Plan.public.is_(True))
+                                        .order_by(Plan.sort))).scalars():
+                if pl.kind == PlanKind.FREE:
+                    continue
+                lp, pp = list_price(p, pl), plan_price(p, pl)
+                plans.append({"name": pl.name, "kind": pl.kind.value, "months": pl.months, "badge": pl.badge,
+                              "price": pp, "list": lp, "monthly": effective_monthly(p, pl),
+                              "save_pct": round((1 - pp / lp) * 100) if lp else 0})
+        out.append({"code": p.code, "name": p.name, "unit": p.unit.value, "enabled": enabled,
+                    "monthly_price": p.monthly_price if enabled else None, "plans": plans})
+    from app.models import Promotion
+    bundle = (await db.execute(select(Promotion).where(Promotion.kind == "bundle", Promotion.active.is_(True),
+                                                      Promotion.code.is_(None)))).scalars().first()
+    data = {"products": out, "bundle_pct": bundle.value if bundle else 0,
+            "max_discount_pct": await get_setting(db, "max_discount_pct", 60)}
+    resp = JSONResponse(data, headers={"Cache-Control": "public, max-age=300"})
+    origin = request.headers.get("origin", "")
+    if origin in PUBLIC_ORIGINS:
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Vary"] = "Origin"
+    return resp

@@ -56,10 +56,13 @@
   <a class="btn" href="{{ url('/my/stores/new') }}">＋ 매장 추가</a>
 </div>
 
+{% if plma_hint %}
+<div class="flash info">i <span>플레이스마스터 PRO도 함께 쓰시려면 <a href="{{ settings.PLMA_SIGNUP_URL }}" target="_blank" rel="noopener"><b>플마 가입 신청</b></a>을 해주세요. 같은 이메일·비밀번호로 신청하시면 이 계정에서 함께 관리돼요.</span></div>
+{% endif %}
 {% set ns = namespace(setup=[]) %}
 {% for p in products %}{% for l in by_product[p.id] %}{% if usable(l) and not l.device_id %}{% set ns.setup = ns.setup + [(p, l)] %}{% endif %}{% endfor %}{% endfor %}
 {% if ns.setup %}
-<div class="card mb" style="border-color:#c7d2fe;background:linear-gradient(135deg,#eef2ff,#fff)"><div class="card-body">
+<div class="card mb" style="border-color:#a7e8c4;background:linear-gradient(135deg,#e8f8ef,#fff)"><div class="card-body">
   <h3>🎉 이용 준비가 끝났어요 — 이제 PC에 설치해 주세요</h3>
   <div class="grid g3 mt small">
     <div><b>① 설치 파일 받기</b><div class="muted">아래 상품의 [설치 파일] 버튼을 누르세요{% for p, l in ns.setup if p.code == 'receipt_review' %}{% if loop.first %} (영수증리뷰는 포스 PC에서){% endif %}{% endfor %}</div></div>
@@ -82,6 +85,7 @@
         <div class="meta">{{ '매장을 추가하면 매장별로 이용을 신청할 수 있어요' if p.unit == Unit.STORE else ('신청하시면 담당자 확인 후 이용할 수 있어요' if p.signup_policy.value == 'approval' else '요금제를 고르고 결제하면 바로 이용할 수 있어요') }}</div></div><div></div>
         <div class="acts">
           {% if p.unit == Unit.STORE %}<a class="btn sm brand" href="{{ url('/my/stores/new') }}">매장 추가하고 시작</a>
+          {% elif p.code == 'plma' and not plma_ready %}<a class="btn sm brand" href="{{ settings.PLMA_SIGNUP_URL }}" target="_blank" rel="noopener">플마 가입 신청 ↗</a>
           {% else %}<form method="post" action="{{ url('/my/products/' ~ p.code ~ '/apply') }}"><button class="btn sm brand">{{ '이용 신청' if p.signup_policy.value == 'approval' else '요금제 보기' }}</button></form>{% endif %}
         </div></div>
     {% else %}

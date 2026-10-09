@@ -192,6 +192,11 @@ async def license_action(request: Request, lid: int, db: AsyncSession = Depends(
     account_id = lic.account_id
     reason = str(f.get("reason", "")).strip()
     try:
+        prod0 = await db.get(Product, lic.product_id)
+        from app import firebase as _fb
+        if prod0.code == "plma" and action in ("approve", "grant") and not _fb.sa_available() and lic.note != "plma-import":
+            raise licensing.LicenseError("플마 신규 승인은 서비스 계정 키 연결 전까지 플마 관리자 프로그램에서 해주세요 "
+                                         "(여기서 승인해도 플마 프로그램이 인식하지 못해요)")
         if action == "approve":                  # 승인 = 무료(무제한) 지급
             plan = (await db.execute(select(Plan).where(Plan.product_id == lic.product_id,
                                                         Plan.kind == PlanKind.FREE))).scalars().first()
@@ -203,7 +208,7 @@ async def license_action(request: Request, lid: int, db: AsyncSession = Depends(
             if acc_ and acc_.phone:
                 from app.notify import send_sms
                 target = prod_.name + (f"({store_.name})" if store_ else "")
-                await send_sms(acc_.phone, f"[광고토대왕] {target} 이용이 승인되었습니다. "
+                await send_sms(acc_.phone, f"[플레이스마스터] {target} 이용이 승인되었습니다. "
                                            f"마이페이지에서 설치 파일을 받아 이용해 주세요. {settings.BASE_URL}/my")
                 msg += " 승인 안내 문자를 보냈습니다."
         elif action == "grant":                  # 요금제 지급 (결제 없이)

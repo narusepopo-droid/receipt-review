@@ -146,7 +146,7 @@ async def run_autopay(db: AsyncSession, send_sms, now: Optional[datetime] = None
                 lic.next_charge_at = now + timedelta(days=1)
                 await licensing.log(db, lic, "system", "autopay_failed_retry", reason=str(e)[:200])
             if account.phone:
-                await send_sms(account.phone, f"[광고토대왕] {product.name} 월 이용료 결제에 실패했습니다. "
+                await send_sms(account.phone, f"[플레이스마스터] {product.name} 월 이용료 결제에 실패했습니다. "
                                               f"마이페이지에서 카드를 확인해 주세요. ({str(e)[:40]})")
             stats["failed"] += 1
     await db.commit()

@@ -102,7 +102,8 @@ async def signup_page(request: Request, product: str = "", db: AsyncSession = De
         flash(request, "이미 로그인되어 있어요. 다른 상품은 아래에서 바로 신청할 수 있어요.", "info")
         return RedirectResponse(url("/my"), status_code=303)
     products = (await db.execute(select(Product).where(Product.active.is_(True)).order_by(Product.sort))).scalars().all()
-    return render(request, "auth/signup.html", products=products, pre=product, form={})
+    return render(request, "auth/signup.html", products=products, pre=product.split(","), form={},
+                  plma_ready=firebase.sa_available())
 
 
 @router.post("/signup")
@@ -131,13 +132,17 @@ async def signup(request: Request, db: AsyncSession = Depends(get_db)):
         errors.append("이용약관·개인정보 처리에 동의해 주세요")
     if _limited(f"signup:{_ip(request)}", 10, 3600):
         errors.append("가입 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요")
+    if any(p.code == "plma" for p in chosen) and not firebase.sa_available():
+        errors.append("플레이스마스터 PRO는 아래 [플마 가입 신청]에서 따로 신청해 주세요")
     if errors:
-        return render(request, "auth/signup.html", products=products, pre="", form=form, errors=errors)
+        return render(request, "auth/signup.html", products=products, pre=[], form=form, errors=errors,
+                      plma_ready=firebase.sa_available())
 
     try:
         res = await firebase.sign_up(email, form["password"])
     except firebase.FirebaseError as e:
-        return render(request, "auth/signup.html", products=products, pre="", form=form, errors=[str(e)])
+        return render(request, "auth/signup.html", products=products, pre=[], form=form, errors=[str(e)],
+                      plma_ready=firebase.sa_available())
 
     acc = await upsert_account(db, res["localId"], email, name=form["name"].strip(), phone=phone,
                                company=form.get("company", "").strip(), biz_no=form.get("biz_no", "").strip())
@@ -159,6 +164,8 @@ async def signup(request: Request, db: AsyncSession = Depends(get_db)):
         p, lic = need_payment[0]
         return RedirectResponse(url(f"/my/buy/{lic.id}"), status_code=303)
     flash(request, "가입이 완료되었습니다. 담당자 승인 후 바로 이용하실 수 있어요.", "ok")
+    if "plma" in (form.get("with") or ""):
+        request.session["_plma_hint"] = True
     return RedirectResponse(url("/my"), status_code=303)
 
 

@@ -20,7 +20,7 @@ async def send_sms(phone: str, message: str) -> bool:
     data = {"key": settings.ALIGO_KEY, "user_id": settings.ALIGO_USER_ID, "sender": settings.ALIGO_SENDER,
             "receiver": digits, "msg": message, "msg_type": msg_type}
     if msg_type == "LMS":
-        data["title"] = "광고토대왕 안내"
+        data["title"] = "플레이스마스터 안내"
     try:
         async with httpx.AsyncClient(timeout=20) as c:
             r = await c.post("https://apis.aligo.in/send/", data=data)
