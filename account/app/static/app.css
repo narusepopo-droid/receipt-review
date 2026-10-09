@@ -79,6 +79,7 @@ h3 { font-size: 16px; font-weight: 700; }
 /* ── 카드 ── */
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
 .card + .card { margin-top: 18px; }
+.grid > .card + .card, .grid > * + .card { margin-top: 0; }
 .card-head { padding: 18px 22px; border-bottom: 1px solid var(--line-2); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .card-body { padding: 22px; }
 .card-body.tight { padding: 0; }

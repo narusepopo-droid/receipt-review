@@ -43,7 +43,7 @@
         <td><a href="{{ url('/ops/accounts/' ~ l.account_id ~ '#lic' ~ l.id) }}"><b>{{ l.account.name or l.account.email }}</b></a>
           <div class="small muted">{{ l.product.name }}{% if l.store %} · {{ l.store.name }}{% endif %}</div></td>
         <td class="nowrap num">{{ l.expires_at|kst }}</td>
-        <td class="right"><span class="badge {{ b[1] }}">{{ days_left(l) }}일</span></td></tr>{% endfor %}
+        <td class="right"><span class="badge {{ 'red' if (days_left(l) or 0) <= 3 else 'amber' }}">{{ days_left(l) }}일</span></td></tr>{% endfor %}
     </tbody></table>{% else %}<div class="empty">7일 안에 끝나는 이용권이 없어요</div>{% endif %}
   </div></div>
 </div>
