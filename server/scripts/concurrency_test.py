@@ -55,11 +55,12 @@ async def main():
                 r = await cc.post(f"/api/v1/session/start?store_code={code}",
                                   json={"phone": f"0109{random.randint(1000000, 9999999)}"})
                 assert r.status_code == 200, r.text
+                cc.sid = r.json()["session_id"]   # 내부 HTTP 시험이라 HTTPS 전용 쿠키 대신 sid 전달
                 clients.append(cc)
 
             # 동시에 결과 화면 진입 → 배정
             async def enter(cc):
-                r = await cc.get(f"/t/{code}/1/result")
+                r = await cc.get(f"/t/{code}/1/result", params={"sid": cc.sid})
                 m = re.search(r"receipt_id=([0-9a-f-]{36})", r.text)
                 return m.group(1) if m else None
 
