@@ -131,17 +131,21 @@ class TestTextGenerator:
 
 
 @pytest.mark.asyncio
-async def test_flow_order_and_connectors(db_session):
-    """음식 → 서비스 → 매장 순서, 이어주는 말 최대 2개"""
+async def test_natural_order_varies_and_links(db_session):
+    """고정 순서가 아님: 고른 항목끼리 잘 어울리는 순서 중 무작위. 어울리는 짝은 이웃하게 놓임"""
     import re
-    from app.review.phrase_bank import BANK
+    from app.review.text_generator import natural_order, affinity
+    orders = {tuple(natural_order(["주차하기 편해요", "맛있어요", "가성비 좋아요", "양이 많아요"])) for _ in range(100)}
+    assert len(orders) >= 2                                   # 매번 같은 순서 아님
+    for o in orders:
+        i, j = o.index("양이 많아요"), o.index("가성비 좋아요")
+        assert abs(i - j) == 1 or "맛있어요" in o[min(i, j):max(i, j) + 1]   # 양↔가성비는 붙거나 맛을 사이에 둠
+        assert o[0] != "주차하기 편해요"                        # 곁가지로 시작하지 않음
+
     store = Store(name="흐름", store_code="gen009")
     db_session.add(store)
     await db_session.flush()
     gen = TextGenerator(db_session)
     for _ in range(30):
-        text, picked = await gen.compose(store.id, ["주차하기 편해요", "친절해요", "맛있어요"], [], {}, 400, mark=True)
-        kinds = [next(k for k, v in BANK.items() if p in v) for p in picked]
-        assert kinds == ["맛있어요", "친절해요", "주차하기 편해요"]
+        text, _ = await gen.compose(store.id, ["주차하기 편해요", "친절해요", "맛있어요"], [], {}, 400, mark=True)
         assert len(re.findall(r"(특히|참,|그리고|게다가) ", text)) <= 2
-        assert "무엇보다" not in text

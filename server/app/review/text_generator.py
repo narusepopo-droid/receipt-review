@@ -22,12 +22,71 @@ from .phrase_bank import BANK, OPENINGS, CLOSINGS
 
 MAX_KEYWORD_SENTENCES = 4   # 키워드를 많이 골라도 글이 너무 길어지지 않게 최대 4문장
 
-# 이야기 순서: 음식 → 가격 → 직원·속도 → 매장 → 포장 (점주가 만든 키워드는 음식 뒤)
-FLOW_ORDER = [
-    "맛있어요", "재료가 신선해요", "특별한 메뉴가 있어요", "양이 많아요", "메뉴가 다양해요",
-    "가성비 좋아요", "음식이 빨리 나와요", "친절해요",
-    "분위기 좋아요", "매장이 청결해요", "주차하기 편해요", "포장 상태가 좋아요",
-]
+# 항목 주제 (같은 주제끼리는 잘 이어짐)
+THEME = {
+    "맛있어요": "food", "재료가 신선해요": "food", "양이 많아요": "food",
+    "특별한 메뉴가 있어요": "food", "메뉴가 다양해요": "food",
+    "가성비 좋아요": "value",
+    "친절해요": "service", "음식이 빨리 나와요": "service",
+    "분위기 좋아요": "space", "매장이 청결해요": "space", "주차하기 편해요": "space",
+    "포장 상태가 좋아요": "takeout",
+}
+# 특히 잘 이어지는 짝 (순서 무관, 점수 높을수록 자연스러움)
+PAIR_AFFINITY = {
+    frozenset({"맛있어요", "재료가 신선해요"}): 4,
+    frozenset({"맛있어요", "특별한 메뉴가 있어요"}): 4,
+    frozenset({"특별한 메뉴가 있어요", "메뉴가 다양해요"}): 4,
+    frozenset({"양이 많아요", "가성비 좋아요"}): 4,
+    frozenset({"맛있어요", "양이 많아요"}): 3,
+    frozenset({"맛있어요", "가성비 좋아요"}): 3,
+    frozenset({"음식이 빨리 나와요", "친절해요"}): 3,
+    frozenset({"분위기 좋아요", "매장이 청결해요"}): 3,
+    frozenset({"맛있어요", "포장 상태가 좋아요"}): 3,
+    frozenset({"분위기 좋아요", "친절해요"}): 2,
+    frozenset({"매장이 청결해요", "친절해요"}): 2,
+    frozenset({"메뉴가 다양해요", "가성비 좋아요"}): 2,
+    frozenset({"주차하기 편해요", "분위기 좋아요"}): 2,
+    frozenset({"주차하기 편해요", "매장이 청결해요"}): 1,
+    frozenset({"음식이 빨리 나와요", "포장 상태가 좋아요"}): 2,
+    frozenset({"맛있어요", "친절해요"}): 2,
+}
+# 첫 문장으로 어색한 항목 (곁가지 이야기로 시작하지 않음)
+WEAK_START = {"주차하기 편해요", "포장 상태가 좋아요", "음식이 빨리 나와요"}
+
+
+def _canon(keyword: str) -> str:
+    for k in THEME:
+        if _norm(k) == _norm(keyword):
+            return k
+    return keyword
+
+
+def affinity(a: str, b: str) -> int:
+    a, b = _canon(a), _canon(b)
+    score = PAIR_AFFINITY.get(frozenset({a, b}), 0)
+    if THEME.get(a) and THEME.get(a) == THEME.get(b):
+        score = max(score, 2)
+    return score
+
+
+def natural_order(keywords: list[str]) -> list[str]:
+    """고른 항목끼리 이웃이 가장 잘 어울리는 순서들 중 하나를 무작위로 (고정 순서 아님)"""
+    from itertools import permutations
+    if len(keywords) <= 1:
+        return list(keywords)
+    scored = []
+    for perm in permutations(keywords):
+        sc = sum(affinity(perm[i], perm[i + 1]) for i in range(len(perm) - 1))
+        if _canon(perm[0]) in WEAK_START:
+            sc -= 2
+        if _canon(perm[-1]) in {"주차하기 편해요", "포장 상태가 좋아요"}:
+            sc += 1           # 곁가지 이야기는 끝에 "참," 으로 붙이면 자연스러움
+        scored.append((sc, perm))
+    best = max(sc for sc, _ in scored)
+    good = [perm for sc, perm in scored if sc >= best - 1]   # 최고점 근처 순서들 중 무작위 → 매번 다른 흐름
+    return list(random.choice(good))
+
+
 # 이어주는 말 (한 리뷰에 최대 2개, 문맥에 맞을 때만)
 FOOD_DETAIL = {"재료가 신선해요", "양이 많아요", "특별한 메뉴가 있어요"}       # 맛 이야기 뒤 "특히"
 SIDE_TOPICS = {"주차하기 편해요", "포장 상태가 좋아요"}  # 마지막이면 "참,"
@@ -51,17 +110,20 @@ CLOSING_STEMS = {"다음에 또 올게요!": ("또 오", "또 올", "다시 오"
                  "만족스러운 식사였어요.": ("만족",)}
 
 
+# 한 리뷰 안에서 두 번 나오면 어색한 핵심 단어
+KEY_STEMS = ("가성비", "가격", "추천", "오랜만", "처음", "맛집", "재방문", "또 오", "또 올", "다시", "단골",
+             "친절", "분위기", "푸짐", "넉넉", "신선", "싱싱", "깔끔", "깨끗", "청결", "주차", "포장", "메뉴",
+             "다양", "빨리", "빠르", "빨라", "든든", "만족", "기분 좋", "정성", "인심", "양도", "양이")
+
+
+def _stems(text: str) -> set:
+    return {k for k in KEY_STEMS if k in text}
+
+
 def _ending(sentence: str) -> str:
     """문장 끝맺음 (예: '좋았어요', '맛있어요') — 같은 끝맺음 연속 방지용"""
     core = sentence.rstrip(".!~ ")
     return core[-4:]
-
-
-def _flow_key(keyword: str) -> int:
-    for i, k in enumerate(FLOW_ORDER):
-        if _norm(k) == _norm(keyword):
-            return i
-    return 1  # 점주가 만든 키워드는 음식 이야기 바로 뒤
 
 
 def _norm(t: str) -> str:
@@ -143,14 +205,25 @@ class TextGenerator:
             counts[hashes[r.phrase_hash]] = r.count
         return counts
 
-    async def _pick(self, store_id: int, phrases: list[str], exclude: set, avoid_endings: set = frozenset()) -> str:
-        """가장 덜 쓴 문장 중 하나 (같은 바퀴 안에서는 중복 없음). 앞 문장과 끝맺음이 같은 문장은 가능하면 피함"""
+    async def _pick(self, store_id: int, phrases: list[str], exclude: set, avoid_endings: set = frozenset(),
+                    own_stems: set = frozenset(), used_stems: set = frozenset()) -> str:
+        """가장 덜 쓴 문장 중 하나 (같은 바퀴 안에서는 중복 없음).
+        앞 문장들과 핵심 단어·끝맺음이 겹치지 않는 문장을 우선 (그 항목 고유 단어는 허용)"""
         counts = await self._usage(store_id, phrases)
         pool = [p for p in phrases if p not in exclude] or phrases
         least = min(counts[p] for p in pool)
         best = [p for p in pool if counts[p] == least]
-        varied = [p for p in best if _ending(p) not in avoid_endings]
-        return random.choice(varied or best)
+
+        def clash(p):
+            return bool((_stems(p) - own_stems) & used_stems) or _ending(p) in avoid_endings
+        clean = [p for p in best if not clash(p)]
+        if clean:
+            return random.choice(clean)
+        # 덜 쓴 문장 중에 없으면 다음 순번에서라도 겹치지 않는 문장
+        clean_any = sorted((p for p in pool if not clash(p)), key=lambda p: counts[p])
+        if clean_any and counts[clean_any[0]] <= least + 1:
+            return clean_any[0]
+        return random.choice(best)
 
     async def _mark_used(self, store_id: int, phrases: list[str]) -> None:
         from ..models.options import PhraseUsage
@@ -182,15 +255,16 @@ class TextGenerator:
         """(완성 문구, 고른 원문 문장들) — 이야기 순서로 배치하고 자연스럽게 이어 붙임"""
         chosen = list(dict.fromkeys(k for k in keywords if k))
         random.shuffle(chosen)
-        chosen = chosen[:MAX_KEYWORD_SENTENCES] or ["맛있어요"]
-        chosen.sort(key=_flow_key)
+        chosen = natural_order(chosen[:MAX_KEYWORD_SENTENCES] or ["맛있어요"])
 
-        picked_raw, endings = [], set()
+        picked_raw, endings, used = [], set(), set()
         for kw in chosen:
             phrases = candidates_for(kw, custom, menus)
-            p = await self._pick(store_id, phrases, set(picked_raw), endings)
+            own = _stems(kw)                       # 예: '가성비 좋아요' 문장의 '가성비'는 허용
+            p = await self._pick(store_id, phrases, set(picked_raw), endings, own, used)
             picked_raw.append(p)
             endings.add(_ending(p))
+            used |= _stems(p)
 
         body = [fill_menu(p, menus) for p in picked_raw]
         joined = " ".join(body)
@@ -201,23 +275,28 @@ class TextGenerator:
         for i in range(1, len(body)):
             if len(used_conn) >= MAX_CONNECTORS or body[i].startswith(NO_CONNECTOR_START) or body[i].startswith("다른"):
                 continue
-            prev_kw, kw = chosen[i - 1], chosen[i]
+            prev_kw, kw = _canon(chosen[i - 1]), _canon(chosen[i])
+            link = affinity(prev_kw, kw)
             conn = ""
-            if _norm(prev_kw) == _norm("맛있어요") and kw in FOOD_DETAIL and random.random() < 0.7:
-                conn = "특히 "
-            elif i == len(body) - 1 and kw in SIDE_TOPICS and random.random() < 0.5:
-                conn = "참, "
-            elif random.random() < 0.35:
-                conn = random.choice(["그리고 ", "게다가 "])
+            if prev_kw == "맛있어요" and kw in FOOD_DETAIL and random.random() < 0.7:
+                conn = "특히 "                       # 맛 → 세부 (재료·양·특별 메뉴)
+            elif i == len(body) - 1 and kw in SIDE_TOPICS and link < 2 and random.random() < 0.6:
+                conn = "참, "                        # 곁가지로 화제 전환
+            elif link >= 2 and random.random() < 0.5:
+                conn = random.choice(["게다가 ", "그리고 "])   # 같은 이야기 이어가기
+            elif link < 2 and random.random() < 0.25:
+                conn = "그리고 "                      # 다른 이야기로 넘어갈 때 가끔
             if conn and conn not in used_conn:
                 used_conn.append(conn)
                 body[i] = conn + body[i]
 
         # 시작 문장: 본문과 부딪히지 않는 것만
-        openings = [o for o in OPENINGS if not any(w in joined for w in OPENING_CONFLICTS.get(o, ()))]
+        openings = [o for o in OPENINGS if not any(w in joined for w in OPENING_CONFLICTS.get(o, ()))
+                    and not (_stems(o) & _stems(joined))]
         opening = random.choice(openings or [""])
         # 마무리: 본문에 이미 같은 말이 있으면 다른 것
-        closings = [c for c in CLOSINGS if not any(w in joined for w in CLOSING_STEMS.get(c, ()))]
+        closings = [c for c in CLOSINGS if not any(w in joined for w in CLOSING_STEMS.get(c, ()))
+                    and not (_stems(c) & _stems(joined + " " + opening))]
         closing = random.choice(closings or [""])
 
         text = " ".join(x for x in [opening, *body, closing] if x)
