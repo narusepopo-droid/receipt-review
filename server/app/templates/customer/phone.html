@@ -49,7 +49,7 @@
         <div class="checkbox__content">
             <span class="checkbox__label checkbox__label--required">개인정보 수집·이용 동의</span>
             <p class="checkbox__description">
-                서비스 제공을 위해 휴대폰 번호를 수집합니다.
+                리뷰 이벤트 참여 확인을 위해 휴대폰 번호를 수집합니다.
                 <a href="#" class="checkbox__link" onclick="showPrivacyPolicy(); return false;">전문 보기</a>
             </p>
         </div>
@@ -58,9 +58,9 @@
     <label class="checkbox">
         <input type="checkbox" id="marketingAgree" class="checkbox__input" checked>
         <div class="checkbox__content">
-            <span class="checkbox__label checkbox__label--optional">마케팅 정보 수신 동의</span>
+            <span class="checkbox__label checkbox__label--optional">혜택·이벤트 문자 수신 동의</span>
             <p class="checkbox__description">
-                매장의 이벤트, 할인 정보를 받아보실 수 있습니다.
+                매장 이벤트·할인 문자를 받습니다. 언제든 거부할 수 있어요.
                 <a href="#" class="checkbox__link" onclick="showMarketingTerms(); return false;">전문 보기</a>
             </p>
         </div>
@@ -79,12 +79,46 @@
 
 {% block scripts %}
 <script>
-function showPrivacyPolicy() {
-    alert('개인정보 수집·이용 동의\n\n수집항목: 휴대폰 번호\n수집목적: 리뷰 이벤트 참여 확인, 혜택 제공\n보유기간: 수집일로부터 1년\n\n동의를 거부할 권리가 있으며, 동의 거부 시 서비스 이용이 제한될 수 있습니다.');
-}
+const TERMS_STORE = {{ store.name | tojson }};
+const TERMS = {
+    privacy: {
+        title: '개인정보 수집·이용 동의 (필수)',
+        body: [
+            ['수집·이용 주체', TERMS_STORE + ' (매장) 및 광고토대왕 (영수증리뷰 서비스 운영사)'],
+            ['수집 항목', '휴대폰 번호, 참여 일시, 접속 기기 정보(브라우저 종류)'],
+            ['이용 목적', '리뷰 이벤트 참여 확인, 영수증 1일 1회 제공(중복 참여 방지), 혜택 지급 확인'],
+            ['보유·이용 기간', '참여일로부터 1년 (이후 지체 없이 파기). 법령에 따라 보관이 필요한 경우 해당 기간'],
+            ['동의 거부 권리', '동의를 거부할 수 있으며, 거부 시 리뷰 이벤트 참여가 제한됩니다.'],
+            ['안전 조치', '휴대폰 번호는 암호화하여 보관하며, 매장에는 일부를 가린 번호(010-****-1234)만 표시됩니다.']
+        ]
+    },
+    marketing: {
+        title: '혜택·이벤트 문자 수신 동의 (선택)',
+        body: [
+            ['보내는 곳', TERMS_STORE],
+            ['내용', '매장 이벤트, 할인·쿠폰, 신메뉴 안내 (광고성 정보)'],
+            ['방법', '문자메시지 (SMS/LMS). 밤 9시 ~ 아침 8시에는 보내지 않습니다.'],
+            ['보유 기간', '동의 철회 시까지'],
+            ['철회 방법', '받은 문자 하단의 수신거부 링크, 또는 매장에 요청하면 언제든 철회할 수 있습니다.'],
+            ['동의 거부', '동의하지 않아도 리뷰 이벤트 참여에 불이익이 없습니다.']
+        ]
+    }
+};
 
-function showMarketingTerms() {
-    alert('마케팅 정보 수신 동의\n\n수신항목: 매장 이벤트, 할인 정보, 신메뉴 안내\n수신방법: 문자메시지(SMS/LMS)\n\n동의를 거부하셔도 서비스 이용이 가능합니다.\n수신 동의 후에도 언제든 거부할 수 있습니다.');
+function showTerms(kind) {
+    const t = TERMS[kind];
+    const rows = t.body.map(([k, v]) =>
+        `<div style="padding:10px 0;border-bottom:1px solid #eee;"><div style="font-size:13px;color:#888;margin-bottom:4px;">${k}</div><div style="font-size:15px;line-height:1.5;">${v}</div></div>`
+    ).join('');
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;display:flex;align-items:flex-end;justify-content:center;';
+    el.innerHTML = `<div style="background:#fff;width:100%;max-width:480px;max-height:85vh;overflow:auto;border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom));">
+        <h2 style="font-size:18px;font-weight:700;margin-bottom:8px;">${t.title}</h2>${rows}
+        <button type="button" class="btn btn--primary btn--large btn--full" style="margin-top:20px;">확인</button></div>`;
+    el.addEventListener('click', (e) => { if (e.target === el || e.target.tagName === 'BUTTON') el.remove(); });
+    document.body.appendChild(el);
 }
+function showPrivacyPolicy() { showTerms('privacy'); }
+function showMarketingTerms() { showTerms('marketing'); }
 </script>
 {% endblock %}

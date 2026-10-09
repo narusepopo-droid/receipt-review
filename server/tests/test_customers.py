@@ -69,3 +69,27 @@ class TestCustomerService:
         c2 = await service.get_or_create_customer("010-1234-5678")
 
         assert c1.id == c2.id
+
+
+@pytest.mark.asyncio
+async def test_purge_inactive_customers_after_one_year(db_session):
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import select
+    from app.models.store import Store
+    from app.models.customer import Customer, StoreCustomer
+    from app.services.disposal import purge_inactive_customers
+    from app.services.customers import hash_phone, encrypt_phone
+
+    db_session.add(Store(id=1, name="s", store_code="S1"))
+    old = datetime.now(timezone.utc) - timedelta(days=400)
+    new = datetime.now(timezone.utc) - timedelta(days=10)
+    for i, last in ((1, old), (2, new)):
+        db_session.add(Customer(id=i, phone_enc=encrypt_phone(f"0101111000{i}"), phone_hash=hash_phone(f"0101111000{i}")))
+        db_session.add(StoreCustomer(store_id=1, customer_id=i, first_visit_at=last, last_visit_at=last))
+    await db_session.commit()
+
+    assert await purge_inactive_customers(db_session) == 1
+    c1 = (await db_session.execute(select(Customer).where(Customer.id == 1))).scalar_one()
+    c2 = (await db_session.execute(select(Customer).where(Customer.id == 2))).scalar_one()
+    assert c1.phone_enc == "" and c1.phone_hash.startswith("deleted-")
+    assert c2.phone_enc != ""

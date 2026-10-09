@@ -207,3 +207,27 @@ async def dispose_by_approval_no(
 
     await db.commit()
     return count
+
+
+async def purge_inactive_customers(db: AsyncSession, days: int = 365) -> int:
+    """
+    개인정보 보유기간(1년) 경과 고객 파기
+    - 매장별 마지막 방문이 1년 넘은 연결(store_customers) 삭제 → 해당 매장 문자 대상에서도 빠짐
+    - 어느 매장과도 연결이 없는 고객은 번호 암호문·해시를 지움 (동의 기록은 증빙용으로 남김)
+    """
+    from sqlalchemy import delete as _delete
+    from app.models.customer import Customer, StoreCustomer
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    await db.execute(_delete(StoreCustomer).where(StoreCustomer.last_visit_at < cutoff))
+    linked = select(StoreCustomer.customer_id)
+    orphans = (await db.execute(select(Customer).where(
+        Customer.id.not_in(linked), Customer.phone_enc != ""))).scalars().all()
+    for c in orphans:
+        c.phone_enc = ""
+        c.phone_hash = f"deleted-{c.id}"
+        c.phone_last4 = None
+    await db.commit()
+    if orphans:
+        logger.info(f"Purged {len(orphans)} inactive customers")
+    return len(orphans)

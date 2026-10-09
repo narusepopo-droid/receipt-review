@@ -30,6 +30,8 @@ async def run_disposal_job():
     async with async_session_factory() as session:
         try:
             await dispose_expired_receipts(session)
+            from app.services.disposal import purge_inactive_customers
+            await purge_inactive_customers(session)
         except Exception as e:
             logger.error(f"Disposal job failed: {e}")
 

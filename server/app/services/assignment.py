@@ -42,9 +42,9 @@ class AssignmentService:
         h, m = map(int, cutoff.split(":"))
         today_cutoff = datetime.combine(now.date(), time(h, m), tzinfo=KST)
 
-        if now < today_cutoff:
-            return today_cutoff - timedelta(days=1)
-        return today_cutoff
+        start = today_cutoff - timedelta(days=1) if now < today_cutoff else today_cutoff
+        # 같은 시각을 UTC 로 반환 (DB 비교 시 시간대 혼동 방지)
+        return start.astimezone(timezone.utc)
 
     async def create_session(
         self,
