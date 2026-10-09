@@ -172,7 +172,8 @@ namespace ReceiptTap.App
 
             try
             {
-                var result = await _uploader.UploadAsync(e.RawData, e.CapturedAt, "serial", VERSION);
+                var mode = ModeOf(e.Source);
+                var result = await _uploader.UploadAsync(e.RawData, e.CapturedAt, mode, VERSION);
                 if (result.Success)
                 {
                     receipt.UploadState = "서버 전송 완료";
@@ -185,7 +186,7 @@ namespace ReceiptTap.App
                         ? "로그인 만료 → 다시 로그인하면 자동 재전송"
                         : "서버 전송 실패 → 나중에 자동 재전송";
                     Log($"업로드 실패 (큐 저장, {result.StatusCode}): {result.Error}");
-                    _queue.Enqueue(e.RawData, e.CapturedAt, "serial");
+                    _queue.Enqueue(e.RawData, e.CapturedAt, ModeOf(e.Source));
                     if (result.StatusCode == 401) MarkUnauthorized(); else MarkServer(false);
                 }
                 else
@@ -200,12 +201,16 @@ namespace ReceiptTap.App
             {
                 receipt.UploadState = "서버 전송 실패 → 나중에 자동 재전송";
                 Log($"업로드 오류 (큐 저장): {ex.Message}");
-                _queue.Enqueue(e.RawData, e.CapturedAt, "serial");
+                _queue.Enqueue(e.RawData, e.CapturedAt, ModeOf(e.Source));
                 MarkServer(false);
             }
 
             ReceiptProcessed?.Invoke(this, receipt);
         }
+
+        /// <summary>캡처 방식: 윈도우 프린터(spooler) / 시리얼(serial)</summary>
+        private static string ModeOf(string source) =>
+            source != null && source.StartsWith(SpoolerCapture.SourcePrefix) ? "spooler" : "serial";
 
         private static string SafeText(byte[] data)
         {
@@ -217,7 +222,7 @@ namespace ReceiptTap.App
             if (_uploader == null) return;
             try
             {
-                var hb = await _uploader.SendHeartbeatAsync(VERSION, "serial", LastReceipt?.CapturedAt, SafeQueueCount());
+                var hb = await _uploader.SendHeartbeatAsync(VERSION, ModeOf(ReceiptPort), LastReceipt?.CapturedAt, SafeQueueCount());
                 if (!string.IsNullOrEmpty(hb.NewToken))
                 {
                     // 서버가 새 토큰 발급 → 저장 (토큰 만료로 수집이 멈추지 않도록)

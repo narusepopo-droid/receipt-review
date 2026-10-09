@@ -17,6 +17,7 @@ namespace ReceiptTap.Core
         private readonly string _lockedPort;
         private readonly Dictionary<string, SpmcCapture> _captures =
             new Dictionary<string, SpmcCapture>(StringComparer.OrdinalIgnoreCase);
+        private SpoolerCapture _spooler;
         private SynchronizationContext _uiContext;
         private Timer _rescanTimer;
         private bool _isCapturing;
@@ -27,7 +28,13 @@ namespace ReceiptTap.Core
         /// <summary>현재 지켜보는 포트 목록</summary>
         public IReadOnlyCollection<string> WatchedPorts
         {
-            get { lock (_captures) return _captures.Keys.ToList(); }
+            get
+            {
+                List<string> list;
+                lock (_captures) list = _captures.Keys.ToList();
+                if (_spooler != null && _spooler.IsCapturing) list.Add("윈도우 프린터");
+                return list;
+            }
         }
 
         /// <summary>마지막으로 영수증이 들어온 포트</summary>
@@ -52,20 +59,56 @@ namespace ReceiptTap.Core
             if (_isCapturing) return;
             _uiContext = SynchronizationContext.Current;
 
-            SpmcHost.Get(); // SPMC 미설치면 여기서 예외 → 호출 쪽에서 "캡처 오류" 처리
-            if (!SpmcHost.LicenseInstalled)
-                Log("⚠ " + SpmcHost.LicenseError);
+            var lockedPrinter = _lockedPort != null && _lockedPort.StartsWith(SpoolerCapture.SourcePrefix)
+                ? _lockedPort.Substring(SpoolerCapture.SourcePrefix.Length) : null;
+            var serialWanted = _lockedPort == null || lockedPrinter == null;
+            var spoolerWanted = _lockedPort == null || lockedPrinter != null;
 
-            AttachPorts();
+            // 1) 시리얼(COM) - SPMC
+            string serialError = null;
+            if (serialWanted)
+            {
+                try
+                {
+                    SpmcHost.Get();
+                    if (!SpmcHost.LicenseInstalled)
+                        Log("⚠ " + SpmcHost.LicenseError);
+                    AttachPorts();
+                }
+                catch (Exception ex)
+                {
+                    serialError = ex.Message;
+                    Log("시리얼 감시 불가: " + ex.Message);
+                }
+            }
+
+            // 2) 윈도우 프린터 (네트워크·와이파이·드라이버 USB 프린터)
+            if (spoolerWanted)
+            {
+                try
+                {
+                    _spooler = new SpoolerCapture(lockedPrinter);
+                    _spooler.ReceiptCaptured += OnPortData;
+                    _spooler.LogMessage += (s, m) => Log(m);
+                    _spooler.ErrorOccurred += (s, e) => RaiseError(e.Exception, e.Message);
+                    _spooler.Start();
+                }
+                catch (Exception ex)
+                {
+                    Log("윈도우 프린터 감시 불가: " + ex.Message);
+                    _spooler = null;
+                }
+            }
+
             if (WatchedPorts.Count == 0)
                 throw new InvalidOperationException(_lockedPort != null
-                    ? $"{_lockedPort} 포트를 찾을 수 없습니다."
-                    : "이 PC에서 시리얼(COM) 포트를 찾을 수 없습니다.");
+                    ? $"{_lockedPort} 를 찾을 수 없습니다."
+                    : "감시할 수 있는 프린터가 없습니다." + (serialError != null ? " (" + serialError + ")" : ""));
 
             _isCapturing = true;
 
             // USB-시리얼처럼 나중에 꽂히는 포트 대비, 1분마다 새 포트 확인 (UI 스레드에서 실행)
-            if (_lockedPort == null && _uiContext != null)
+            if ((_lockedPort == null || !_lockedPort.StartsWith(SpoolerCapture.SourcePrefix)) && _uiContext != null)
                 _rescanTimer = new Timer(_ => _uiContext.Post(__ => { if (_isCapturing) AttachPorts(); }, null),
                     null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
         }
@@ -123,6 +166,8 @@ namespace ReceiptTap.Core
         public void Stop()
         {
             _isCapturing = false;
+            _spooler?.Dispose();
+            _spooler = null;
             _rescanTimer?.Dispose();
             _rescanTimer = null;
 

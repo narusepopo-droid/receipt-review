@@ -301,6 +301,13 @@ namespace ReceiptTap.App
                 foreach (var name in SafePortNames())
                     _portCombo.Items.Add(new SpmcPortInfo { Name = name, Port = name, Present = true });
             }
+            // 윈도우에 등록된 프린터 (네트워크·와이파이 프린터 등)
+            try
+            {
+                foreach (var pr in SpoolerCapture.ListPrinters())
+                    _portCombo.Items.Add(new SpmcPortInfo { Name = $"[프린터] {pr.Name}", Port = SpoolerCapture.SourcePrefix + pr.Name, Present = true });
+            }
+            catch { }
         }
 
         private static string[] SafePortNames()
@@ -367,7 +374,7 @@ namespace ReceiptTap.App
             var port = _service?.ReceiptPort;
             _portVal.Text = string.IsNullOrEmpty(port)
                 ? "찾는 중 (영수증 1장 출력 필요)"
-                : port + (_config.PortLocked ? " (직접 선택)" : " (자동 연결됨)");
+                : DisplayPort(port) + (_config.PortLocked ? " (직접 선택)" : " (자동 연결됨)");
             _portVal.ForeColor = string.IsNullOrEmpty(port) ? Color.FromArgb(41, 121, 255) : Color.FromArgb(0, 140, 60);
 
             var watched = _service?.WatchedPorts ?? new string[0];
@@ -397,6 +404,11 @@ namespace ReceiptTap.App
             if (last != null && (last != _shownReceipt || _uploadLbl.Text != UploadText(last)))
                 ShowReceipt(last, false);
         }
+
+        public static string DisplayPort(string port) =>
+            port != null && port.StartsWith(SpoolerCapture.SourcePrefix)
+                ? "프린터 " + port.Substring(SpoolerCapture.SourcePrefix.Length)
+                : port;
 
         private static string StatusTitle(AgentStatus s)
         {
@@ -502,16 +514,16 @@ namespace ReceiptTap.App
             ShowReceipt(r, true);
 
             if (wasWaiting == WaitMode.AutoConnect)
-                SetWaitText($"✔ 연결 성공! {r.Port} 포트에서 영수증을 읽었습니다.\r\n이제 영수증이 나올 때마다 자동으로 읽어옵니다.", Color.FromArgb(0, 140, 60));
+                SetWaitText($"✔ 연결 성공! {DisplayPort(r.Port)}에서 영수증을 읽었습니다.\r\n이제 영수증이 나올 때마다 자동으로 읽어옵니다.", Color.FromArgb(0, 140, 60));
             else if (wasWaiting == WaitMode.Test)
-                SetWaitText($"✔ 테스트 성공! {r.Port} 포트에서 영수증을 읽었습니다.", Color.FromArgb(0, 140, 60));
+                SetWaitText($"✔ 테스트 성공! {DisplayPort(r.Port)}에서 영수증을 읽었습니다.", Color.FromArgb(0, 140, 60));
             RefreshAll();
         }
 
         private void ShowReceipt(CapturedReceipt r, bool flash)
         {
             _shownReceipt = r;
-            _receiptHeader.Text = $"{r.CapturedAt:yyyy-MM-dd HH:mm:ss}  ·  {r.Port}  ·  {r.RawData.Length:N0}바이트";
+            _receiptHeader.Text = $"{r.CapturedAt:yyyy-MM-dd HH:mm:ss}  ·  {DisplayPort(r.Port)}  ·  {r.RawData.Length:N0}바이트";
             _receiptBox.Text = (r.Text ?? "").Replace("\n", "\r\n");
             _uploadLbl.Text = UploadText(r);
             _uploadLbl.ForeColor = (r.UploadState ?? "").Contains("완료") ? Color.FromArgb(0, 140, 60)

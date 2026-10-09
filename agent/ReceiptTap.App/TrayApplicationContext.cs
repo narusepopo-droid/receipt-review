@@ -47,7 +47,7 @@ namespace ReceiptTap.App
             _captureService.StatusChanged += (s, status) => OnUi(() => UpdateStatus(status));
             _captureService.PortDetected += (s, port) => OnUi(() =>
                 _trayIcon.ShowBalloonTip(4000, "프린터 자동 연결됨",
-                    $"{port} 포트에서 영수증을 찾았습니다.\n이제 영수증이 자동으로 수집됩니다.", ToolTipIcon.Info));
+                    $"{SettingsForm.DisplayPort(port)}에서 영수증을 찾았습니다.\n이제 영수증이 자동으로 수집됩니다.", ToolTipIcon.Info));
             _captureService.ReceiptProcessed += (s, r) => OnUi(() =>
             {
                 if (_settingsForm == null)
