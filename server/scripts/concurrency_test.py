@@ -50,7 +50,8 @@ async def main():
             # 손님마다 별도 쿠키(세션)로 번호 입력
             clients = []
             for i in range(CUSTOMERS):
-                cc = httpx.AsyncClient(base_url=BASE, timeout=60)
+                # 손님마다 다른 접속 IP (nginx 가 넣는 X-Real-IP 흉내, 요청 제한은 IP별)
+                cc = httpx.AsyncClient(base_url=BASE, timeout=60, headers={"X-Real-IP": f"10.77.{i // 200}.{i % 200 + 1}"})
                 r = await cc.post(f"/api/v1/session/start?store_code={code}",
                                   json={"phone": f"0109{random.randint(1000000, 9999999)}"})
                 assert r.status_code == 200, r.text
