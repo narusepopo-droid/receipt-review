@@ -110,7 +110,7 @@ async def run(base: str, keep: bool):
             check("손님 번호 입력 → 세션 시작", r.status_code == 200, r.text[:160])
             sid = r.json().get("session_id")
 
-            r = await c.post(f"/api/v1/session/{sid}/keywords", json={"keywords": ["맛있어요"]})
+            r = await c.post(f"/api/v1/session/{sid}/keywords", json={"keywords": ["맛있어요", "친절해요", "양이 많아요"]})
             check("키워드 저장", r.status_code == 200, r.text[:120])
 
             r = await c.post(f"/api/v1/session/{sid}/assign")

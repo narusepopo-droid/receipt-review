@@ -43,7 +43,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 class PhrasesUpdate(BaseModel):
     keywords: list
     signature_menus: list
-    templates: list
+    templates: list = []
     text_min_len: int
     text_max_len: int
 
@@ -528,14 +528,10 @@ async def phrases_page(request: Request, db: AsyncSession = Depends(get_db)):
     store = store_data["store"]
     settings = store_data["settings"]
 
-    keywords = settings.keywords if settings and settings.keywords else [
-        {"label": "맛있어요", "default": True},
-        {"label": "친절해요", "default": True},
-        {"label": "분위기 좋아요", "default": False}
-    ]
+    from app.review.phrase_bank import DEFAULT_KEYWORDS, BANK
+    keywords = settings.keywords if settings and settings.keywords else DEFAULT_KEYWORDS
 
     signature_menus = settings.signature_menus if settings and settings.signature_menus else []
-    templates_list = settings.templates if settings and settings.templates else []
 
     return templates.TemplateResponse(
         request=request,
@@ -545,7 +541,7 @@ async def phrases_page(request: Request, db: AsyncSession = Depends(get_db)):
             "active_menu": "phrases",
             "keywords": keywords,
             "signature_menus": signature_menus,
-            "templates": templates_list,
+            "bank_counts": {k: len(v) for k, v in BANK.items()},
             "text_min_len": settings.text_min_len if settings else 30,
             "text_max_len": settings.text_max_len if settings else 150
         }
@@ -554,27 +550,25 @@ async def phrases_page(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.post("/phrases/preview", name="admin_preview_phrases")
 async def preview_phrases(request: Request, data: PhrasesUpdate, db: AsyncSession = Depends(get_db)):
-    """저장 전 화면 값으로 실제 문구 생성기를 돌려 5개 미리보기 (DB 기록 없음)"""
+    """저장 전 화면 값으로 실제 생성 방식(문장 묶음 조합)을 5번 돌려 미리보기 (사용 기록 없음)"""
     store_data = await get_current_store(request, db)
     if not store_data:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다")
 
-    from app.review.text_generator import TextGenerator, DEFAULT_TEMPLATES
+    from app.review.text_generator import TextGenerator
+    from app.review.phrase_bank import MIN_KEYWORDS
     import random as _random
     gen = TextGenerator(db)
-    kw_phrases = {k["label"]: [p for p in k.get("phrases", []) if p]
-                  for k in data.keywords if isinstance(k, dict) and k.get("label") and k.get("phrases")}
+    store_id = store_data["store"].id
+    custom = {k["label"]: [p for p in k.get("phrases", []) if p]
+              for k in data.keywords if isinstance(k, dict) and k.get("label") and k.get("phrases")}
     labels = [k["label"] for k in data.keywords if isinstance(k, dict) and k.get("label")]
-    defaults = [k["label"] for k in data.keywords if isinstance(k, dict) and k.get("default")] or labels[:2]
     menus = [m for m in data.signature_menus if m]
     texts = []
-    for i in range(5):
-        chosen = defaults if i == 0 else _random.sample(labels, k=min(len(labels), _random.randint(1, 3))) if labels else []
-        if data.templates:
-            tpl = _random.choice([t for t in data.templates if t] or DEFAULT_TEMPLATES)
-            text = gen._fill_template(tpl, menus, chosen, kw_phrases)
-        else:
-            text = gen._compose(menus, chosen, kw_phrases)
+    for _ in range(5):
+        n = min(len(labels), _random.randint(MIN_KEYWORDS, MIN_KEYWORDS + 2))
+        chosen = _random.sample(labels, k=n) if labels else []
+        text, _picked = await gen.compose(store_id, chosen, menus, custom, data.text_max_len, mark=False)
         texts.append({"text": text, "len": len(text),
                       "ok": data.text_min_len <= len(text) <= data.text_max_len, "keywords": chosen})
     return JSONResponse({"texts": texts})
@@ -600,7 +594,7 @@ async def save_phrases(request: Request, data: PhrasesUpdate, db: AsyncSession =
 
     settings.keywords = data.keywords
     settings.signature_menus = data.signature_menus
-    settings.templates = data.templates
+    settings.templates = []   # 템플릿 방식은 사용하지 않음 (문장 묶음 조합)
     settings.text_min_len = data.text_min_len
     settings.text_max_len = data.text_max_len
 
@@ -627,7 +621,7 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
         context={
             "store": {"id": store.id, "name": store.name, "naver_review_url": store.naver_review_url, "staff_pin": store.staff_pin},
             "active_menu": "settings",
-            "options": {"phone_verify": opts.phone_verify, "ai_text": opts.ai_text,
+            "options": {"phone_verify": opts.phone_verify,
                         "review_check": opts.review_check, "naver_place_id": opts.naver_place_id or ""},
             "settings": {
                 "benefit_text": settings.benefit_text if settings else "",
@@ -859,7 +853,6 @@ async def sms_cancel(request: Request, campaign_id: int, db: AsyncSession = Depe
 
 class OptionsUpdate(BaseModel):
     phone_verify: bool = False
-    ai_text: bool = False
     review_check: bool = False
     naver_place_id: Optional[str] = None
 
@@ -882,6 +875,6 @@ async def save_options(request: Request, data: OptionsUpdate, db: AsyncSession =
     if not o:
         o = StoreOptions(store_id=store.id)
         db.add(o)
-    o.phone_verify, o.ai_text, o.review_check, o.naver_place_id = data.phone_verify, data.ai_text, data.review_check, place
+    o.phone_verify, o.review_check, o.naver_place_id = data.phone_verify, data.review_check, place
     await db.commit()
     return JSONResponse({"success": True, "naver_place_id": place})

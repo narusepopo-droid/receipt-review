@@ -1,87 +1,30 @@
-"""리뷰 문구 생성기"""
-import re
-import random
+"""
+리뷰 문구 생성기
+
+손님이 고른 키워드(최소 3개)마다 문장 묶음(phrase_bank: 12키워드 × 25문장 = 300문장 + 점주 추가 문장)에서
+1문장씩 골라 이어 붙인다. 앞뒤로 시작·마무리 문장을 무작위로 붙임.
+
+- 한 매장 안에서 같은 문장은 그 키워드 문장을 한 바퀴 다 쓸 때까지 다시 쓰지 않음 (phrase_usage)
+- 완성 문구도 30일 안에 같은 것이 나가지 않게 한 번 더 확인
+"""
 import hashlib
+import random
+import re
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.session import TextHistory
 from ..models.store import StoreSettings
+from .phrase_bank import BANK, OPENINGS, CLOSINGS
+
+MAX_KEYWORD_SENTENCES = 4   # 키워드를 많이 골라도 글이 너무 길어지지 않게 최대 4문장
 
 
-DEFAULT_TEMPLATES = [
-    "{메뉴} 정말 맛있었어요! {키워드1} 다음에 또 올게요.",
-    "오늘 {메뉴} 먹었는데 {키워드1} {키워드2} 추천합니다.",
-    "{키워드1} 분위기도 좋고 {메뉴}도 최고였어요.",
-    "{메뉴} 강추해요! {키워드1} 또 방문할게요.",
-    "역시 {메뉴}! {키워드1} {키워드2} 만족스러웠습니다.",
-]
-
-DEFAULT_MENUS: list[str] = []
-
-# 점주가 템플릿을 등록하지 않았을 때 쓰는 조합형 문장 재료
-# (시작 × 메뉴/본문 × 키워드 문장 순서 × 마무리 → 수천 가지 조합, 같은 문장 반복 방지)
-OPENINGS = [
-    "", "", "오늘 방문했어요.", "점심 먹으러 왔어요.", "저녁 식사하러 들렀어요.",
-    "지인 추천으로 와봤어요.", "근처에 볼일이 있어서 들렀어요.", "오랜만에 다시 왔어요.",
-    "가족이랑 같이 왔어요.", "친구랑 왔는데 좋았어요.",
-]
-MENU_SENTENCES = [
-    "{메뉴} 정말 맛있었어요.", "{메뉴} 먹었는데 기대 이상이었어요.", "{메뉴} 추천합니다!",
-    "{메뉴}가 특히 맛있었어요.", "{메뉴} 양도 넉넉하고 좋았어요.", "역시 {메뉴}가 최고네요.",
-    "{메뉴} 또 먹고 싶어요.", "{메뉴} 맛집 인정합니다.",
-]
-NO_MENU_SENTENCES = [
-    "음식이 전체적으로 맛있었어요.", "메뉴가 다 맛있었어요.", "음식이 정갈하고 맛있었어요.",
-    "먹는 내내 만족스러웠어요.", "음식이 빨리 나와서 좋았어요.", "기대 이상이었어요.",
-]
-CLOSINGS = [
-    "다음에 또 올게요!", "재방문 의사 있어요.", "또 방문할게요.", "추천합니다!",
-    "잘 먹고 갑니다.", "만족스러운 식사였어요.", "주변에도 추천할게요.", "자주 올 것 같아요.", "",
-]
-
-DEFAULT_KEYWORD_PHRASES = {
-    "맛있어요": [
-        "정말 맛있었어요.",
-        "맛이 일품이에요.",
-        "입맛에 딱 맞았어요.",
-    ],
-    "친절해요": [
-        "직원분들이 정말 친절하셨어요.",
-        "응대가 친절해서 기분 좋았어요.",
-        "서비스가 훌륭했어요.",
-    ],
-    "깔끔해요": [
-        "매장이 깔끔하고 청결해요.",
-        "위생적이고 정돈되어 있어요.",
-        "깔끔한 분위기가 좋았어요.",
-    ],
-    "가성비좋아요": [
-        "가격 대비 만족스러웠어요.",
-        "가성비 최고예요!",
-        "합리적인 가격이에요.",
-    ],
-    "분위기좋아요": [
-        "분위기가 아늑하고 좋아요.",
-        "편안한 분위기에서 식사했어요.",
-        "인테리어가 예뻐요.",
-    ],
-    "재방문의사있어요": [
-        "다음에 또 오고 싶어요.",
-        "단골 될 것 같아요.",
-        "꼭 다시 올게요.",
-    ],
-    "양이많아요": [
-        "양이 정말 푸짐해요.",
-        "양이 넉넉해서 배불리 먹었어요.",
-    ],
-    "음식이빨리나와요": [
-        "음식이 빨리 나와서 좋았어요.",
-        "주문하고 금방 나왔어요.",
-    ],
-}
+def _norm(t: str) -> str:
+    return re.sub(r"\s+", "", t or "")
 
 
 def _josa_iga(word: str) -> str:
@@ -94,197 +37,146 @@ def _josa_iga(word: str) -> str:
     return "가"
 
 
+def _phrase_hash(phrase: str) -> str:
+    return hashlib.sha256(phrase.encode()).hexdigest()
+
+
+def candidates_for(keyword: str, custom: Optional[dict], menus: list[str]) -> list[str]:
+    """키워드의 후보 문장: 기본 25문장 + 점주가 추가한 문장 (메뉴가 없으면 {메뉴} 문장 제외)"""
+    out = []
+    for label, phrases in BANK.items():
+        if _norm(label) == _norm(keyword):
+            out.extend(phrases)
+    for label, phrases in (custom or {}).items():
+        if _norm(label) == _norm(keyword):
+            out.extend(p for p in phrases if p)
+    if not out:
+        out = [keyword if keyword.endswith((".", "!", "요")) else keyword]   # 점주가 만든 새 키워드 (문장 미등록)
+    if not menus:
+        out = [p for p in out if "{메뉴}" not in p] or out
+    return list(dict.fromkeys(out))
+
+
+def fill_menu(phrase: str, menus: list[str]) -> str:
+    if "{메뉴}" not in phrase:
+        return phrase
+    menu = random.choice(menus) if menus else "음식"
+    phrase = phrase.replace("{메뉴}가", menu + _josa_iga(menu)).replace("{메뉴}는", menu + ("은" if _josa_iga(menu) == "이" else "는"))
+    return phrase.replace("{메뉴}", menu)
+
+
 class TextGenerator:
     def __init__(self, db: AsyncSession):
         self.db = db
 
     def _hash_text(self, text: str) -> str:
-        """문장 해시 생성"""
         return hashlib.sha256(text.encode()).hexdigest()
 
-    def _keyword_to_phrase(
-        self,
-        keyword: str,
-        keyword_phrases: Optional[dict] = None
-    ) -> str:
-        """키워드를 문장형으로 변환"""
-        # 점주 등록 문장 → 기본 문장 → 키워드 그대로 (띄어쓰기 무시하고 매칭)
-        norm = lambda t: re.sub(r"\s+", "", t or "")
-        for table in (keyword_phrases or {}, DEFAULT_KEYWORD_PHRASES):
-            for label, candidates in table.items():
-                if norm(label) == norm(keyword):
-                    cands = [c for c in (candidates or []) if c and norm(c) != norm(label)]
-                    if cands:
-                        return random.choice(cands)
-        return keyword
-
-    def _fill_template(
-        self,
-        template: str,
-        menus: list[str],
-        keywords: list[str],
-        keyword_phrases: Optional[dict] = None
-    ) -> str:
-        """템플릿 빈칸 채우기"""
-        result = template
-
-        if menus:
-            result = result.replace("{메뉴}", random.choice(menus))
-        else:
-            result = result.replace("{메뉴}", "")
-
-        for i in range(1, 6):
-            placeholder = f"{{키워드{i}}}"
-            if placeholder in result:
-                if i <= len(keywords):
-                    phrase = self._keyword_to_phrase(keywords[i-1], keyword_phrases)
-                    result = result.replace(placeholder, phrase)
-                else:
-                    result = result.replace(placeholder, "")
-
-        result = re.sub(r"\s+", " ", result).strip()
-        return result
-
-    async def is_duplicate(
-        self,
-        store_id: int,
-        text: str,
-        days: int = 30
-    ) -> bool:
-        """최근 N일 내 중복 문구인지 확인"""
-        text_hash = self._hash_text(text)
+    # ---------- 완성 문구 30일 중복 확인 ----------
+    async def is_duplicate(self, store_id: int, text: str, days: int = 30) -> bool:
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-
-        result = await self.db.execute(
-            select(TextHistory).where(
-                TextHistory.store_id == store_id,
-                TextHistory.text_hash == text_hash,
-                TextHistory.used_at >= cutoff
-            )
-        )
-        return result.scalar_one_or_none() is not None
+        result = await self.db.execute(select(TextHistory).where(
+            TextHistory.store_id == store_id,
+            TextHistory.text_hash == self._hash_text(text),
+            TextHistory.used_at >= cutoff))
+        return result.scalars().first() is not None
 
     async def record_text(self, store_id: int, text: str) -> None:
-        """사용된 문구 기록"""
-        history = TextHistory(
-            store_id=store_id,
-            text_hash=self._hash_text(text),
-            used_at=datetime.now(timezone.utc)
-        )
-        self.db.add(history)
+        self.db.add(TextHistory(store_id=store_id, text_hash=self._hash_text(text), used_at=datetime.now(timezone.utc)))
         await self.db.flush()
 
     async def cleanup_old_history(self, store_id: int, days: int = 30) -> int:
-        """오래된 문구 기록 정리"""
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-        result = await self.db.execute(
-            delete(TextHistory).where(
-                TextHistory.store_id == store_id,
-                TextHistory.used_at < cutoff
-            )
-        )
+        result = await self.db.execute(delete(TextHistory).where(
+            TextHistory.store_id == store_id, TextHistory.used_at < cutoff))
         return result.rowcount
+
+    # ---------- 문장 순환 (한 바퀴 돌면 다시) ----------
+    async def _usage(self, store_id: int, phrases: list[str]) -> dict:
+        from ..models.options import PhraseUsage
+        hashes = {_phrase_hash(p): p for p in phrases}
+        rows = (await self.db.execute(select(PhraseUsage).where(
+            PhraseUsage.store_id == store_id, PhraseUsage.phrase_hash.in_(list(hashes))))).scalars().all()
+        counts = {p: 0 for p in phrases}
+        for r in rows:
+            counts[hashes[r.phrase_hash]] = r.count
+        return counts
+
+    async def _pick(self, store_id: int, phrases: list[str], exclude: set) -> str:
+        """가장 덜 쓴 문장 중 하나 (같은 바퀴 안에서는 중복 없음)"""
+        counts = await self._usage(store_id, phrases)
+        pool = [p for p in phrases if p not in exclude] or phrases
+        least = min(counts[p] for p in pool)
+        return random.choice([p for p in pool if counts[p] == least])
+
+    async def _mark_used(self, store_id: int, phrases: list[str]) -> None:
+        from ..models.options import PhraseUsage
+        for p in phrases:
+            h = _phrase_hash(p)
+            row = (await self.db.execute(select(PhraseUsage).where(
+                PhraseUsage.store_id == store_id, PhraseUsage.phrase_hash == h))).scalar_one_or_none()
+            if row:
+                row.count += 1
+            else:
+                self.db.add(PhraseUsage(store_id=store_id, phrase_hash=h, count=1))
+        await self.db.flush()
+
+    # ---------- 생성 ----------
+    @staticmethod
+    def _store_material(settings: Optional[StoreSettings]):
+        menus = [m for m in (settings.signature_menus or []) if m and m.strip()] if settings else []
+        custom = {}
+        if settings and settings.keywords:
+            for kw in settings.keywords:
+                if isinstance(kw, dict) and kw.get("label") and kw.get("phrases"):
+                    custom[kw["label"]] = [p for p in kw["phrases"] if p]
+        min_len = settings.text_min_len if settings and settings.text_min_len else 30
+        max_len = settings.text_max_len if settings and settings.text_max_len else 150
+        return menus, custom, min_len, max_len
+
+    async def compose(self, store_id: int, keywords: list[str], menus: list[str], custom: dict,
+                      max_len: int = 150, mark: bool = True) -> tuple[str, list[str]]:
+        """(완성 문구, 고른 원문 문장들)"""
+        chosen = list(dict.fromkeys(k for k in keywords if k))
+        random.shuffle(chosen)
+        chosen = chosen[:MAX_KEYWORD_SENTENCES] or ["맛있어요"]
+
+        picked_raw = []
+        for kw in chosen:
+            phrases = candidates_for(kw, custom, menus)
+            picked_raw.append(await self._pick(store_id, phrases, set(picked_raw)))
+
+        opening = random.choice(OPENINGS)
+        closing = random.choice(CLOSINGS)
+        body = [fill_menu(p, menus) for p in picked_raw]
+        text = " ".join(x for x in [opening, *body, closing] if x)
+        # 너무 길면 시작·마무리부터 뺌
+        if len(text) > max_len:
+            text = " ".join(x for x in [*body, closing] if x)
+        if len(text) > max_len:
+            text = " ".join(body)
+        if mark:
+            await self._mark_used(store_id, picked_raw)
+        return re.sub(r"\s+", " ", text).strip(), picked_raw
 
     async def generate(
         self,
         store_id: int,
         selected_keywords: list[str],
         settings: Optional[StoreSettings] = None,
-        max_attempts: int = 20
+        max_attempts: int = 10
     ) -> str:
-        """
-        문구 생성
-        - 템플릿 랜덤 선택 → 빈칸 채움
-        - 글자수 범위 체크
-        - 중복 방지 (30일 내)
-        """
-        templates = DEFAULT_TEMPLATES
-        menus = DEFAULT_MENUS
-        keyword_phrases = DEFAULT_KEYWORD_PHRASES
-        min_len = 30
-        max_len = 150
-
-        if settings:
-            if settings.templates:
-                templates = settings.templates
-            if settings.signature_menus:
-                menus = settings.signature_menus
-            if settings.keywords:
-                kw_phrases = {}
-                for kw in settings.keywords:
-                    if isinstance(kw, dict) and kw.get("label") and kw.get("phrases"):
-                        kw_phrases[kw["label"]] = [p for p in kw["phrases"] if p]
-                if kw_phrases:
-                    keyword_phrases = kw_phrases
-            min_len = settings.text_min_len
-            max_len = settings.text_max_len
-
-        custom_templates = bool(settings and settings.templates)
-
-        # AI 문장 (매장에서 켠 경우) → 실패하면 아래 기존 방식
-        try:
-            from app.services.otp import get_options
-            from app.review import ai_text
-            if self.db is not None and (await get_options(self.db, store_id)).ai_text and ai_text.is_available():
-                phrases = [self._keyword_to_phrase(k, keyword_phrases) for k in (selected_keywords or [])[:3]]
-                for _ in range(2):   # 두 번째 시도는 문장이 겹쳤을 때만 (실패면 바로 기존 방식 → 손님 대기 최소화)
-                    text = await ai_text.generate(menus, phrases, min_len, max_len)
-                    if not text:
-                        break
-                    if not await self.is_duplicate(store_id, text):
-                        await self.record_text(store_id, text)
-                        return text
-        except Exception as e:  # AI 쪽 문제로 손님 흐름이 멈추면 안 됨
-            import logging
-            logging.getLogger(__name__).warning("AI text failed: %s", e)
-
-        def make() -> str:
-            if custom_templates:
-                tpl = random.choice(templates)
-                if not menus:
-                    # 메뉴가 없으면 {메뉴}가 없는 템플릿 우선
-                    no_menu = [t for t in templates if "{메뉴}" not in t]
-                    tpl = random.choice(no_menu) if no_menu else tpl
-                return self._fill_template(tpl, menus, selected_keywords, keyword_phrases)
-            return self._compose(menus, selected_keywords, keyword_phrases)
-
+        menus, custom, min_len, max_len = self._store_material(settings)
+        text, picked = "", []
         for _ in range(max_attempts):
-            text = make()
-
-            if len(text) < min_len or len(text) > max_len:
+            text, picked = await self.compose(store_id, selected_keywords, menus, custom, max_len, mark=False)
+            if len(text) < min_len or await self.is_duplicate(store_id, text):
                 continue
-
-            if await self.is_duplicate(store_id, text):
-                continue
-
-            await self.record_text(store_id, text)
-            return text
-
-        fallback = make()
-        await self.record_text(store_id, fallback)
-        return fallback
-
-    def _compose(self, menus: list[str], keywords: list[str], keyword_phrases: Optional[dict]) -> str:
-        """조합형 기본 문장: 시작 + 메뉴 문장 + 키워드 문장들(섞음) + 마무리"""
-        parts = [random.choice(OPENINGS)]
-        if menus:
-            menu = random.choice(menus)
-            sentence = random.choice(MENU_SENTENCES).replace("{메뉴}가", menu + _josa_iga(menu))
-            parts.append(sentence.replace("{메뉴}", menu))
-        else:
-            parts.append(random.choice(NO_MENU_SENTENCES))
-
-        kws = list(keywords)[:3]
-        random.shuffle(kws)
-        for kw in kws:
-            phrase = self._keyword_to_phrase(kw, keyword_phrases).strip()
-            if phrase and phrase[-1] not in ".!?~":
-                phrase += "."
-            parts.append(phrase)
-
-        parts.append(random.choice(CLOSINGS))
-        text = " ".join(p for p in parts if p)
-        return re.sub(r"\s+", " ", text).strip()
+            break
+        # 확정한 문장만 사용 처리 (한 바퀴 순환 기록)
+        await self._mark_used(store_id, picked)
+        await self.record_text(store_id, text)
+        return text
 
     async def regenerate(
         self,
@@ -295,16 +187,11 @@ class TextGenerator:
         settings: Optional[StoreSettings] = None,
         max_regenerate: int = 10
     ) -> tuple[str, int]:
-        """
-        다른 문구 생성 (세션당 최대 10회)
-        Returns: (새 문구, 새 재생성 카운트)
-        """
+        """다른 문구 (세션당 최대 10회)"""
         if regenerate_count >= max_regenerate:
             return current_text, regenerate_count
-
-        for attempt in range(5):
+        for _ in range(5):
             new_text = await self.generate(store_id, selected_keywords, settings)
             if new_text != current_text:
                 return new_text, regenerate_count + 1
-
         return current_text, regenerate_count

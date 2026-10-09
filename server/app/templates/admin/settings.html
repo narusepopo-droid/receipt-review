@@ -198,10 +198,6 @@
             <input type="checkbox" id="opt-phone-verify" {{ 'checked' if options.phone_verify }}>
             <span><strong>휴대폰 인증번호</strong><br><span style="font-size:13px; color:var(--gray-600);">손님이 번호 입력 후 문자로 받은 6자리를 입력해야 참여할 수 있습니다. 가짜 번호가 많을 때 켜세요. (문자 비용 발생)</span></span>
         </label>
-        <label style="display:flex; gap:10px; align-items:flex-start; margin-bottom:16px;">
-            <input type="checkbox" id="opt-ai-text" {{ 'checked' if options.ai_text }}>
-            <span><strong>AI 리뷰 문장</strong><br><span style="font-size:13px; color:var(--gray-600);">AI가 키워드·대표메뉴로 매번 다른 자연스러운 문장을 만듭니다. AI가 응답하지 않으면 기존 방식으로 자동 전환됩니다.</span></span>
-        </label>
         <label style="display:flex; gap:10px; align-items:flex-start; margin-bottom:8px;">
             <input type="checkbox" id="opt-review-check" {{ 'checked' if options.review_check }}>
             <span><strong>리뷰 등록 자동 확인</strong><br><span style="font-size:13px; color:var(--gray-600);">네이버 플레이스에 올라온 리뷰와 손님에게 드린 문구를 비교해 실제 등록 건수를 셉니다.</span></span>
@@ -268,7 +264,6 @@ async function saveOptions() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             phone_verify: document.getElementById('opt-phone-verify').checked,
-            ai_text: document.getElementById('opt-ai-text').checked,
             review_check: document.getElementById('opt-review-check').checked,
             naver_place_id: document.getElementById('opt-place').value
         })

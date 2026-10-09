@@ -150,6 +150,11 @@ async def run_case(pw, name, engine_name, ua, kind, idx):
             await page.check("#privacyAgree")
         await page.click("#submitPhone")
         await page.wait_for_url("**/keywords", timeout=8000)
+        # 키워드 3개 이상 선택 (3개 미만이면 다음 버튼 비활성)
+        assert await page.is_disabled("#submitKeywords"), "3개 미만인데 다음 버튼이 눌림"
+        chips = page.locator(".keyword-chip:not(.active)")
+        while await page.locator(".keyword-chip.active").count() < 3:
+            await chips.first.click()
         await page.click("#submitKeywords")
         await page.wait_for_url("**/result", timeout=8000)
         await page.wait_for_function("document.getElementById('receiptImage') && document.getElementById('receiptImage').naturalWidth > 0", timeout=8000)

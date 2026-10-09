@@ -13,7 +13,7 @@
 <!-- 헤더 -->
 <div class="header">
     <h1 class="header__store-name">어떤 점이 좋았나요?</h1>
-    <p class="header__subtitle">해당하는 키워드를 선택해주세요</p>
+    <p class="header__subtitle">좋았던 점을 <strong>{{ min_keywords }}개 이상</strong> 골라주세요</p>
 </div>
 
 <!-- 키워드 선택 -->
@@ -33,13 +33,11 @@
         {% endfor %}
     </div>
 
-    <p class="text-center" style="color: var(--color-text-muted); font-size: 14px;">
-        선택하지 않고 넘어가셔도 됩니다
-    </p>
+    <p class="text-center" id="keywordCount" style="color: var(--color-text-muted); font-size: 15px; font-weight: 600;"></p>
 </div>
 
 <!-- 제출 버튼 -->
-<button type="button" id="submitKeywords" class="btn btn--primary btn--large btn--full">
+<button type="button" id="submitKeywords" class="btn btn--primary btn--large btn--full" data-min="{{ min_keywords }}">
     다음
 </button>
 

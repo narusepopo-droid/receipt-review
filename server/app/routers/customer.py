@@ -117,12 +117,8 @@ async def keywords_page(
     store = await get_store_by_code(store_code, db)
     store_settings = await get_store_settings(store.id, db)
 
-    keywords = store_settings.keywords if store_settings and store_settings.keywords else [
-        {"label": "맛있어요", "default": True},
-        {"label": "친절해요", "default": True},
-        {"label": "분위기 좋아요", "default": False},
-        {"label": "가성비 좋아요", "default": False},
-    ]
+    from ..review.phrase_bank import DEFAULT_KEYWORDS, MIN_KEYWORDS
+    keywords = store_settings.keywords if store_settings and store_settings.keywords else DEFAULT_KEYWORDS
 
     store_data = {
         "id": store.id,
@@ -135,7 +131,7 @@ async def keywords_page(
     return templates.TemplateResponse(
         request=request,
         name="customer/keywords.html",
-        context={"store": store_data, "table_no": table_no, "keywords": keywords,
+        context={"store": store_data, "table_no": table_no, "keywords": keywords, "min_keywords": MIN_KEYWORDS,
                  "session_id": str(session.id) if (session := await current_session(request, store.id, db)) else ""}
     )
 
@@ -435,6 +431,11 @@ async def save_keywords(
     db: AsyncSession = Depends(get_db)
 ):
     """키워드 저장"""
+    from ..review.phrase_bank import MIN_KEYWORDS
+    picked = list(dict.fromkeys(k.strip() for k in request.keywords if k and k.strip()))
+    if len(picked) < MIN_KEYWORDS:
+        raise HTTPException(status_code=400, detail=f"키워드를 {MIN_KEYWORDS}개 이상 골라주세요")
+    request.keywords = picked
     result = await db.execute(
         select(ReviewSession).where(ReviewSession.id == session_id)
     )

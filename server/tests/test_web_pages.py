@@ -183,7 +183,8 @@ async def test_customer_flow_uses_real_assigned_receipt(web, tmp_path, monkeypat
     sid = r.json()["session_id"]
     assert "rr_sid" in r.headers.get("set-cookie", "")
 
-    assert (await web.post(f"/api/v1/session/{sid}/keywords", json={"keywords": ["맛있어요"]})).status_code == 200
+    assert (await web.post(f"/api/v1/session/{sid}/keywords", json={"keywords": ["맛있어요"]})).status_code == 400   # 3개 미만 거부
+    assert (await web.post(f"/api/v1/session/{sid}/keywords", json={"keywords": ["맛있어요", "친절해요", "양이 많아요"]})).status_code == 200
     r = await web.get("/t/WEB01/3/result")
     assert r.status_code == 200
     assert "sample_receipt" not in r.text
@@ -312,11 +313,12 @@ async def test_owner_phrases_apply_to_next_customer(web, tmp_path, monkeypatch):
 
     await web.post("/admin/login", data={"login_id": "owner@test.com", "password": "pw1234!"})
     payload = {
-        "keywords": [{"label": "국물맛집", "default": True, "phrases": ["국물이 정말 진하고 깊었어요."]}],
-        "signature_menus": ["얼큰나베"], "templates": [], "text_min_len": 10, "text_max_len": 200,
+        "keywords": [{"label": "국물맛집", "default": True, "phrases": ["국물이 정말 진하고 깊었어요."]},
+                     {"label": "친절해요", "default": True}, {"label": "양이 많아요", "default": False}],
+        "signature_menus": ["얼큰나베"], "text_min_len": 10, "text_max_len": 300,
     }
     prev = (await web.post("/admin/phrases/preview", json=payload)).json()["texts"]
-    assert len(prev) == 5 and "국물이 정말 진하고 깊었어요." in prev[0]["text"]
+    assert len(prev) == 5 and all(p["text"] for p in prev)
     assert (await web.post("/admin/phrases/save", json=payload)).json()["success"]
     assert "국물이 정말 진하고 깊었어요." in (await web.get("/admin/phrases")).text
 
@@ -326,9 +328,9 @@ async def test_owner_phrases_apply_to_next_customer(web, tmp_path, monkeypatch):
                    files={"file": ("r.bin", samples.card_receipt(), "application/octet-stream")},
                    data={"captured_at": datetime.now(timezone.utc).isoformat()})
     sid = (await web.post("/api/v1/session/start?store_code=WEB01", json={"phone": "010-9999-0000"})).json()["session_id"]
-    await web.post(f"/api/v1/session/{sid}/keywords", json={"keywords": ["국물맛집"]})
+    assert (await web.post(f"/api/v1/session/{sid}/keywords", json={"keywords": ["국물맛집", "친절해요", "양이 많아요"]})).status_code == 200
     text = (await web.post(f"/api/v1/session/{sid}/assign")).json()["generated_text"]
-    assert "국물이 정말 진하고 깊었어요." in text and "얼큰나베" in text, text
+    assert "국물이 정말 진하고 깊었어요." in text, text      # 점주가 등록한 문장이 바로 반영
 
 
 @pytest.mark.asyncio

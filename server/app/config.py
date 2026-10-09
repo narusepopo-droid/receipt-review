@@ -36,9 +36,6 @@ class Settings(BaseSettings):
     SMS_COST_SMS: int = 20          # 건당 비용 (원)
     SMS_COST_LMS: int = 50
 
-    # AI 리뷰 문장 (Phase 9) - 비어 있으면 기존 조합 방식
-    ANTHROPIC_API_KEY: str = ""
-
     # 운영자 알림 받을 휴대폰 (에이전트 끊김 등). 알리고 키도 있어야 문자 발송
     OPS_ALERT_PHONE: str = ""
 

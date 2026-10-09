@@ -78,15 +78,53 @@ class TestTextGenerator:
         assert h1 != h3
 
     @pytest.mark.asyncio
-    async def test_keyword_to_phrase(self, db_session):
-        generator = TextGenerator(db_session)
+    async def test_bank_sentence_per_keyword(self, db_session):
+        """고른 키워드마다 그 키워드 문장이 하나씩 들어감"""
+        from app.review.phrase_bank import BANK
+        store = Store(name="테스트매장", store_code="gen005")
+        db_session.add(store)
+        await db_session.flush()
+        gen = TextGenerator(db_session)
+        kws = ["친절해요", "주차하기 편해요", "포장 상태가 좋아요"]
+        text, picked = await gen.compose(store.id, kws, [], {}, 300, mark=False)
+        for kw in kws:
+            assert any(p in picked for p in BANK[kw]), kw
+        assert all(p in text for p in picked)
 
-        phrase = generator._keyword_to_phrase("맛있어요")
-        assert phrase in [
-            "정말 맛있었어요.",
-            "맛이 일품이에요.",
-            "입맛에 딱 맞았어요.",
-        ]
+    @pytest.mark.asyncio
+    async def test_no_repeat_until_full_cycle(self, db_session):
+        """한 매장에서 같은 문장은 한 바퀴(25문장) 다 쓰기 전에는 다시 안 나옴"""
+        from app.review.phrase_bank import BANK
+        store = Store(name="테스트매장", store_code="gen006")
+        db_session.add(store)
+        await db_session.flush()
+        gen = TextGenerator(db_session)
+        bank = [p for p in BANK["주차하기 편해요"]]
+        seen = []
+        for _ in range(len(bank)):
+            _, picked = await gen.compose(store.id, ["주차하기 편해요"], [], {}, 300, mark=True)
+            seen.append(picked[0])
+        assert sorted(seen) == sorted(bank)          # 25번 동안 25문장 모두 한 번씩
+        _, picked = await gen.compose(store.id, ["주차하기 편해요"], [], {}, 300, mark=True)
+        assert picked[0] in bank                       # 26번째부터 다시 순환
 
-        unknown = generator._keyword_to_phrase("알수없는키워드")
-        assert unknown == "알수없는키워드"
+    @pytest.mark.asyncio
+    async def test_cycle_is_per_store(self, db_session):
+        from app.review.phrase_bank import BANK
+        a = Store(name="A", store_code="gen007")
+        b = Store(name="B", store_code="gen008")
+        db_session.add_all([a, b])
+        await db_session.flush()
+        gen = TextGenerator(db_session)
+        for _ in range(24):
+            await gen.compose(a.id, ["맛있어요"], [], {}, 300, mark=True)
+        # B 매장은 A 사용 기록과 무관하게 아무 문장이나 가능 (첫 바퀴)
+        _, picked = await gen.compose(b.id, ["맛있어요"], [], {}, 300, mark=True)
+        assert picked[0] in BANK["맛있어요"]
+
+    @pytest.mark.asyncio
+    async def test_custom_phrases_added_and_menu(self, db_session):
+        from app.review.text_generator import candidates_for
+        c = candidates_for("맛있어요", {"맛있어요": ["국물이 진했어요."]}, ["갈비탕"])
+        assert "국물이 진했어요." in c and len(c) == 26
+        assert all("{메뉴}" not in p for p in candidates_for("맛있어요", {}, []))

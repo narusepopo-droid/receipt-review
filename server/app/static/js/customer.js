@@ -430,6 +430,8 @@
 
             if (!chips.length) return;
 
+            this.min = parseInt(submitBtn?.dataset.min || '3', 10);
+
             // 기본 선택된 키워드
             chips.forEach(chip => {
                 if (chip.classList.contains('active')) {
@@ -444,10 +446,24 @@
                     } else {
                         this.selectedKeywords.delete(chip.dataset.keyword);
                     }
+                    this.updateCount();
                 });
             });
 
             submitBtn?.addEventListener('click', () => this.submit());
+            this.updateCount();
+        },
+
+        updateCount() {
+            const n = this.selectedKeywords.size;
+            const ok = n >= this.min;
+            const label = document.getElementById('keywordCount');
+            const btn = document.getElementById('submitKeywords');
+            if (label) {
+                label.textContent = ok ? `${n}개 선택했어요 ✓` : `${n}개 선택 · ${this.min - n}개 더 골라주세요`;
+                label.style.color = ok ? '#03C75A' : '';
+            }
+            if (btn) btn.disabled = !ok;
         },
 
         async submit() {

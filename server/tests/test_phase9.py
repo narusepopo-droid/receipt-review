@@ -55,54 +55,6 @@ async def test_options_require_place_for_review_check(web):
 
 
 @pytest.mark.asyncio
-async def test_ai_text_used_when_enabled_and_fallback_when_fails(web, tmp_path, monkeypatch):
-    import sys
-    from pathlib import Path
-    from datetime import datetime, timezone
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-    import make_sample_escpos as samples
-    from app.routers.auth import generate_token
-    from app.review import ai_text
-
-    monkeypatch.setattr(settings, "RECEIPT_IMAGE_DIR", str(tmp_path / "img"))
-    monkeypatch.setattr(settings, "RECEIPT_RAW_DIR", str(tmp_path / "raw"))
-    for no in (b"30012345", b"30012399"):
-        await web.post("/agent/v1/receipts", headers={"Authorization": f"Bearer {generate_token(1)}"},
-                       files={"file": ("r.bin", samples.card_receipt().replace(b"30012345", no), "application/octet-stream")},
-                       data={"captured_at": datetime.now(timezone.utc).isoformat()})
-    await owner(web)
-    await web.post("/admin/options/save", json={"ai_text": True})
-
-    calls = {}
-
-    async def fake_generate(menus, phrases, mn, mx):
-        calls["phrases"] = phrases
-        return "점심에 왔는데 국물이 정말 진하고 직원분들도 친절하셨어요. 또 올게요."
-    monkeypatch.setattr(ai_text, "is_available", lambda: True)
-    monkeypatch.setattr(ai_text, "generate", fake_generate)
-    sid = (await web.post("/api/v1/session/start?store_code=WEB01", json={"phone": "010-3131-4141"})).json()["session_id"]
-    await web.post(f"/api/v1/session/{sid}/keywords", json={"keywords": ["친절해요"]})
-    text = (await web.post(f"/api/v1/session/{sid}/assign")).json()["generated_text"]
-    assert text.startswith("점심에 왔는데") and calls["phrases"]
-
-    # AI 실패 → 기존 조합 방식
-    async def failing(*a):
-        return None
-    monkeypatch.setattr(ai_text, "generate", failing)
-    sid2 = (await web.post("/api/v1/session/start?store_code=WEB01", json={"phone": "010-3131-5151"})).json()["session_id"]
-    text2 = (await web.post(f"/api/v1/session/{sid2}/assign")).json()["generated_text"]
-    assert text2 and not text2.startswith("점심에 왔는데")
-
-
-@pytest.mark.asyncio
-async def test_ai_text_bad_key_returns_none(monkeypatch):
-    """잘못된 키 → 오류를 삼키고 None (손님 흐름은 기존 방식으로 계속)"""
-    from app.review import ai_text
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-invalid-test-key")
-    assert await ai_text.generate(["김치찌개"], ["정말 맛있었어요."], 20, 150) is None
-
-
-@pytest.mark.asyncio
 async def test_review_check_matches_posted_review(web, tmp_path, monkeypatch):
     """손님에게 준 문구가 네이버 리뷰에 (조금 고쳐서라도) 올라오면 확인됨으로 집계"""
     import sys

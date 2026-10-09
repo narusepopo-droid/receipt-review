@@ -30,13 +30,7 @@
             </p>
 
             <div id="keywords-container" class="chips-container">
-                {% for keyword in keywords | default([
-                    {'label': '맛있어요', 'default': true},
-                    {'label': '친절해요', 'default': true},
-                    {'label': '분위기 좋아요', 'default': false},
-                    {'label': '가성비 좋아요', 'default': false},
-                    {'label': '재방문 의사 있어요', 'default': false}
-                ]) %}
+                {% for keyword in keywords %}
                 <div class="chip {{ 'active' if keyword.default else '' }}" data-keyword="{{ keyword.label }}">
                     <input type="checkbox" {{ 'checked' if keyword.default else '' }} style="display: none;">
                     {{ keyword.label }}
@@ -64,15 +58,16 @@
         </div>
         <div class="card-body">
             <p style="font-size: 13px; color: var(--gray-600); margin-bottom: 16px;">
-                손님이 키워드를 고르면 아래 문장 중 하나가 리뷰에 들어갑니다. 한 줄에 한 문장씩 적어주세요.
-                비워두면 기본 문장을 씁니다. (새로 추가한 키워드는 저장 후 여기에 나타납니다)
+                손님이 고른 키워드(3개 이상)마다 문장을 하나씩 뽑아 리뷰를 만듭니다. 기본 키워드에는 문장이 25개씩 준비되어 있고,
+                여기 적은 문장은 <strong>추가</strong>됩니다 (한 줄에 한 문장). 한 매장에서 같은 문장은 한 바퀴 다 쓸 때까지 다시 나오지 않습니다.
             </p>
             <div id="phrases-container">
                 {% for keyword in keywords %}
                 <div class="form-group">
-                    <label class="form-label">{{ keyword.label }}</label>
-                    <textarea class="form-input phrase-input" data-keyword="{{ keyword.label }}" rows="3"
-                              placeholder="예) 국물이 정말 진했어요.">{{ (keyword.phrases or []) | join('\n') }}</textarea>
+                    <label class="form-label">{{ keyword.label }}
+                        <span style="font-weight:400; color:var(--gray-500); font-size:12px;">{% if bank_counts.get(keyword.label) %}기본 문장 {{ bank_counts.get(keyword.label) }}개 + {% else %}기본 문장 없음 · {% endif %}추가 문장</span></label>
+                    <textarea class="form-input phrase-input" data-keyword="{{ keyword.label }}" rows="2"
+                              placeholder="{% if bank_counts.get(keyword.label) %}(선택) 우리 매장만의 문장 추가{% else %}이 키워드에 쓸 문장을 꼭 적어주세요{% endif %}">{{ (keyword.phrases or []) | join('\n') }}</textarea>
                 </div>
                 {% endfor %}
             </div>
@@ -90,7 +85,7 @@
             </p>
 
             <div id="menus-container">
-                {% for menu in signature_menus | default(['돼지김치찌개', '계란말이', '된장찌개']) %}
+                {% for menu in signature_menus %}
                 <div class="template-item">
                     <span style="color: var(--gray-400);">☰</span>
                     <input type="text" class="form-input" value="{{ menu }}" style="flex: 1;">
@@ -105,40 +100,6 @@
                 <i data-feather="plus" style="width: 14px; height: 14px;"></i>
                 메뉴 추가
             </button>
-        </div>
-    </div>
-</div>
-
-<!-- Templates Section -->
-<div class="card" style="margin-top: 24px;">
-    <div class="card-header">
-        <h3 class="card-title">문구 템플릿</h3>
-        <button class="btn btn-sm btn-outline" onclick="addTemplate()">
-            <i data-feather="plus" style="width: 14px; height: 14px;"></i>
-            추가
-        </button>
-    </div>
-    <div class="card-body">
-        <p style="font-size: 13px; color: var(--gray-600); margin-bottom: 16px;">
-            <code>{메뉴}</code>는 대표메뉴로, <code>{키워드1}</code> <code>{키워드2}</code>는 선택된 키워드의 문장형으로 치환됩니다.
-        </p>
-
-        <div id="templates-container">
-            {% for template in templates | default([
-                '{메뉴} 정말 맛있었어요! {키워드1} 다음에 또 올게요.',
-                '오늘 {메뉴} 먹었는데 {키워드1} {키워드2} 추천합니다.',
-                '{키워드1} 분위기도 좋고 {메뉴}도 최고였어요.'
-            ]) %}
-            <div class="template-item">
-                <span class="drag-handle" style="color: var(--gray-400);">☰</span>
-                <input type="text" class="form-input template-text" value="{{ template }}" style="flex: 1;">
-                <div class="actions">
-                    <button class="btn btn-sm btn-outline" onclick="removeTemplate(this)" style="color: var(--danger);">
-                        <i data-feather="trash-2" style="width: 14px; height: 14px;"></i>
-                    </button>
-                </div>
-            </div>
-            {% endfor %}
         </div>
     </div>
 </div>
@@ -268,7 +229,7 @@ function collectData() {
             phrases: phraseMap[el.dataset.keyword] || []
         })),
         signature_menus: Array.from(document.querySelectorAll('#menus-container input')).map(el => el.value.trim()).filter(v => v),
-        templates: Array.from(document.querySelectorAll('.template-text')).map(el => el.value.trim()).filter(v => v),
+        templates: [],
         text_min_len: parseInt(document.getElementById('text-min-len').value) || 30,
         text_max_len: parseInt(document.getElementById('text-max-len').value) || 150
     };

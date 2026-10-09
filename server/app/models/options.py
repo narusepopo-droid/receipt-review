@@ -39,3 +39,12 @@ class ReviewCheck(Base, TimestampMixin):
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), index=True, nullable=False)
     similarity: Mapped[int] = mapped_column(Integer, default=0)           # %
     review_excerpt: Mapped[Optional[str]] = mapped_column(Text)
+
+
+class PhraseUsage(Base):
+    """매장별 문장 사용 횟수 — 한 바퀴 다 쓰기 전에는 같은 문장을 다시 쓰지 않기 위함"""
+    __tablename__ = "phrase_usage"
+
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), primary_key=True)
+    phrase_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, default=0)
