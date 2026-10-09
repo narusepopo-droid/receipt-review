@@ -81,3 +81,8 @@ receipt-review.pem
 
 # SPMC 라이선스 키 (새 파일이 실수로 올라가는 것 방지)
 *.spmclic
+
+# account server
+account/.env
+account/*.db
+account/venv/
