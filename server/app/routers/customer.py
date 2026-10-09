@@ -361,6 +361,10 @@ async def start_session(
     store = await get_store_by_code(store_code, db)
     store_settings = await get_store_settings(store.id, db)
 
+    from ..services.account_link import license_usable
+    if not await license_usable(store.id):
+        raise HTTPException(status_code=403, detail="지금은 이 매장의 리뷰 이벤트가 쉬는 중이에요. 직원에게 문의해 주세요.")
+
     from ..services.otp import get_options, recently_verified
     if (await get_options(db, store.id)).phone_verify and not await recently_verified(db, request.phone):
         raise HTTPException(status_code=403, detail="휴대폰 인증을 먼저 해주세요")

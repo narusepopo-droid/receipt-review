@@ -34,6 +34,9 @@ class SignupRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+    device_id: Optional[str] = None      # 에이전트 PC 고유번호 (계정 서버 PC 1대 제한)
+    device_name: Optional[str] = None
+    store_id: Optional[int] = None       # 매장이 여러 개일 때 고른 매장 (계정 서버 매장 번호)
 
 
 class LoginResponse(BaseModel):
@@ -43,6 +46,9 @@ class LoginResponse(BaseModel):
     store_name: Optional[str] = None
     store_code: Optional[str] = None
     message: Optional[str] = None
+    code: Optional[str] = None           # choose_store / device_mismatch / expired ...
+    stores: Optional[list] = None        # 매장 선택 목록
+    expires_at: Optional[str] = None
 
 
 class PaymentWebhook(BaseModel):
@@ -525,6 +531,24 @@ async def login(req: LoginRequest, request: Request, db: AsyncSession = Depends(
     if left:
         return LoginResponse(success=False, message=f"로그인 시도가 너무 많습니다. {left // 60 + 1}분 후 다시 시도하세요.")
 
+    # 통합 계정 서버 (이용권 + PC 1대). PC 정보를 보내는 새 에이전트만 해당, 서버가 꺼져 있으면 예전 방식
+    from app.services import account_link
+    if account_link.enabled() and req.device_id:
+        res = await account_link.account_login(req.email.strip(), req.password, req.device_id,
+                                               req.device_name or "", req.store_id)
+        if res is not None and res.get("ok"):
+            login_limiter.success(key)
+            store = await account_link.ensure_review_store(db, res["store"], req.email)
+            return LoginResponse(success=True, token=generate_token(store.id), store_id=store.id,
+                                 store_name=store.name, store_code=store.store_code,
+                                 expires_at=res.get("expires_at"), message=res.get("message") or None)
+        if res is not None and res.get("code") == "choose_store":
+            return LoginResponse(success=False, code="choose_store", stores=res.get("stores"),
+                                 message="매장을 선택해 주세요")
+        if res is not None and res.get("code") not in ("bad_login",):
+            return LoginResponse(success=False, code=res.get("code"), message=res.get("message"))
+        # bad_login 이거나 계정 서버 연결 실패 → 아래 예전 방식으로 확인
+
     result = await db.execute(
         select(Store).where(Store.admin_login_id == req.email)
     )
@@ -537,6 +561,8 @@ async def login(req: LoginRequest, request: Request, db: AsyncSession = Depends(
 
     if store.status == StoreStatus.PAUSED:
         return LoginResponse(success=False, message="승인 대기 중입니다. 담당자 승인 후 로그인 가능합니다.")
+    if not await account_link.license_usable(store.id):
+        return LoginResponse(success=False, code="expired", message="이용 기간이 끝났습니다. 마이페이지에서 연장해 주세요.")
 
     token = generate_token(store.id)
 

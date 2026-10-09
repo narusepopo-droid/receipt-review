@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -140,6 +140,8 @@ namespace ReceiptTap.Core
                     try
                     {
                         var json = Newtonsoft.Json.Linq.JObject.Parse(body);
+                        if (json["license_ok"] != null) result.LicenseOk = (bool)json["license_ok"];
+                        result.LicenseMessage = (string)json["license_message"];
                         var token = (string)json["new_token"];
                         if (!string.IsNullOrEmpty(token))
                         {
@@ -183,6 +185,9 @@ namespace ReceiptTap.Core
         public bool Success { get; set; }
         public int StatusCode { get; set; }
         public string NewToken { get; set; }
+        /// <summary>이용권 상태 (만료·정지면 false). 캡처·업로드는 계속함</summary>
+        public bool LicenseOk { get; set; } = true;
+        public string LicenseMessage { get; set; }
         /// <summary>토큰이 거부됨 → 다시 로그인 필요</summary>
         public bool Unauthorized => StatusCode == 401;
     }

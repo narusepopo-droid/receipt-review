@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>매장 선택 - 영수증리뷰 관리자</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', path='admin/css/admin.css') }}">
+</head>
+<body>
+    <div class="login-wrapper">
+        <div class="login-card">
+            <div class="login-logo"><h1><span>영수증</span>리뷰</h1></div>
+            <p class="login-title">관리할 매장을 선택하세요</p>
+            {% for s in stores %}
+            <form method="post" action="{{ url_for('admin_choose_store_post') }}" style="margin-bottom:10px">
+                <input type="hidden" name="store_id" value="{{ s.id }}">
+                <button type="submit" class="btn {{ 'btn-primary' if s.id == current else 'btn-secondary' }} btn-lg" style="width:100%;justify-content:space-between">
+                    <span>{{ s.name }}</span><span style="opacity:.6;font-size:13px">{{ s.store_code }}</span>
+                </button>
+            </form>
+            {% endfor %}
+            <div style="text-align:center;margin-top:20px;font-size:13px">
+                <a href="https://review.placemaster.co.kr/account/my" style="color:#03C75A">마이페이지</a> ·
+                <a href="{{ url_for('admin_logout') }}" style="color:#6c757d">로그아웃</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

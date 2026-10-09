@@ -159,6 +159,8 @@ app.include_router(customer.router)
 app.include_router(admin.router)
 app.include_router(ops.router)
 app.include_router(download.router)
+from app.routers import internal as _internal  # noqa: E402
+app.include_router(_internal.router)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 

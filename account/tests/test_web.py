@@ -232,3 +232,23 @@ async def test_internal_requires_secret(client):
     r = await client.post("/internal/review-store", json={"review_store_id": 1},
                           headers={"X-Internal-Secret": "internal-test"})
     assert r.json()["state"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_internal_owner_login(client):
+    await signup(client)
+    h = {"X-Internal-Secret": "internal-test"}
+    r = (await client.post("/internal/owner-login", json={"email": "owner@test.com", "password": "password1"},
+                           headers=h)).json()
+    assert r["ok"] and r["stores"][0]["name"] == "테스트 매장" and r["stores"][0]["state"] == "pending"
+    r = (await client.post("/internal/owner-login", json={"email": "owner@test.com", "password": "x"},
+                           headers=h)).json()
+    assert not r["ok"]
+    # 매장 연결
+    sid = (await client.post("/internal/owner-login", json={"email": "owner@test.com", "password": "password1"},
+                             headers=h)).json()["stores"][0]["id"]
+    r = await client.post("/internal/link-store", json={"store_id": sid, "review_store_id": 77,
+                                                         "review_store_code": "ABC"}, headers=h)
+    assert r.json()["ok"]
+    r = (await client.post("/internal/review-store", json={"review_store_id": 77}, headers=h)).json()
+    assert r["state"] == "pending" and r["usable"] is False

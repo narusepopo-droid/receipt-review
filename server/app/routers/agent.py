@@ -51,6 +51,9 @@ class HeartbeatResponse(BaseModel):
     server_time: datetime
     # 토큰이 하루 이상 지났으면 새 토큰 발급 (에이전트가 저장 → 만료 없이 계속 동작)
     new_token: Optional[str] = None
+    # 통합 계정 이용권 (만료·정지면 False → 트레이 앱이 안내 표시. 캡처·출력은 계속)
+    license_ok: bool = True
+    license_message: Optional[str] = None
 
 
 class ReceiptUploadResponse(BaseModel):
@@ -170,10 +173,14 @@ async def heartbeat(
     if authorization and authorization.startswith("Bearer ") and token_needs_refresh(authorization[7:]):
         new_token = generate_token(store.id)
 
+    from app.services.account_link import license_usable
+    lic_ok = await license_usable(store.id)
     return HeartbeatResponse(
         success=True,
         new_token=new_token,
-        server_time=datetime.now(timezone.utc)
+        server_time=datetime.now(timezone.utc),
+        license_ok=lic_ok,
+        license_message=None if lic_ok else "이용 기간이 끝났습니다. 마이페이지에서 연장해 주세요.",
     )
 
 

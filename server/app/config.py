@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     # 외부 사이트에서 API 호출 허용 (가입 페이지 등)
     CORS_ORIGINS: str = "https://placemaster.co.kr,https://www.placemaster.co.kr,https://review.placemaster.co.kr"
 
+    # 통합 계정 서버 (비어 있으면 연동 안 함 — 예전 방식 로그인)
+    ACCOUNT_API_URL: str = ""
+    ACCOUNT_WEB_URL: str = "https://review.placemaster.co.kr/account"
+    INTERNAL_SECRET: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

@@ -272,8 +272,10 @@ class TextGenerator:
         # 이어주는 말: 문맥에 맞을 때만, 한 리뷰에 최대 2개, 같은 말 반복 없음
         used_conn = []
         norm_kw = [_norm(k) for k in chosen]
+        # 문장 안에 원래 들어 있는 이어주는 말도 한도에 포함
+        built_in = len(re.findall(r"(특히|참,|그리고|게다가) ", joined))
         for i in range(1, len(body)):
-            if len(used_conn) >= MAX_CONNECTORS or body[i].startswith(NO_CONNECTOR_START) or body[i].startswith("다른"):
+            if len(used_conn) + built_in >= MAX_CONNECTORS or body[i].startswith(NO_CONNECTOR_START) or body[i].startswith("다른"):
                 continue
             prev_kw, kw = _canon(chosen[i - 1]), _canon(chosen[i])
             link = affinity(prev_kw, kw)

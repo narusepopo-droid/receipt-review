@@ -110,6 +110,30 @@ async def login(
         return templates.TemplateResponse(request=request, name="admin/login.html",
                                           context={"error": f"로그인 시도가 너무 많습니다. {left // 60 + 1}분 후 다시 시도하세요."})
 
+    # 통합 계정 서버 (꺼져 있으면 예전 방식)
+    from app.services import account_link
+    from app.config import settings as _cfg
+    if account_link.enabled():
+        res = await account_link.owner_login(login_id.strip(), password)
+        if res is not None and res.get("ok"):
+            login_limiter.success(key)
+            usable = [s_ for s_ in res.get("stores", []) if s_.get("usable")]
+            if not usable:
+                msg = ("이용 중인 영수증리뷰 매장이 없습니다. 마이페이지에서 결제·승인 상태를 확인해 주세요."
+                       if res.get("stores") else "영수증리뷰 매장이 없습니다. 마이페이지에서 매장을 추가해 주세요.")
+                return templates.TemplateResponse(request=request, name="admin/login.html",
+                                                  context={"error": msg, "account_url": _cfg.ACCOUNT_WEB_URL})
+            ids = []
+            for s_ in usable:
+                st = await account_link.ensure_review_store(db, s_, login_id)
+                ids.append(st.id)
+            request.session.clear()
+            request.session["owner_store_ids"] = ids
+            request.session["store_id"] = ids[0]
+            if len(ids) > 1:
+                return RedirectResponse(url="/admin/choose-store", status_code=302)
+            return RedirectResponse(url="/admin/dashboard", status_code=302)
+
     # DB에서 매장 조회
     result = await db.execute(
         select(Store).where(Store.admin_login_id == login_id)
@@ -117,6 +141,9 @@ async def login(
     store = result.scalar_one_or_none()
 
     if store and store.verify_password(password):
+        if not await account_link.license_usable(store.id):
+            return templates.TemplateResponse(request=request, name="admin/login.html",
+                                              context={"error": "이용 기간이 끝났습니다. 마이페이지에서 연장해 주세요."})
         login_limiter.success(key)
         request.session["store_id"] = store.id
         return RedirectResponse(url="/admin/dashboard", status_code=302)
@@ -127,6 +154,24 @@ async def login(
         name="admin/login.html",
         context={"error": "아이디 또는 비밀번호가 올바르지 않습니다."}
     )
+
+
+@router.get("/choose-store", response_class=HTMLResponse, name="admin_choose_store")
+async def choose_store(request: Request, db: AsyncSession = Depends(get_db)):
+    ids = request.session.get("owner_store_ids") or []
+    if not ids:
+        return RedirectResponse(url="/admin/login", status_code=302)
+    stores = (await db.execute(select(Store).where(Store.id.in_(ids)).order_by(Store.id))).scalars().all()
+    return templates.TemplateResponse(request=request, name="admin/choose_store.html",
+                                      context={"stores": stores, "current": request.session.get("store_id")})
+
+
+@router.post("/choose-store", name="admin_choose_store_post")
+async def choose_store_post(request: Request, store_id: int = Form(...)):
+    if store_id not in (request.session.get("owner_store_ids") or []):
+        return RedirectResponse(url="/admin/login", status_code=302)
+    request.session["store_id"] = store_id
+    return RedirectResponse(url="/admin/dashboard", status_code=302)
 
 
 @router.get("/logout", name="admin_logout")

@@ -211,3 +211,34 @@ async def internal_link_store(request: Request, x_internal_secret: str = Header(
     store.review_store_code = body.get("review_store_code")
     await db.commit()
     return {"ok": True}
+
+
+@router.post("/internal/owner-login")
+async def internal_owner_login(request: Request, x_internal_secret: str = Header(""),
+                               db: AsyncSession = Depends(get_db)):
+    """영수증리뷰 점주웹 로그인 확인 (PC 등록 없음). 이메일·비밀번호 → 영수증리뷰 매장 목록"""
+    _check_internal(x_internal_secret)
+    body = await request.json()
+    email = (body.get("email") or "").strip().lower()
+    try:
+        res = await firebase.sign_in(email, body.get("password") or "")
+    except firebase.FirebaseError as e:
+        from app.legacy import try_migrate_review_owner
+        migrated = await try_migrate_review_owner(db, email, body.get("password") or "")
+        if not migrated:
+            return {"ok": False, "message": str(e)}
+        res = {"localId": migrated.firebase_uid, "email": migrated.email}
+    acc = await upsert_account(db, res["localId"], res.get("email", email))
+    await db.commit()
+    if acc.blocked:
+        return {"ok": False, "message": "사용이 중지된 계정입니다."}
+    product = (await db.execute(select(Product).where(Product.code == "receipt_review"))).scalar_one()
+    lics = (await db.execute(select(License).where(License.account_id == acc.id, License.product_id == product.id)
+                             .order_by(License.id))).scalars().all()
+    stores = []
+    for l in lics:
+        s = await db.get(Store, l.store_id) if l.store_id else None
+        if s and not s.archived:
+            stores.append({"id": s.id, "name": s.name, "review_store_id": s.review_store_id,
+                           "state": licensing.state(l), "usable": licensing.usable(l)})
+    return {"ok": True, "email": acc.email, "stores": stores}

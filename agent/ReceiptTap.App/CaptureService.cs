@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using ReceiptTap.Core;
@@ -229,6 +229,7 @@ namespace ReceiptTap.App
                     _config.AuthToken = hb.NewToken;
                     try { _config.Save(); } catch { }
                 }
+                if (hb.Success) _licenseMessage = hb.LicenseOk ? null : (hb.LicenseMessage ?? "이용 기간이 끝났습니다. 마이페이지에서 연장해 주세요.");
                 if (hb.Unauthorized) MarkUnauthorized();
                 else MarkServer(hb.Success);
             }
@@ -239,6 +240,7 @@ namespace ReceiptTap.App
         }
 
         private int _retrying;
+        private string _licenseMessage;
 
         private async void RetryQueue(object state)
         {
@@ -308,6 +310,11 @@ namespace ReceiptTap.App
             if (_unauthorized)
             {
                 SetStatus(AgentStatus.LoginRequired, "로그인이 만료되었습니다. 트레이 아이콘을 눌러 다시 로그인해 주세요.");
+                return;
+            }
+            if (_licenseMessage != null)
+            {
+                SetStatus(AgentStatus.Disconnected, _licenseMessage);
                 return;
             }
             if (!_serverOk)

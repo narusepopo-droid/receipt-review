@@ -56,6 +56,16 @@
                     <i data-feather="grid"></i>
                     <span>테이블 안내판</span>
                 </a>
+                {% if (request.session.get('owner_store_ids') or [])|length > 1 %}
+                <a href="{{ url_for('admin_choose_store') }}" class="nav-item">
+                    <i data-feather="repeat"></i>
+                    <span>매장 바꾸기</span>
+                </a>
+                {% endif %}
+                <a href="https://review.placemaster.co.kr/account/my" class="nav-item">
+                    <i data-feather="credit-card"></i>
+                    <span>이용권·결제</span>
+                </a>
                 <a href="{{ url_for('admin_logout') }}" class="nav-item">
                     <i data-feather="log-out"></i>
                     <span>로그아웃</span>

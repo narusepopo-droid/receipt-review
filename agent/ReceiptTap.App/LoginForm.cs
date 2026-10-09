@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Net;
 using System.Text;
@@ -49,7 +49,7 @@ namespace ReceiptTap.App
 
             var subtitleLabel = new Label
             {
-                Text = "가입 시 등록한 이메일과 비밀번호로 로그인하세요",
+                Text = "광고토대왕 계정(플레이스마스터와 같은 계정)으로 로그인하세요",
                 Location = new Point(20, 55),
                 AutoSize = true,
                 Font = new Font("맑은 고딕", 9),
@@ -139,12 +139,17 @@ namespace ReceiptTap.App
             };
             _signupLink.Click += (s, e) =>
             {
-                System.Diagnostics.Process.Start("https://placemaster.co.kr/receipt-signup.html");
+                OpenUrl("https://review.placemaster.co.kr/account/signup?product=receipt_review");
             };
             Controls.Add(_signupLink);
         }
 
         private async void OnLogin(object sender, EventArgs e)
+        {
+            await DoLogin(null);
+        }
+
+        private async System.Threading.Tasks.Task DoLogin(int? storeId)
         {
             var email = _emailTextBox.Text.Trim();
             var password = _passwordTextBox.Text;
@@ -159,89 +164,109 @@ namespace ReceiptTap.App
             _statusLabel.ForeColor = Color.Gray;
             _statusLabel.Text = "로그인 중...";
 
+            LoginResponse result;
             try
             {
-                var config = AgentConfig.Load();
-                var url = $"{config.ServerUrl}/auth/login";
-
-                ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
-                var request = (HttpWebRequest)WebRequest.Create(url);
-                request.Method = "POST";
-                request.ContentType = "application/json";
-
-                var payload = JsonConvert.SerializeObject(new { email, password });
-                var data = Encoding.UTF8.GetBytes(payload);
-
-                using (var stream = await request.GetRequestStreamAsync())
-                {
-                    stream.Write(data, 0, data.Length);
-                }
-
-                using (var response = (HttpWebResponse)await request.GetResponseAsync())
-                {
-                    using (var reader = new System.IO.StreamReader(response.GetResponseStream()))
-                    {
-                        var body = await reader.ReadToEndAsync();
-                        var result = JsonConvert.DeserializeObject<LoginResponse>(body);
-
-                        if (result.success)
-                        {
-                            AuthToken = result.token;
-                            StoreId = result.store_id ?? 0;
-                            StoreName = result.store_name;
-                            StoreCode = result.store_code;
-
-                            // 설정 저장
-                            config.AuthToken = result.token;
-                            config.StoreId = result.store_id ?? 0;
-                            config.StoreName = result.store_name;
-                            config.StoreCode = result.store_code;
-                            config.Save();
-
-                            DialogResult = DialogResult.OK;
-                            Close();
-                        }
-                        else
-                        {
-                            _statusLabel.ForeColor = Color.Red;
-                            _statusLabel.Text = result.message ?? "로그인에 실패했습니다.";
-                            _loginButton.Enabled = true;
-                        }
-                    }
-                }
-            }
-            catch (WebException ex)
-            {
-                _statusLabel.ForeColor = Color.Red;
-
-                if (ex.Response is HttpWebResponse errorResponse)
-                {
-                    using (var reader = new System.IO.StreamReader(errorResponse.GetResponseStream()))
-                    {
-                        var errorBody = reader.ReadToEnd();
-                        try
-                        {
-                            var errorResult = JsonConvert.DeserializeObject<LoginResponse>(errorBody);
-                            _statusLabel.Text = errorResult.message ?? "로그인에 실패했습니다.";
-                        }
-                        catch
-                        {
-                            _statusLabel.Text = "서버 오류가 발생했습니다.";
-                        }
-                    }
-                }
-                else
-                {
-                    _statusLabel.Text = "서버에 연결할 수 없습니다.";
-                }
-
-                _loginButton.Enabled = true;
+                result = await PostLogin(email, password, storeId);
             }
             catch (Exception ex)
             {
                 _statusLabel.ForeColor = Color.Red;
-                _statusLabel.Text = "오류: " + ex.Message;
+                _statusLabel.Text = ex is WebException ? "서버에 연결할 수 없습니다." : "오류: " + ex.Message;
                 _loginButton.Enabled = true;
+                return;
+            }
+
+            if (result.success)
+            {
+                var config = AgentConfig.Load();
+                AuthToken = result.token;
+                StoreId = result.store_id ?? 0;
+                StoreName = result.store_name;
+                StoreCode = result.store_code;
+                config.AuthToken = result.token;
+                config.StoreId = result.store_id ?? 0;
+                config.StoreName = result.store_name;
+                config.StoreCode = result.store_code;
+                config.Save();
+                if (!string.IsNullOrEmpty(result.message))
+                    MessageBox.Show(result.message, "영수증리뷰", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                DialogResult = DialogResult.OK;
+                Close();
+                return;
+            }
+
+            if (result.code == "choose_store" && result.stores != null && result.stores.Count > 0)
+            {
+                var chosen = StorePicker.Pick(this, result.stores);
+                if (chosen != null)
+                {
+                    await DoLogin(chosen);
+                    return;
+                }
+                _statusLabel.ForeColor = Color.Gray;
+                _statusLabel.Text = "매장을 선택해 주세요.";
+                _loginButton.Enabled = true;
+                return;
+            }
+
+            _statusLabel.ForeColor = Color.Red;
+            _statusLabel.Text = result.message ?? "로그인에 실패했습니다.";
+            _loginButton.Enabled = true;
+            if (result.code == "device_mismatch" || result.code == "expired" || result.code == "pending" || result.code == "no_license")
+            {
+                var go = MessageBox.Show(result.message + "\n\n마이페이지를 열까요?", "영수증리뷰",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (go == DialogResult.Yes) OpenUrl(MyPageUrl);
+            }
+        }
+
+        private const string MyPageUrl = "https://review.placemaster.co.kr/account/my";
+
+        private static void OpenUrl(string url)
+        {
+            try { System.Diagnostics.Process.Start(url); } catch { }
+        }
+
+        private static async System.Threading.Tasks.Task<LoginResponse> PostLogin(string email, string password, int? storeId)
+        {
+            var config = AgentConfig.Load();
+            var url = $"{config.ServerUrl}/auth/login";
+
+            ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
+            var request = (HttpWebRequest)WebRequest.Create(url);
+            request.Method = "POST";
+            request.ContentType = "application/json";
+
+            var payload = JsonConvert.SerializeObject(new
+            {
+                email,
+                password,
+                device_id = DeviceInfo.DeviceId,
+                device_name = DeviceInfo.DeviceName,
+                store_id = storeId
+            });
+            var data = Encoding.UTF8.GetBytes(payload);
+            using (var stream = await request.GetRequestStreamAsync())
+            {
+                stream.Write(data, 0, data.Length);
+            }
+
+            try
+            {
+                using (var response = (HttpWebResponse)await request.GetResponseAsync())
+                using (var reader = new System.IO.StreamReader(response.GetResponseStream()))
+                {
+                    return JsonConvert.DeserializeObject<LoginResponse>(await reader.ReadToEndAsync());
+                }
+            }
+            catch (WebException ex) when (ex.Response is HttpWebResponse err)
+            {
+                using (var reader = new System.IO.StreamReader(err.GetResponseStream()))
+                {
+                    try { return JsonConvert.DeserializeObject<LoginResponse>(reader.ReadToEnd()) ?? new LoginResponse { message = "로그인에 실패했습니다." }; }
+                    catch { return new LoginResponse { message = "서버 오류가 발생했습니다." }; }
+                }
             }
         }
 
@@ -253,6 +278,8 @@ namespace ReceiptTap.App
             public string store_name { get; set; }
             public string store_code { get; set; }
             public string message { get; set; }
+            public string code { get; set; }
+            public System.Collections.Generic.List<StoreChoice> stores { get; set; }
         }
     }
 }
