@@ -1,0 +1,129 @@
+{% extends "base_ops.html" %}
+{% block title %}{{ acc.name or acc.email }}{% endblock %}
+{% set ACT = {'created': '이용권 생성', 'plan_applied': '요금제 적용', 'expiry_changed': '만료일 변경', 'status_changed': '상태 변경',
+  'device_bound': 'PC 등록', 'device_reset': 'PC 해제', 'charged': '월 자동결제', 'autopay_failed_retry': '자동결제 실패(재시도)',
+  'autopay_failed_suspended': '자동결제 실패로 정지', 'autopay_stopped': '자동결제 종료', 'autopay_cancel_requested': '자동결제 해지 신청',
+  'autopay_off': '자동결제 끔', 'expired_suspended': '기간 만료로 정지'} %}
+{% block content %}
+<div class="page-head">
+  <div><a class="small muted" href="{{ url('/ops/accounts') }}">← 회원 목록</a>
+    <h1 style="margin-top:6px">{{ acc.name or acc.email }} {% if acc.blocked %}<span class="badge red">차단</span>{% endif %}</h1>
+    <p>{{ acc.email }} · {{ acc.phone|phone }} · 가입 {{ acc.created_at|kst }}</p></div>
+</div>
+
+<div class="grid" style="grid-template-columns:minmax(0,1fr) 340px;align-items:start" id="accGrid">
+<div>
+  <div class="card"><div class="card-head"><h2>이용권</h2></div>
+    {% for l in lics %}{% set b = state_badge(l) %}{% set st = lic_state(l) %}
+    <div class="lic" id="lic{{ l.id }}" style="grid-template-columns:minmax(0,1fr) auto">
+      <div>
+        <div class="name">{{ l.product.name }}{% if l.store %} · {{ l.store.name }}{% endif %} <span class="badge {{ b[1] }}">{{ b[0] }}</span>
+          {% if l.autopay %}<span class="badge brand plain">월 자동결제{% if l.autopay_cancel_requested %} · 해지 예정{% endif %}</span>{% endif %}</div>
+        <div class="meta">{{ l.plan.name if l.plan else '요금제 없음' }} ·
+          {% if l.expires_at %}{{ l.expires_at|kst }}까지 ({{ days_left(l) }}일){% elif st != 'pending' %}무제한{% else %}-{% endif %}
+          {% if l.next_charge_at %} · 다음 청구 {{ l.next_charge_at|kst }}{% endif %}
+          {% if l.commitment_ends_at %} · 약정 {{ l.commitment_ends_at|kst }}까지{% endif %}</div>
+        <div class="meta">PC: {{ l.device_name or ('등록됨' if l.device_id else '미등록') }}{% if l.device_bound_at %} ({{ l.device_bound_at|kst }}){% endif %}
+          {% if l.store and l.store.review_store_id %} · 영수증리뷰 매장 #{{ l.store.review_store_id }}{% endif %}</div>
+      </div>
+      <div class="acts">
+        {% if st == 'pending' %}<form method="post" action="{{ url('/ops/licenses/' ~ l.id) }}"><input type="hidden" name="action" value="approve"><button class="btn sm brand">승인</button></form>{% endif %}
+        <button class="btn sm" onclick="openLic({{ l.id }})">관리</button>
+      </div>
+    </div>
+    <div class="modal" id="m{{ l.id }}"><div class="sheet">
+      <div class="card-head"><h2>{{ l.product.name }}{% if l.store %} · {{ l.store.name }}{% endif %}</h2><button class="btn sm ghost" onclick="this.closest('.modal').classList.remove('open')">닫기</button></div>
+      <div class="card-body stack">
+        <form method="post" action="{{ url('/ops/licenses/' ~ l.id) }}" class="row"><input type="hidden" name="action" value="grant">
+          <select class="in sm" name="plan_id" style="flex:1">{% for p in plans if p.product_id == l.product_id %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select>
+          <button class="btn sm primary">요금제 지급</button></form>
+        <p class="small faint">결제 없이 요금제를 지급합니다. 기간권은 남은 기간 뒤에 이어 붙어요.</p>
+        <form method="post" action="{{ url('/ops/licenses/' ~ l.id) }}" class="row"><input type="hidden" name="action" value="extend">
+          <input class="in sm" name="months" type="number" min="0" value="1" style="width:80px"> 개월
+          <input class="in sm" name="days" type="number" min="0" value="0" style="width:80px"> 일
+          <button class="btn sm">연장</button></form>
+        <form method="post" action="{{ url('/ops/licenses/' ~ l.id) }}" class="row"><input type="hidden" name="action" value="set_expiry">
+          <input class="in sm" type="date" name="expires_at" value="{{ l.expires_at|kst('%Y-%m-%d') if l.expires_at else '' }}" style="width:auto">
+          <button class="btn sm">만료일 지정</button><span class="small faint">비우면 무제한</span></form>
+        <hr style="border:0;border-top:1px solid var(--line)">
+        <div class="row">
+          {% if st in ('suspended',) or (l.status.value == 'suspended') %}
+            <form method="post" action="{{ url('/ops/licenses/' ~ l.id) }}"><input type="hidden" name="action" value="resume"><button class="btn sm">정지 해제</button></form>
+          {% elif st != 'cancelled' %}
+            <form method="post" action="{{ url('/ops/licenses/' ~ l.id) }}" onsubmit="return confirm('정지할까요?')"><input type="hidden" name="action" value="suspend"><button class="btn sm danger">정지</button></form>
+          {% endif %}
+          {% if l.device_id %}<form method="post" action="{{ url('/ops/licenses/' ~ l.id) }}"><input type="hidden" name="action" value="device_reset"><button class="btn sm">PC 해제</button></form>{% endif %}
+          {% if l.autopay %}<form method="post" action="{{ url('/ops/licenses/' ~ l.id) }}" onsubmit="return confirm('자동결제를 끌까요?')"><input type="hidden" name="action" value="autopay_off"><button class="btn sm">자동결제 끄기</button></form>{% endif %}
+          {% if st != 'cancelled' %}<form method="post" action="{{ url('/ops/licenses/' ~ l.id) }}" onsubmit="return confirm('해지할까요? 자동결제도 멈춥니다.')"><input type="hidden" name="action" value="cancel"><button class="btn sm danger">해지</button></form>
+          {% else %}<form method="post" action="{{ url('/ops/licenses/' ~ l.id) }}"><input type="hidden" name="action" value="resume"><button class="btn sm">해지 취소</button></form>{% endif %}
+        </div>
+      </div></div></div>
+    {% else %}<div class="empty">이용권이 없어요</div>{% endfor %}
+    <div class="addrow row">
+      <form method="post" action="{{ url('/ops/accounts/' ~ acc.id ~ '/licenses') }}" class="row">
+        <select class="in sm" name="product_id" style="width:auto">{% for p in products if p.unit == Unit.ACCOUNT %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select>
+        <button class="btn sm">이용권 추가</button></form>
+      <form method="post" action="{{ url('/ops/accounts/' ~ acc.id ~ '/stores') }}" class="row">
+        <input class="in sm" name="name" placeholder="매장 이름" style="width:150px">
+        <input class="in sm" name="review_store_id" placeholder="리뷰 매장번호" style="width:110px" title="영수증리뷰 서버의 매장 번호 (연결용, 선택)">
+        <button class="btn sm">매장 추가</button></form>
+    </div>
+  </div>
+
+  <div class="card"><div class="card-head"><h2>결제 내역</h2></div><div class="card-body tight table-wrap">
+    {% if orders %}<table class="t"><thead><tr><th>일시</th><th>내용</th><th class="right">금액</th><th>상태</th><th></th></tr></thead><tbody>
+    {% for o in orders %}<tr>
+      <td class="small muted nowrap">{{ o.created_at|kst('%y.%m.%d %H:%M') }}</td>
+      <td>{{ o.title }}<div class="small faint mono">{{ o.id }} · {{ o.method }}</div></td>
+      <td class="right num"><b>{{ o.amount|won }}</b></td><td>{% include "ops/_order_badge.html" %}</td>
+      <td class="right nowrap">
+        {% if o.status.value in ('pending', 'failed') %}<form method="post" action="{{ url('/ops/orders/' ~ o.id) }}?back={{ ('/ops/accounts/' ~ acc.id)|urlencode }}" style="display:inline" onsubmit="return confirm('입금 확인 처리하고 이용권을 적용할까요?')">
+          <input type="hidden" name="action" value="mark_paid"><button class="btn sm brand">입금 확인</button></form>{% endif %}
+        {% if o.status.value == 'paid' and o.amount > 0 %}<form method="post" action="{{ url('/ops/orders/' ~ o.id) }}?back={{ ('/ops/accounts/' ~ acc.id)|urlencode }}" style="display:inline" onsubmit="return confirm('환불할까요? (토스 결제는 카드 취소됨)')">
+          <input type="hidden" name="action" value="refund"><button class="btn sm danger">환불</button></form>{% endif %}
+      </td></tr>{% endfor %}
+    </tbody></table>{% else %}<div class="empty">결제 내역이 없어요</div>{% endif %}
+  </div></div>
+
+  <div class="card"><div class="card-head"><h2>변경 기록</h2></div><div class="card-body">
+    {% if logs %}<ul class="timeline">{% for g in logs %}
+      <li><b>{{ ACT.get(g.action, g.action) }}</b> · {{ lic_name.get(g.license_id, '') }}
+        <span class="faint">— {{ g.actor }} · {{ g.created_at|kst('%y.%m.%d %H:%M') }}</span>
+        {% if g.detail.plan %}<div class="small muted">{{ g.detail.plan }}</div>{% endif %}
+        {% if g.detail.reason %}<div class="small muted">{{ g.detail.reason }}</div>{% endif %}
+        {% if g.detail.after and g.detail.after.expires_at != (g.detail.before or {}).get('expires_at') %}<div class="small muted">만료일 {{ (g.detail.before or {}).get('expires_at', '-') or '무제한' }} → {{ g.detail.after.expires_at or '무제한' }}</div>{% endif %}
+      </li>{% endfor %}</ul>
+    {% else %}<p class="muted">기록이 없어요</p>{% endif %}
+  </div></div>
+</div>
+
+<aside>
+  <div class="card"><div class="card-head"><h2>회원 정보</h2></div><div class="card-body">
+    <form method="post" action="{{ url('/ops/accounts/' ~ acc.id) }}">
+      <div class="field"><label class="f">이름</label><input class="in sm" name="name" value="{{ acc.name }}"></div>
+      <div class="field"><label class="f">휴대폰 (만료 문자)</label><input class="in sm" name="phone" value="{{ acc.phone }}"></div>
+      <div class="field"><label class="f">상호</label><input class="in sm" name="company" value="{{ acc.company }}"></div>
+      <div class="field"><label class="f">사업자번호</label><input class="in sm" name="biz_no" value="{{ acc.biz_no }}"></div>
+      <div class="field"><label class="f">메모 (운영자만 보임)</label><textarea class="in" name="memo" rows="3">{{ acc.memo }}</textarea></div>
+      <div class="field"><label class="check"><input type="checkbox" name="blocked" value="1" {{ 'checked' if acc.blocked }}><span>로그인 차단</span></label></div>
+      <button class="btn sm primary">저장</button>
+    </form>
+  </div></div>
+  <div class="card"><div class="card-body small">
+    <dl class="kv" style="grid-template-columns:90px 1fr">
+      <dt>Firebase</dt><dd class="mono" style="word-break:break-all">{{ acc.firebase_uid or '-' }}</dd>
+      <dt>최근 로그인</dt><dd>{{ acc.last_login_at|kst('%Y.%m.%d %H:%M') }}</dd>
+      <dt>자동결제 카드</dt><dd>{{ (billing_key.card_company ~ ' ' ~ billing_key.card_number) if billing_key else '없음' }}</dd>
+      <dt>매장</dt><dd>{% for s in stores %}{{ s.name }}{% if not loop.last %}, {% endif %}{% else %}-{% endfor %}</dd>
+    </dl>
+  </div></div>
+</aside>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function openLic(id){ document.getElementById('m'+id).classList.add('open'); }
+document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
+</script>
+<style>@media (max-width:900px){ #accGrid{grid-template-columns:1fr!important}}</style>
+{% endblock %}

@@ -1,0 +1,104 @@
+{% extends "base_ops.html" %}
+{% block title %}상품·요금제{% endblock %}
+{% set KIND = {'free': '무료', 'monthly': '월 자동결제', 'prepaid': '일시불', 'lifetime': '영구'} %}
+{% block content %}
+<div class="page-head"><div><h1>상품·요금제</h1><p>가격·할인율·판매 방식은 여기서 바꾸면 바로 점주 화면에 반영돼요.</p></div></div>
+
+{% for v in view %}{% set p = v.p %}
+<div class="card mb">
+  <div class="card-head"><div><h2>{{ p.name }}</h2><div class="small muted">{{ '매장마다 이용권 · 매장당 PC 1대' if p.unit.value == 'store' else '계정당 이용권 · PC 1대' }}</div></div>
+    <span class="badge {{ 'green' if p.active else 'gray' }}">{{ '판매 중' if p.active else '판매 중지' }}</span></div>
+  <div class="card-body">
+    <form method="post" action="{{ url('/ops/products/' ~ p.id) }}" class="grid g4" style="align-items:end">
+      <div class="field" style="margin:0"><label class="f">상품 이름</label><input class="in sm" name="name" value="{{ p.name }}"></div>
+      <div class="field" style="margin:0"><label class="f">정가 (월, 원)</label><input class="in sm" name="monthly_price" value="{{ p.monthly_price }}" inputmode="numeric"></div>
+      <div class="field" style="margin:0"><label class="f">가입 방식</label>
+        <select class="in sm" name="signup_policy">
+          <option value="approval" {{ 'selected' if p.signup_policy.value == 'approval' }}>가입 → 운영자 승인 (현재 무료)</option>
+          <option value="payment" {{ 'selected' if p.signup_policy.value == 'payment' }}>가입 → 결제 → 다운로드</option></select></div>
+      <div class="field" style="margin:0"><label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if p.active }}><span>판매 중</span></label></div>
+      <div class="field" style="margin:0;grid-column:span 2"><label class="f">소개 문구</label><input class="in sm" name="tagline" value="{{ p.tagline }}"></div>
+      <div class="field" style="margin:0;grid-column:span 2"><label class="f">다운로드 주소</label><input class="in sm" name="download_url" value="{{ p.download_url }}" placeholder="https://..."></div>
+      <div><button class="btn sm primary">상품 저장</button></div>
+    </form>
+    {% if v.warnings %}<div class="warn-list mt">⚠ 할인 규칙 확인:<br>{% for w in v.warnings %}· {{ w }}<br>{% endfor %}</div>{% endif %}
+  </div>
+  <div class="card-body tight table-wrap" style="border-top:1px solid var(--line-2)">
+    <table class="t">
+      <thead><tr><th>요금제</th><th>방식</th><th class="right">개월</th><th class="right">할인율</th><th class="right">정가</th><th class="right">판매가</th><th class="right">월 환산</th><th>노출</th><th></th></tr></thead>
+      <tbody>
+      {% for x in v.plans %}{% set pl = x.plan %}
+        <tr>
+          <td><b>{{ pl.name }}</b>{% if pl.badge %} <span class="badge amber plain">{{ pl.badge }}</span>{% endif %}</td>
+          <td class="small">{{ KIND[pl.kind.value] }}</td>
+          <td class="right num">{{ pl.months or ('기준 ' ~ pl.lifetime_months if pl.kind.value == 'lifetime' else '무제한') }}</td>
+          <td class="right num">{{ pl.discount_pct }}%{% if pl.price_override is not none %} <span class="faint small">(직접 가격)</span>{% endif %}</td>
+          <td class="right num muted">{{ x.list|won }}{% if pl.kind.value == 'monthly' %}/월{% endif %}</td>
+          <td class="right num"><b>{{ x.price|won }}</b>{% if pl.kind.value == 'monthly' %}/월{% endif %}</td>
+          <td class="right num muted">{{ x.monthly|won }}</td>
+          <td>{% if pl.public %}<span class="badge green plain">판매</span>{% else %}<span class="badge gray plain">숨김</span>{% endif %}</td>
+          <td class="right"><button class="btn sm ghost" onclick='editPlan({{ {"id": pl.id, "product_id": p.id, "name": pl.name, "kind": pl.kind.value, "months": pl.months, "discount_pct": pl.discount_pct, "lifetime_months": pl.lifetime_months, "price_override": pl.price_override, "badge": pl.badge, "public": pl.public, "sort": pl.sort}|tojson }})'>수정</button></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div class="addrow"><button class="btn sm" onclick='editPlan({"product_id": {{ p.id }}, "kind": "prepaid", "public": true, "discount_pct": 0, "lifetime_months": 36, "sort": 50})'>＋ 요금제 추가</button></div>
+  </div>
+</div>
+{% endfor %}
+
+<div class="card"><div class="card-head"><h2>전체 할인 한도</h2></div><div class="card-body">
+  <form method="post" action="{{ url('/ops/settings') }}" class="row" onsubmit="this.action='{{ url('/ops/settings') }}'">
+    <span>정가 대비 최대</span><input class="in sm" name="max_discount_pct" value="{{ max_pct }}" style="width:80px" inputmode="numeric"><span>% 까지 할인</span>
+    <button class="btn sm primary">저장</button></form>
+  <p class="small muted mt">요금제 할인 + 묶음 할인 + 쿠폰을 모두 합쳐도 이 비율을 넘지 않게 묶음·쿠폰 할인을 줄여요. (요금제 자체 할인은 유지)</p>
+</div></div>
+
+<div class="modal" id="planModal"><div class="sheet">
+  <div class="card-head"><h2 id="pmTitle">요금제</h2><button class="btn sm ghost" onclick="pm.classList.remove('open')">닫기</button></div>
+  <div class="card-body">
+    <form method="post" action="{{ url('/ops/plans') }}" id="pmForm">
+      <input type="hidden" name="id"><input type="hidden" name="product_id">
+      <div class="field"><label class="f">이름</label><input class="in" name="name" required placeholder="예: 1년 일시불"></div>
+      <div class="grid g2">
+        <div class="field"><label class="f">방식</label><select class="in" name="kind">
+          <option value="monthly">월 자동결제 (약정)</option><option value="prepaid">일시불 (기간)</option>
+          <option value="lifetime">영구</option><option value="free">무료 (운영자 지급용)</option></select></div>
+        <div class="field"><label class="f" id="monthsLabel">개월</label><input class="in" name="months" type="number" min="1"></div>
+      </div>
+      <div class="grid g2">
+        <div class="field"><label class="f">할인율 (%)</label><input class="in" name="discount_pct" type="number" min="0" max="95"></div>
+        <div class="field"><label class="f">직접 가격 (원, 선택)</label><input class="in" name="price_override" inputmode="numeric" placeholder="비우면 정가×할인율"></div>
+      </div>
+      <div class="grid g2">
+        <div class="field" id="lifeField"><label class="f">영구권 기준 개월</label><input class="in" name="lifetime_months" type="number" min="1">
+          <div class="hint">영구권 정가 = 월 정가 × 기준 개월</div></div>
+        <div class="field"><label class="f">강조 표시 (선택)</label><input class="in" name="badge" placeholder="예: 인기, 최대 할인"></div>
+      </div>
+      <div class="grid g2">
+        <div class="field"><label class="f">순서</label><input class="in" name="sort" type="number"></div>
+        <div class="field" style="align-self:center"><label class="check"><input type="checkbox" name="public" value="1"><span>점주 화면에 판매</span></label></div>
+      </div>
+      <div class="row between">
+        <button class="btn primary">저장</button>
+        <button class="btn danger" name="delete" value="1" id="pmDel" onclick="return confirm('삭제할까요? 사용 중이면 판매 중지로 바뀝니다.')">삭제</button>
+      </div>
+    </form>
+  </div></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+const pm = document.getElementById('planModal'), f = document.getElementById('pmForm');
+function syncKind(){ const k = f.kind.value;
+  document.getElementById('monthsLabel').textContent = k === 'monthly' ? '약정 개월' : (k === 'free' ? '기간 개월 (비우면 무제한)' : '개월');
+  f.months.closest('.field').style.display = k === 'lifetime' ? 'none' : '';
+  document.getElementById('lifeField').style.display = k === 'lifetime' ? '' : 'none'; }
+function editPlan(p){
+  document.getElementById('pmTitle').textContent = p.id ? '요금제 수정' : '요금제 추가';
+  for (const k of ['id','product_id','name','kind','months','discount_pct','lifetime_months','price_override','badge','sort']) f[k].value = p[k] ?? '';
+  f.public.checked = !!p.public; document.getElementById('pmDel').style.display = p.id ? '' : 'none';
+  syncKind(); pm.classList.add('open'); }
+f.kind.addEventListener('change', syncKind);
+pm.addEventListener('click', e => { if (e.target === pm) pm.classList.remove('open'); });
+</script>
+{% endblock %}

@@ -170,7 +170,8 @@ async def checkout(request: Request, db: AsyncSession = Depends(get_db)):
             "type": "billing", "clientKey": settings.TOSS_CLIENT_KEY, "customerKey": acc.toss_customer_key,
             "successUrl": f"{base}/my/billing/success?order={order.id}", "failUrl": f"{base}/my/pay/fail?order={order.id}"}})
     return JSONResponse({"toss": {
-        "type": "payment", "clientKey": settings.TOSS_CLIENT_KEY, "amount": order.amount, "orderId": order.id,
+        "type": "payment", "clientKey": settings.TOSS_CLIENT_KEY, "customerKey": acc.toss_customer_key,
+        "amount": order.amount, "orderId": order.id,
         "orderName": order.title, "customerName": acc.name or acc.email, "customerEmail": acc.email,
         "successUrl": f"{base}/my/pay/success", "failUrl": f"{base}/my/pay/fail?order={order.id}"}})
 
@@ -320,7 +321,7 @@ async def order_list(request: Request, db: AsyncSession = Depends(get_db)):
     acc = await require_account(request, db)
     rows = (await db.execute(select(Order).where(Order.account_id == acc.id).order_by(Order.created_at.desc())
                              .limit(100))).scalars().all()
-    return render(request, "my/orders.html", acc=acc, orders=rows, public_discounts=orders.public_discounts)
+    return render(request, "my/orders.html", acc=acc, new=request.query_params.get("new"), orders=rows, public_discounts=orders.public_discounts)
 
 
 @router.get("/profile")

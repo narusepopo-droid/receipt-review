@@ -1,0 +1,15 @@
+{% extends "base_my.html" %}
+{% set nav = 'home' %}
+{% block title %}매장 추가{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>매장 추가</h1><p>매장마다 영수증리뷰 이용권이 따로 생기고, 매장당 포스 PC 1대에서 사용할 수 있어요.</p></div></div>
+<div class="card" style="max-width:560px"><div class="card-body">
+  {% if error %}<div class="flash err">! <span>{{ error }}</span></div>{% endif %}
+  <form method="post" action="{{ url('/my/stores') }}">
+    <div class="field"><label class="f">매장 이름</label><input class="in" name="name" required autofocus placeholder="예: 수작나베 석촌점"></div>
+    <div class="field"><label class="f">사업자번호 <span class="faint">(선택)</span></label><input class="in" name="biz_no" placeholder="000-00-00000"></div>
+    <div class="field"><label class="f">주소 <span class="faint">(선택)</span></label><input class="in" name="address"></div>
+    <div class="row"><button class="btn brand">매장 추가</button><a class="btn ghost" href="{{ url('/my') }}">취소</a></div>
+  </form>
+</div></div>
+{% endblock %}

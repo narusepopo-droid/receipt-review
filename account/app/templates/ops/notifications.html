@@ -1,0 +1,20 @@
+{% extends "base_ops.html" %}
+{% block title %}만료 알림 기록{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>만료 알림 기록</h1><p>매일 오전 10시, 만료 7일·3일·1일 전 이용권에 문자를 보내요. 같은 만료일에는 한 번씩만 보내요.</p></div></div>
+<div class="card"><div class="card-body tight table-wrap">
+{% if rows %}
+<table class="t">
+  <thead><tr><th>일시</th><th>종류</th><th>만료일</th><th>내용</th><th>발송</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr><td class="small muted nowrap">{{ r.created_at|kst('%y.%m.%d %H:%M') }}</td>
+      <td><span class="badge brand plain">{{ {'d7': '7일 전', 'd3': '3일 전', 'd1': '1일 전'}.get(r.kind, r.kind) }}</span></td>
+      <td class="nowrap">{{ r.ref }}</td><td class="small">{{ r.message }}</td>
+      <td>{% if r.sent %}<span class="badge green">성공</span>{% else %}<span class="badge red" title="휴대폰 번호 없음 또는 문자 설정 확인">실패</span>{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<div class="empty"><div class="ico">🔔</div>아직 보낸 알림이 없어요</div>{% endif %}
+</div></div>
+{% endblock %}

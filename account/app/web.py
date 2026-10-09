@@ -41,7 +41,27 @@ def state_badge(lic) -> tuple:
     return STATE_LABEL.get(licensing.state(lic), ("-", "gray"))
 
 
-templates.env.globals.update(url=url, settings=settings)
+def progress(lic) -> int:
+    """남은 기간 막대 (%)"""
+    if not lic.expires_at or not lic.starts_at:
+        return 100
+    from app.models import now_utc
+    total = (licensing.aware(lic.expires_at) - licensing.aware(lic.starts_at)).total_seconds()
+    left = (licensing.aware(lic.expires_at) - now_utc()).total_seconds()
+    return max(0, min(100, round(left / total * 100))) if total > 0 else 0
+
+
+def phone_fmt(p: str) -> str:
+    p = p or ""
+    if len(p) == 11:
+        return f"{p[:3]}-{p[3:7]}-{p[7:]}"
+    if len(p) == 10:
+        return f"{p[:3]}-{p[3:6]}-{p[6:]}"
+    return p or "-"
+
+
+templates.env.globals.update(url=url, settings=settings, progress=progress)
+templates.env.filters.update(phone=phone_fmt)
 templates.env.filters.update(won=won, kst=kst)
 templates.env.globals.update(state_badge=state_badge, lic_state=licensing.state, days_left=licensing.days_left,
                              usable=licensing.usable)

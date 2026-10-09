@@ -1,0 +1,60 @@
+{% extends "base_ops.html" %}
+{% block title %}대시보드{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>대시보드</h1><p>회원·이용권·매출 현황</p></div>
+  <a class="btn" href="{{ url('/ops/accounts') }}">회원 검색</a></div>
+
+<div class="grid g4">
+  <div class="card kpi accent"><div class="label">이번 달 매출</div><div class="value">{{ revenue_month|won }}</div><div class="sub">누적 {{ revenue_total|won }}</div></div>
+  <div class="card kpi"><div class="label">전체 회원</div><div class="value">{{ accounts }}</div><div class="sub">최근 7일 +{{ new_week }}</div></div>
+  <div class="card kpi"><div class="label">승인 대기</div><div class="value" style="{{ 'color:var(--amber)' if pending }}">{{ pending|length }}</div><div class="sub">승인 또는 결제 전</div></div>
+  <div class="card kpi"><div class="label">7일 안에 만료</div><div class="value" style="{{ 'color:var(--red)' if soon }}">{{ soon|length }}</div><div class="sub">자동 문자 발송 대상</div></div>
+</div>
+
+<div class="grid g2 mt">
+{% for s in stats %}
+  <div class="card"><div class="card-head"><h2>{{ s.product.name }}</h2>
+    <span class="badge {{ 'amber' if s.product.signup_policy.value == 'approval' else 'brand' }} plain">{{ '가입 → 승인' if s.product.signup_policy.value == 'approval' else '가입 → 결제' }}</span></div>
+    <div class="card-body"><div class="grid g4" style="gap:10px">
+      <div><div class="small muted">이용 중</div><div style="font-size:22px;font-weight:800;color:var(--green)">{{ s.active }}</div></div>
+      <div><div class="small muted">유예</div><div style="font-size:22px;font-weight:800;color:var(--amber)">{{ s.grace }}</div></div>
+      <div><div class="small muted">대기</div><div style="font-size:22px;font-weight:800">{{ s.pending }}</div></div>
+      <div><div class="small muted">만료·정지</div><div style="font-size:22px;font-weight:800;color:var(--faint)">{{ s.expired }}</div></div>
+    </div><div class="small muted mt">전체 {{ s.total }}개 이용권{% if s.product.unit.value == 'store' %} (매장 단위){% endif %}</div></div></div>
+{% endfor %}
+</div>
+
+<div class="grid g2 mt" style="align-items:start">
+  <div class="card"><div class="card-head"><h2>승인 대기</h2><span class="small muted">{{ pending|length }}건</span></div>
+    <div class="card-body tight table-wrap">
+    {% if pending %}<table class="t"><tbody>
+      {% for l in pending %}<tr>
+        <td><a href="{{ url('/ops/accounts/' ~ l.account_id) }}"><b>{{ l.account.name or l.account.email }}</b></a>
+          <div class="small muted">{{ l.product.name }}{% if l.store %} · {{ l.store.name }}{% endif %} · {{ l.created_at|kst('%m.%d %H:%M') }}</div></td>
+        <td class="right"><form method="post" action="{{ url('/ops/licenses/' ~ l.id) }}"><input type="hidden" name="action" value="approve">
+          <button class="btn sm brand">승인 (무료·무제한)</button></form></td></tr>{% endfor %}
+    </tbody></table>{% else %}<div class="empty">대기 중인 신청이 없어요</div>{% endif %}
+  </div></div>
+
+  <div class="card"><div class="card-head"><h2>곧 만료</h2><span class="small muted">7일 이내</span></div>
+    <div class="card-body tight table-wrap">
+    {% if soon %}<table class="t"><tbody>
+      {% for l in soon %}{% set b = state_badge(l) %}<tr>
+        <td><a href="{{ url('/ops/accounts/' ~ l.account_id ~ '#lic' ~ l.id) }}"><b>{{ l.account.name or l.account.email }}</b></a>
+          <div class="small muted">{{ l.product.name }}{% if l.store %} · {{ l.store.name }}{% endif %}</div></td>
+        <td class="nowrap num">{{ l.expires_at|kst }}</td>
+        <td class="right"><span class="badge {{ b[1] }}">{{ days_left(l) }}일</span></td></tr>{% endfor %}
+    </tbody></table>{% else %}<div class="empty">7일 안에 끝나는 이용권이 없어요</div>{% endif %}
+  </div></div>
+</div>
+
+<div class="card mt"><div class="card-head"><h2>최근 주문</h2><a class="small" href="{{ url('/ops/orders') }}">전체 보기 →</a></div>
+  <div class="card-body tight table-wrap">
+  {% if recent %}<table class="t"><thead><tr><th>일시</th><th>회원</th><th>내용</th><th class="right">금액</th><th>상태</th></tr></thead><tbody>
+    {% for o in recent %}<tr class="link" onclick="location.href='{{ url('/ops/accounts/' ~ o.account_id) }}'">
+      <td class="small muted nowrap">{{ o.created_at|kst('%m.%d %H:%M') }}</td><td>{{ o.account.name or o.account.email }}</td>
+      <td>{{ o.title }}</td><td class="right num"><b>{{ o.amount|won }}</b></td>
+      <td>{% include "ops/_order_badge.html" %}</td></tr>{% endfor %}
+  </tbody></table>{% else %}<div class="empty">아직 주문이 없어요</div>{% endif %}
+</div></div>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "base_ops.html" %}
+{% block title %}결제{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>결제</h1><p>입금 확인이 필요한 신청은 '대기'에 있어요.</p></div></div>
+<div class="tabs">
+  {% for k, v in [('', '전체'), ('pending', '대기'), ('paid', '완료'), ('failed', '실패'), ('refunded', '환불'), ('cancelled', '취소')] %}
+    <a href="{{ url('/ops/orders') }}{{ '?status=' ~ k if k }}" class="{{ 'on' if status == k }}">{{ v }}</a>{% endfor %}
+</div>
+<div class="card"><div class="card-body tight table-wrap">
+{% if orders %}
+<table class="t">
+  <thead><tr><th>일시</th><th>회원</th><th>내용</th><th>방식</th><th class="right">정가</th><th class="right">결제</th><th>상태</th><th></th></tr></thead>
+  <tbody>
+  {% for o in orders %}{% set disc = public_discounts(o) %}
+    <tr>
+      <td class="small muted nowrap">{{ o.created_at|kst('%y.%m.%d %H:%M') }}</td>
+      <td><a href="{{ url('/ops/accounts/' ~ o.account_id) }}">{{ o.account.name or o.account.email }}</a></td>
+      <td>{{ o.title }}{% if disc %}<div class="small muted">{% for d in disc %}{{ d.label }} -{{ d.amount|won }}{% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
+        {% if o.fail_reason %}<div class="small" style="color:var(--red)">{{ o.fail_reason }}</div>{% endif %}</td>
+      <td class="small">{{ {'card': '카드', 'billing': '자동결제', 'manual': '입금', 'free': '무료'}.get(o.method, o.method) }}</td>
+      <td class="right num muted">{{ o.list_amount|won }}</td>
+      <td class="right num"><b>{{ o.amount|won }}</b></td>
+      <td>{% include "ops/_order_badge.html" %}</td>
+      <td class="right nowrap">
+        {% if o.status.value in ('pending', 'failed') %}
+          <form method="post" action="{{ url('/ops/orders/' ~ o.id) }}?back={{ request.url.path|urlencode }}" style="display:inline" onsubmit="return confirm('입금 확인 처리하고 이용권을 적용할까요?')"><input type="hidden" name="action" value="mark_paid"><button class="btn sm brand">입금 확인</button></form>
+          {% if o.status.value == 'pending' %}<form method="post" action="{{ url('/ops/orders/' ~ o.id) }}" style="display:inline"><input type="hidden" name="action" value="cancel"><button class="btn sm ghost">취소</button></form>{% endif %}
+        {% endif %}
+        {% if o.status.value == 'paid' and o.amount > 0 %}
+          <form method="post" action="{{ url('/ops/orders/' ~ o.id) }}" style="display:inline" onsubmit="return confirm('환불할까요?')"><input type="hidden" name="action" value="refund"><button class="btn sm danger">환불</button></form>{% endif %}
+        {% if o.receipt_url %}<a class="btn sm ghost" href="{{ o.receipt_url }}" target="_blank" rel="noopener">영수증</a>{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<div class="empty"><div class="ico">💳</div>주문이 없어요</div>{% endif %}
+</div></div>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends "base_ops.html" %}
+{% block title %}할인·프로모션{% endblock %}
+{% set KIND = {'percent': '% 할인', 'amount': '원 할인', 'bundle': '묶음 할인'} %}
+{% set PK = {'monthly': '월결제', 'prepaid': '일시불', 'lifetime': '영구'} %}
+{% block content %}
+<div class="page-head"><div><h1>할인·프로모션</h1>
+  <p>쿠폰 코드를 비우면 조건이 맞을 때 자동으로 적용돼요. 모든 할인은 합쳐서 정가의 {{ max_pct }}%를 넘지 않아요.</p></div>
+  <button class="btn brand" onclick='editPromo({"kind":"percent","active":true,"product_codes":[],"plan_kinds":[],"min_products":1})'>＋ 프로모션 만들기</button></div>
+
+<div class="card"><div class="card-body tight table-wrap">
+{% if promos %}
+<table class="t">
+  <thead><tr><th>이름</th><th>쿠폰</th><th>할인</th><th>대상</th><th>기간</th><th class="right">사용</th><th>상태</th><th></th></tr></thead>
+  <tbody>
+  {% for p in promos %}
+    <tr>
+      <td><b>{{ p.name }}</b></td>
+      <td>{% if p.code %}<span class="mono badge gray plain">{{ p.code }}</span>{% else %}<span class="small muted">자동 적용</span>{% endif %}</td>
+      <td class="nowrap">{{ p.value|won if p.kind == 'amount' else (p.value ~ '%') }} <span class="small muted">{{ KIND[p.kind] }}{% if p.kind == 'bundle' %} · {{ p.min_products if p.min_products > 1 else 2 }}개 상품 이상{% endif %}</span></td>
+      <td class="small">{% if p.product_codes %}{% for c in p.product_codes %}{{ (products|selectattr('code','equalto',c)|first).name if (products|selectattr('code','equalto',c)|list) else c }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}전체 상품{% endif %}
+        {% if p.plan_kinds %}<div class="muted">{% for k in p.plan_kinds %}{{ PK.get(k, k) }}{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}</td>
+      <td class="small nowrap">{{ p.starts_at|kst if p.starts_at else '' }} ~ {{ p.ends_at|kst if p.ends_at else '' }}{% if not p.starts_at and not p.ends_at %}<span class="muted">상시</span>{% endif %}</td>
+      <td class="right num">{{ p.used_count }}{% if p.max_uses %} / {{ p.max_uses }}{% endif %}</td>
+      <td><span class="badge {{ 'green' if p.active else 'gray' }}">{{ '진행 중' if p.active else '종료' }}</span></td>
+      <td class="right"><button class="btn sm ghost" onclick='editPromo({{ {"id": p.id, "name": p.name, "code": p.code or "", "kind": p.kind, "value": p.value, "product_codes": p.product_codes or [], "plan_kinds": p.plan_kinds or [], "min_products": p.min_products, "starts_at": p.starts_at|kst("%Y-%m-%d") if p.starts_at else "", "ends_at": p.ends_at|kst("%Y-%m-%d") if p.ends_at else "", "max_uses": p.max_uses, "active": p.active}|tojson }})'>수정</button></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<div class="empty"><div class="ico">🏷️</div>프로모션이 없어요</div>{% endif %}
+</div></div>
+
+<div class="card mt"><div class="card-body small muted">
+  <b style="color:var(--ink)">할인이 적용되는 순서</b><br>
+  ① 요금제 할인 (기간이 길수록·일시불일수록·영구권일수록 큼 — 상품·요금제 화면에서 설정)<br>
+  ② 묶음 할인 (플마 + 영수증리뷰를 한 번에 결제) ③ 쿠폰·자동 프로모션<br>
+  합계가 전체 할인 한도를 넘으면 ②·③을 줄여요.
+</div></div>
+
+<div class="modal" id="prModal"><div class="sheet">
+  <div class="card-head"><h2 id="prTitle">프로모션</h2><button class="btn sm ghost" onclick="pr.classList.remove('open')">닫기</button></div>
+  <div class="card-body">
+    <form method="post" action="{{ url('/ops/promotions') }}" id="prForm">
+      <input type="hidden" name="id">
+      <div class="field"><label class="f">이름 (점주 결제 화면에 보임)</label><input class="in" name="name" required placeholder="예: 오픈 기념 20% 할인"></div>
+      <div class="grid g2">
+        <div class="field"><label class="f">종류</label><select class="in" name="kind">
+          <option value="percent">% 할인</option><option value="amount">원 할인</option><option value="bundle">묶음 할인 (여러 상품 함께)</option></select></div>
+        <div class="field"><label class="f" id="valLabel">할인</label><input class="in" name="value" inputmode="numeric" required></div>
+      </div>
+      <div class="grid g2">
+        <div class="field"><label class="f">쿠폰 코드 (선택)</label><input class="in" name="code" placeholder="비우면 자동 적용" style="text-transform:uppercase"></div>
+        <div class="field" id="minField"><label class="f">최소 상품 수</label><input class="in" name="min_products" type="number" min="2"></div>
+      </div>
+      <div class="field"><label class="f">대상 상품 (선택 안 하면 전체)</label><div class="row">
+        {% for p in products %}<label class="check"><input type="checkbox" name="product_codes" value="{{ p.code }}"><span>{{ p.name }}</span></label>{% endfor %}</div></div>
+      <div class="field"><label class="f">대상 결제 방식 (선택 안 하면 전체)</label><div class="row">
+        {% for k, v in PK.items() %}<label class="check"><input type="checkbox" name="plan_kinds" value="{{ k }}"><span>{{ v }}</span></label>{% endfor %}</div></div>
+      <div class="grid g2">
+        <div class="field"><label class="f">시작일</label><input class="in" type="date" name="starts_at"></div>
+        <div class="field"><label class="f">종료일</label><input class="in" type="date" name="ends_at"></div>
+      </div>
+      <div class="grid g2">
+        <div class="field"><label class="f">최대 사용 횟수 (선택)</label><input class="in" name="max_uses" type="number" min="1" placeholder="무제한"></div>
+        <div class="field" style="align-self:center"><label class="check"><input type="checkbox" name="active" value="1"><span>진행 중</span></label></div>
+      </div>
+      <div class="row between"><button class="btn primary">저장</button>
+        <button class="btn danger" name="delete" value="1" id="prDel" onclick="return confirm('프로모션을 종료할까요?')">종료</button></div>
+    </form>
+  </div></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+const pr = document.getElementById('prModal'), g = document.getElementById('prForm');
+function syncK(){ const k = g.kind.value; document.getElementById('valLabel').textContent = k === 'amount' ? '할인 금액 (원)' : '할인율 (%)';
+  document.getElementById('minField').style.display = k === 'bundle' ? '' : 'none'; }
+function editPromo(p){
+  document.getElementById('prTitle').textContent = p.id ? '프로모션 수정' : '프로모션 만들기';
+  for (const k of ['id','name','code','kind','value','min_products','starts_at','ends_at','max_uses']) g[k].value = p[k] ?? '';
+  g.querySelectorAll('[name=product_codes]').forEach(c => c.checked = (p.product_codes||[]).includes(c.value));
+  g.querySelectorAll('[name=plan_kinds]').forEach(c => c.checked = (p.plan_kinds||[]).includes(c.value));
+  g.active.checked = !!p.active; document.getElementById('prDel').style.display = p.id ? '' : 'none';
+  syncK(); pr.classList.add('open'); }
+g.kind.addEventListener('change', syncK);
+pr.addEventListener('click', e => { if (e.target === pr) pr.classList.remove('open'); });
+</script>
+{% endblock %}

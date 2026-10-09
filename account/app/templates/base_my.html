@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+{% include "_head.html" %}
+<title>{% block title %}마이페이지{% endblock %} · 광고토대왕</title>
+</head>
+<body>
+<header class="topbar"><div class="inner">
+  <a class="logo" href="{{ url('/my') }}"><span class="mark">P</span>광고토대왕</a>
+  <nav class="topnav">
+    <a href="{{ url('/my') }}" class="{{ 'on' if nav == 'home' }}">내 상품</a>
+    <a href="{{ url('/my/orders') }}" class="{{ 'on' if nav == 'orders' }}">결제 내역</a>
+    <a href="{{ url('/my/profile') }}" class="{{ 'on' if nav == 'profile' }}">내 정보</a>
+  </nav>
+  <div class="me">
+    {% if acc.is_operator %}<a class="btn sm" href="{{ url('/ops') }}">운영자 화면</a>{% endif %}
+    <span class="nowrap">{{ acc.name or acc.email }}</span>
+    <a class="btn sm ghost" href="{{ url('/logout') }}">로그아웃</a>
+  </div>
+</div></header>
+<main class="page">
+{% include "_flash.html" %}
+{% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

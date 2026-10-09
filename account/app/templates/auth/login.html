@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ko"><head>{% include "_head.html" %}<title>로그인 · 광고토대왕</title></head>
+<body>
+<div class="auth-wrap">
+  {% include "_auth_art.html" %}
+  <section class="auth-form"><div class="box">
+    <h1>로그인</h1>
+    <p class="sub">플레이스마스터 PRO · 영수증리뷰 계정으로 로그인하세요</p>
+    {% include "_flash.html" %}
+    {% if error %}<div class="flash err">! <span>{{ error }}</span></div>{% endif %}
+    <form method="post" action="{{ url('/login') }}">
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="field"><label class="f">이메일</label>
+        <input class="in" type="email" name="email" value="{{ email or '' }}" autocomplete="username" required autofocus></div>
+      <div class="field"><label class="f">비밀번호</label>
+        <input class="in" type="password" name="password" autocomplete="current-password" required></div>
+      <button class="btn brand lg block" type="submit">로그인</button>
+    </form>
+    <p class="alt"><a href="{{ url('/reset') }}">비밀번호를 잊으셨나요?</a></p>
+    <p class="alt">아직 계정이 없으신가요? <a href="{{ url('/signup') }}"><b>회원가입</b></a></p>
+  </div></section>
+</div>
+</body></html>

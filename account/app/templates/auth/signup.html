@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ko"><head>{% include "_head.html" %}<title>회원가입 · 광고토대왕</title></head>
+<body>
+<div class="auth-wrap">
+  {% include "_auth_art.html" %}
+  <section class="auth-form"><div class="box wide">
+    <h1>회원가입</h1>
+    <p class="sub">하나의 계정으로 두 상품을 모두 이용할 수 있어요</p>
+    {% if errors %}<div class="flash err">! <span>{% for e in errors %}{{ e }}{% if not loop.last %}<br>{% endif %}{% endfor %}</span></div>{% endif %}
+    <form method="post" action="{{ url('/signup') }}" id="sf">
+      <div class="field"><label class="f">이용할 상품</label>
+        <div class="pick">
+        {% for p in products %}
+          <label><input type="checkbox" name="p_{{ p.code }}" value="1" data-unit="{{ p.unit.value }}"
+            {{ 'checked' if form.get('p_' ~ p.code) or pre == p.code }}>
+            <p><b>{{ p.name }}</b><span>{{ p.tagline }}{% if p.unit.value == 'store' %} · 매장마다 이용권{% endif %}</span></p></label>
+        {% endfor %}
+        </div>
+      </div>
+      <div class="field" id="storeField"><label class="f">매장 이름</label>
+        <input class="in" name="store_name" value="{{ form.get('store_name','') }}" placeholder="예: 수작나베 석촌점">
+        <div class="hint">매장은 가입 후 마이페이지에서 더 추가할 수 있어요</div></div>
+      <div class="grid g2">
+        <div class="field"><label class="f">이름</label><input class="in" name="name" value="{{ form.get('name','') }}" required></div>
+        <div class="field"><label class="f">휴대폰 번호</label><input class="in" name="phone" inputmode="numeric" value="{{ form.get('phone','') }}" placeholder="010-0000-0000" required></div>
+      </div>
+      <div class="grid g2">
+        <div class="field"><label class="f">상호 <span class="faint">(선택)</span></label><input class="in" name="company" value="{{ form.get('company','') }}"></div>
+        <div class="field"><label class="f">사업자번호 <span class="faint">(선택)</span></label><input class="in" name="biz_no" value="{{ form.get('biz_no','') }}"></div>
+      </div>
+      <div class="field"><label class="f">이메일 (로그인 아이디)</label><input class="in" type="email" name="email" value="{{ form.get('email','') }}" autocomplete="username" required></div>
+      <div class="grid g2">
+        <div class="field"><label class="f">비밀번호</label><input class="in" type="password" name="password" minlength="8" autocomplete="new-password" required></div>
+        <div class="field"><label class="f">비밀번호 확인</label><input class="in" type="password" name="password2" minlength="8" autocomplete="new-password" required></div>
+      </div>
+      <div class="field"><label class="check"><input type="checkbox" name="agree" value="1" {{ 'checked' if form.get('agree') }}>
+        <span>이용약관과 개인정보 수집·이용(이름, 이메일, 휴대폰 번호 — 계정 관리·이용 기간 안내 목적, 탈퇴 시까지 보관)에 동의합니다.</span></label></div>
+      <button class="btn brand lg block" type="submit">가입하기</button>
+    </form>
+    <p class="alt">이미 계정이 있으신가요? <a href="{{ url('/login') }}"><b>로그인</b></a></p>
+    <p class="alt small">플레이스마스터 PRO를 쓰고 계신 분은 같은 이메일·비밀번호로 바로 로그인하세요.</p>
+  </div></section>
+</div>
+<script>
+const sf = document.getElementById('sf'), st = document.getElementById('storeField');
+function upd(){ st.style.display = [...sf.querySelectorAll('[data-unit=store]')].some(c=>c.checked) ? '' : 'none'; }
+sf.addEventListener('change', upd); upd();
+</script>
+</body></html>

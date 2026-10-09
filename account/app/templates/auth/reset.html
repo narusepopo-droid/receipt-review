@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="ko"><head>{% include "_head.html" %}<title>비밀번호 재설정 · 광고토대왕</title></head>
+<body>
+<div class="auth-wrap">
+  {% include "_auth_art.html" %}
+  <section class="auth-form"><div class="box">
+    <h1>비밀번호 재설정</h1>
+    {% if sent %}
+      <p class="sub">가입된 이메일이라면 비밀번호 재설정 메일을 보냈습니다. 메일함(스팸함 포함)을 확인해 주세요.</p>
+      <a class="btn primary lg block" href="{{ url('/login') }}">로그인으로 돌아가기</a>
+    {% else %}
+      <p class="sub">가입한 이메일을 입력하시면 재설정 링크를 보내드려요</p>
+      <form method="post" action="{{ url('/reset') }}">
+        <div class="field"><label class="f">이메일</label><input class="in" type="email" name="email" required autofocus></div>
+        <button class="btn brand lg block">재설정 메일 받기</button>
+      </form>
+      <p class="alt"><a href="{{ url('/login') }}">로그인으로 돌아가기</a></p>
+    {% endif %}
+  </div></section>
+</div>
+</body></html>

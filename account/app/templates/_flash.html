@@ -1,0 +1,1 @@
+{% for f in pop_flash(request) %}<div class="flash {{ f.k }}">{{ '✓' if f.k == 'ok' else '!' }} <span>{{ f.m }}</span></div>{% endfor %}

@@ -1,0 +1,131 @@
+{% extends "base_my.html" %}
+{% set nav = 'home' %}
+{% block title %}요금제 선택{% endblock %}
+{% macro kind_label(k) %}{{ {'monthly': '월 자동결제', 'prepaid': '일시불', 'lifetime': '영구', 'free': '무료'}[k.value] }}{% endmacro %}
+{% macro plan_cards(lic_id, plans, selectable_none=False) %}
+  <div class="plans" data-lic="{{ lic_id }}">
+    {% if selectable_none %}
+      <label class="plan on"><input type="radio" name="plan_{{ lic_id }}" value="" checked>
+        <div class="kind" style="color:var(--muted)">선택 안 함</div><h3>이번엔 결제 안 함</h3>
+        <div class="per">함께 결제하면 묶음 할인이 적용돼요</div></label>
+    {% endif %}
+    {% for v in plans %}{% set pl = v.plan %}
+      <label class="plan {{ 'on' if not selectable_none and loop.index == (plans|length > 3 and 3 or 1) }}">
+        <input type="radio" name="plan_{{ lic_id }}" value="{{ pl.id }}" {{ 'checked' if not selectable_none and loop.index == (plans|length > 3 and 3 or 1) }}>
+        {% if pl.badge %}<span class="tag">{{ pl.badge }}</span>{% endif %}
+        <div class="kind">{{ kind_label(pl.kind) }}{% if pl.kind == PlanKind.MONTHLY %} · {{ pl.months }}개월 약정{% endif %}</div>
+        <h3>{{ pl.name }}</h3>
+        <div class="price">{{ v.price|won }}{% if pl.kind == PlanKind.MONTHLY %}<small> /월</small>{% endif %}</div>
+        {% if v.save_pct > 0 %}<div class="strike">{{ v.list|won }}</div><span class="save">{{ v.save_pct }}% 할인</span>{% endif %}
+        <div class="per">
+          {% if pl.kind == PlanKind.LIFETIME %}한 번 결제로 계속 사용
+          {% elif pl.kind == PlanKind.PREPAID %}월 {{ v.monthly|won }} 꼴 · {{ pl.months }}개월
+          {% else %}매월 자동 결제 · 약정 {{ pl.months }}개월{% endif %}</div>
+      </label>
+    {% endfor %}
+  </div>
+{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <div><a class="small muted" href="{{ url('/my') }}">← 내 상품</a>
+    <h1 style="margin-top:6px">{{ lic.product.name }}{% if lic.store %} · {{ lic.store.name }}{% endif %}</h1>
+    <p>{% if lic.expires_at and usable(lic) %}현재 {{ lic.expires_at|kst }}까지 이용 중 — 결제하시면 남은 기간 뒤에 이어서 연장돼요.
+       {% elif not lic.expires_at and usable(lic) %}현재 무제한으로 이용 중이에요.
+       {% else %}요금제를 고르고 결제하시면 바로 이용할 수 있어요.{% endif %}</p></div>
+</div>
+
+<div class="grid" style="grid-template-columns:minmax(0,1fr) 340px;align-items:start" id="buyGrid">
+  <div>
+    <div class="card"><div class="card-head"><h2>요금제</h2><span class="small muted">기간이 길수록, 일시불일수록 더 저렴해요</span></div>
+      <div class="card-body">{{ plan_cards(lic.id, plans) }}</div></div>
+
+    {% if others %}
+    <div class="card"><div class="card-head"><h2>함께 결제하기 <span class="badge green plain">묶음 할인</span></h2></div>
+      <div class="card-body stack">
+        {% for o in others %}
+          <div><h3 class="mb" style="margin-bottom:10px">{{ o.product.name }}{% if o.store %} · {{ o.store.name }}{% endif %}
+            <span class="badge {{ state_badge(o)[1] }}">{{ state_badge(o)[0] }}</span></h3>
+            {{ plan_cards(o.id, other_plans[o.id], True) }}</div>
+        {% endfor %}
+      </div></div>
+    {% endif %}
+  </div>
+
+  <aside class="card summary"><div class="card-body">
+    <h2>결제 금액</h2>
+    <div id="lines" class="mt small"></div>
+    <div id="discounts"></div>
+    <div class="total"><span class="muted">총 결제</span><b id="total">-</b></div>
+    <div id="monthlyNote" class="small muted hidden" style="margin-top:6px">첫 달 결제 후 매월 같은 날 자동으로 결제돼요.</div>
+    <div class="field mt"><label class="f">쿠폰 코드</label>
+      <div class="row" style="flex-wrap:nowrap"><input class="in sm" id="promo" placeholder="있으면 입력"><button class="btn sm" id="applyPromo" type="button">적용</button></div>
+      <div class="hint" id="promoMsg"></div></div>
+    <button class="btn brand lg block" id="payBtn">결제하기</button>
+    {% if not toss %}<p class="small muted mt">현재 온라인 결제 준비 중입니다. 신청하시면 담당자가 입금 안내를 드리고 확인 후 바로 적용해 드려요.</p>{% endif %}
+    {% if billing_key %}<p class="small muted mt">등록된 카드: {{ billing_key.card_company }} {{ billing_key.card_number }}</p>{% endif %}
+    <p class="small faint mt">결제 후 이용 기간은 마이페이지에서 바로 확인할 수 있어요. 기간이 끝나면 다음 날까지 유예되고, 7·3·1일 전에 문자로 알려드려요.</p>
+  </div></aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://js.tosspayments.com/v2/standard"></script>
+<script>
+const $ = s => document.querySelector(s);
+const won = n => (n < 0 ? '-' : '') + Math.abs(n).toLocaleString('ko-KR') + '원';
+let promo = '';
+function items() {
+  return [...document.querySelectorAll('.plans')].map(g => {
+    const c = g.querySelector('input:checked');
+    return c && c.value ? {license_id: +g.dataset.lic, plan_id: +c.value} : null;
+  }).filter(Boolean);
+}
+async function post(path, body) {
+  const r = await fetch('{{ url("/my") }}' + path, {method: 'POST', headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}, body: JSON.stringify(body)});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || j.message || '오류가 발생했습니다');
+  return j;
+}
+async function refresh() {
+  document.querySelectorAll('.plan').forEach(p => p.classList.toggle('on', p.querySelector('input').checked));
+  const it = items();
+  if (!it.length) { $('#total').textContent = '-'; $('#lines').innerHTML = ''; $('#discounts').innerHTML = ''; return; }
+  try {
+    const q = await post('/quote', {items: it, promo_code: promo});
+    $('#lines').innerHTML = q.lines.map(l => `<div class="line"><span>${l.name}</span><span class="num">${won(l.list)}${l.monthly ? '/월' : ''}</span></div>`).join('');
+    $('#discounts').innerHTML = q.discounts.filter(d => !d.label.startsWith('_')).map(d => `<div class="line disc"><span>${d.label}</span><span class="num">-${won(d.amount)}</span></div>`).join('');
+    $('#total').textContent = won(q.amount);
+    $('#monthlyNote').classList.toggle('hidden', !q.lines.some(l => l.monthly));
+    $('#promoMsg').textContent = promo ? (q.promo_error || '쿠폰이 적용되었어요') : '';
+    $('#promoMsg').style.color = q.promo_error ? 'var(--red)' : 'var(--green)';
+  } catch (e) { $('#promoMsg').textContent = e.message; }
+}
+document.addEventListener('change', e => { if (e.target.matches('.plan input')) refresh(); });
+$('#applyPromo').onclick = () => { promo = $('#promo').value.trim(); refresh(); };
+$('#payBtn').onclick = async () => {
+  const btn = $('#payBtn'); btn.disabled = true;
+  try {
+    const r = await post('/checkout', {items: items(), promo_code: promo});
+    if (r.done) {
+      if (r.manual) alert('신청되었습니다. 담당자가 입금 안내를 드리고, 확인되면 바로 이용권이 적용돼요.');
+      location.href = r.redirect; return;
+    }
+    if (r.charge_now) {
+      if (!confirm('등록된 카드로 첫 달 이용료를 결제할까요?')) { btn.disabled = false; return; }
+      const c = await post('/charge-now/' + r.order_id, {}); location.href = c.redirect; return;
+    }
+    const t = r.toss, tp = TossPayments(t.clientKey), pay = tp.payment({customerKey: t.customerKey});
+    if (t.type === 'billing') {
+      await pay.requestBillingAuth({method: 'CARD', successUrl: t.successUrl, failUrl: t.failUrl});
+    } else {
+      await pay.requestPayment({method: 'CARD', amount: {currency: 'KRW', value: t.amount}, orderId: t.orderId,
+        orderName: t.orderName, customerName: t.customerName, customerEmail: t.customerEmail,
+        successUrl: t.successUrl, failUrl: t.failUrl});
+    }
+  } catch (e) { if (e.code !== 'USER_CANCEL') alert(e.message); btn.disabled = false; }
+};
+refresh();
+</script>
+<style>@media (max-width:900px){ #buyGrid{grid-template-columns:1fr!important}}</style>
+{% endblock %}

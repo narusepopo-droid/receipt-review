@@ -1,0 +1,36 @@
+{% extends "base_ops.html" %}
+{% block title %}회원·이용권{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>회원·이용권</h1><p>{{ rows|length }}명</p></div></div>
+<form class="card mb" method="get"><div class="card-body row">
+  <input class="in" style="flex:1;min-width:200px" name="q" value="{{ q }}" placeholder="이메일, 이름, 휴대폰, 상호, 매장 이름">
+  <select class="in" style="width:auto" name="product"><option value="">모든 상품</option>
+    {% for p in products %}<option value="{{ p.code }}" {{ 'selected' if product == p.code }}>{{ p.name }}</option>{% endfor %}</select>
+  <select class="in" style="width:auto" name="state"><option value="">모든 상태</option>
+    {% for k, v in [('active','이용 중'),('grace','유예 중'),('pending','승인 대기'),('expired','만료'),('suspended','정지'),('cancelled','해지')] %}
+      <option value="{{ k }}" {{ 'selected' if state == k }}>{{ v }}</option>{% endfor %}</select>
+  <button class="btn primary">검색</button>
+</div></form>
+
+<div class="card"><div class="card-body tight table-wrap">
+{% if rows %}
+<table class="t">
+  <thead><tr><th>회원</th><th>연락처</th><th>이용권</th><th>가입일</th><th>최근 로그인</th></tr></thead>
+  <tbody>
+  {% for r in rows %}{% set a = r.a %}
+    <tr class="link" onclick="location.href='{{ url('/ops/accounts/' ~ a.id) }}'">
+      <td><b>{{ a.name or '(이름 없음)' }}</b>{% if a.is_operator %} <span class="badge brand plain">운영자</span>{% endif %}{% if a.blocked %} <span class="badge red plain">차단</span>{% endif %}
+        <div class="small muted">{{ a.email }}{% if a.company %} · {{ a.company }}{% endif %}</div></td>
+      <td class="nowrap small">{{ a.phone|phone }}</td>
+      <td>{% for l in r.lics %}{% set b = state_badge(l) %}
+          <span class="badge {{ b[1] }}" title="{{ l.product.name }}{% if l.store %} · {{ l.store.name }}{% endif %}">{{ '플마' if l.product.code == 'plma' else (l.store.name if l.store else l.product.name) }}{% if l.expires_at %} ~{{ l.expires_at|kst('%y.%m.%d') }}{% endif %}</span>
+        {% else %}<span class="faint small">없음</span>{% endfor %}</td>
+      <td class="nowrap small muted">{{ a.created_at|kst }}</td>
+      <td class="nowrap small muted">{{ a.last_login_at|kst('%m.%d %H:%M') }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<div class="empty"><div class="ico">🔍</div>조건에 맞는 회원이 없어요</div>{% endif %}
+</div></div>
+{% endblock %}

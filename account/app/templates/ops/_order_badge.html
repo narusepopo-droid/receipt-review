@@ -1,0 +1,1 @@
+{% set _s = {'pending': ('대기', 'amber'), 'paid': ('완료', 'green'), 'failed': ('실패', 'red'), 'cancelled': ('취소', 'gray'), 'refunded': ('환불', 'gray')}[o.status.value] %}<span class="badge {{ _s[1] }}">{{ _s[0] }}</span>

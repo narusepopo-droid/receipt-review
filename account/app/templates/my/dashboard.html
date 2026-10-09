@@ -1,0 +1,81 @@
+{% extends "base_my.html" %}
+{% set nav = 'home' %}
+{% block title %}내 상품{% endblock %}
+{% macro lic_row(l, title, sub) %}
+  {% set lb = state_badge(l) %}{% set st = lic_state(l) %}{% set dl = days_left(l) %}
+  <div class="lic" id="lic{{ l.id }}">
+    <div>
+      <div class="name">{{ title }} <span class="badge {{ lb[1] }}">{{ lb[0] }}</span>
+        {% if l.autopay %}<span class="badge brand plain">월 자동결제{% if l.autopay_cancel_requested %} · 해지 예정{% endif %}</span>{% endif %}</div>
+      <div class="meta">{{ sub }}{% if l.plan %} · {{ l.plan.name }}{% endif %}
+        · PC {{ l.device_name or ('등록됨' if l.device_id else '미등록') }}</div>
+    </div>
+    <div class="period">
+      {% if st == 'pending' %}
+        <div class="big">승인·결제 대기</div><div class="meta">결제하시면 바로 이용할 수 있어요</div>
+      {% elif not l.expires_at %}
+        <div class="big">무제한</div><div class="bar"><i style="width:100%"></i></div>
+      {% else %}
+        <div class="big">{{ l.expires_at|kst }}까지
+          {% if dl is not none and dl >= 0 %}<span class="{{ 'faint' if dl > 7 else '' }}" style="{{ 'color:var(--red)' if dl <= 7 }}">· {{ dl }}일 남음</span>{% endif %}</div>
+        {% if st == 'grace' %}<div class="meta" style="color:var(--amber)">유예 기간 — 오늘까지 연장하지 않으면 사용이 중지돼요</div>
+        {% elif st == 'expired' %}<div class="meta" style="color:var(--red)">이용 기간이 끝났어요</div>
+        {% else %}<div class="bar"><i style="width:{{ progress(l) }}%"></i></div>{% endif %}
+      {% endif %}
+    </div>
+    <div class="acts">
+      {% if usable(l) %}<a class="btn sm" href="{{ url('/my/download/' ~ l.id) }}">다운로드</a>{% endif %}
+      {% if st not in ('cancelled',) and l.product.monthly_price > 0 %}
+        <a class="btn sm {{ 'brand' if st in ('pending','grace','expired') or (dl is not none and dl <= 7) else '' }}" href="{{ url('/my/buy/' ~ l.id) }}">
+          {{ '결제하기' if st == 'pending' else ('연장하기' if l.expires_at else '요금제') }}</a>
+      {% endif %}
+      {% if l.device_id %}
+        <form method="post" action="{{ url('/my/licenses/' ~ l.id ~ '/device-reset') }}" onsubmit="return confirm('등록된 PC를 해제할까요?\n새 PC에서 로그인하면 그 PC가 등록됩니다. (30일에 1번 가능)')">
+          <button class="btn sm ghost">PC 변경</button></form>
+      {% endif %}
+      {% if l.autopay and not l.autopay_cancel_requested %}
+        <form method="post" action="{{ url('/my/licenses/' ~ l.id ~ '/autopay-cancel') }}" onsubmit="return confirm('월 자동결제를 해지할까요?\n약정 기간 중이면 약정 종료일까지는 계속 결제됩니다.')">
+          <button class="btn sm ghost">자동결제 해지</button></form>
+      {% endif %}
+    </div>
+  </div>
+{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <div><h1>안녕하세요{% if acc.name %}, {{ acc.name }}님{% endif %}</h1>
+    <p>이용 중인 상품과 매장별 이용 기간을 확인하세요.</p></div>
+  <a class="btn" href="{{ url('/my/stores/new') }}">＋ 매장 추가</a>
+</div>
+
+{% for p in products %}
+  {% set lics = by_product[p.id] %}
+  <section class="card product mb">
+    <div class="ph">
+      <div class="pic {{ p.code }}">{{ '📊' if p.code == 'plma' else '🧾' }}</div>
+      <div style="flex:1"><h2>{{ p.name }}</h2><p>{{ p.tagline }}{% if p.unit == Unit.STORE %} · 매장마다 이용권 · 매장당 포스 PC 1대{% else %} · PC 1대{% endif %}</p></div>
+      {% if lics %}<span class="badge gray plain">{{ lics|length }}{{ '개 매장' if p.unit == Unit.STORE else '개' }}</span>{% endif %}
+    </div>
+    {% if not lics %}
+      <div class="lic"><div><div class="name faint">아직 이용하지 않는 상품이에요</div>
+        <div class="meta">{{ '매장을 추가하면 매장별로 이용권을 신청할 수 있어요' if p.unit == Unit.STORE else '신청하시면 담당자 확인 후 이용할 수 있어요' }}</div></div><div></div>
+        <div class="acts">
+          {% if p.unit == Unit.STORE %}<a class="btn sm brand" href="{{ url('/my/stores/new') }}">매장 추가하고 시작</a>
+          {% else %}<form method="post" action="{{ url('/my/products/' ~ p.code ~ '/apply') }}"><button class="btn sm brand">이용 신청</button></form>{% endif %}
+        </div></div>
+    {% else %}
+      {% for l in lics %}
+        {{ lic_row(l, l.store.name if l.store else p.name, (l.store.address or '매장') if l.store else '계정 이용권') }}
+      {% endfor %}
+      {% if p.unit == Unit.STORE %}
+        <div class="addrow row between"><span class="small muted">매장이 더 있으신가요? 매장마다 이용권을 따로 결제해요.</span>
+          <a class="btn sm" href="{{ url('/my/stores/new') }}">＋ 매장 추가</a></div>
+      {% endif %}
+    {% endif %}
+  </section>
+{% endfor %}
+
+<div class="card mt2"><div class="card-body row between">
+  <div><h3>도움이 필요하신가요?</h3><p class="small muted">PC 변경·결제·환불 문의는 고객센터로 연락주세요. 이용 기간이 끝나면 만료 다음 날까지 계속 쓰실 수 있고, 7일·3일·1일 전에 문자로 알려드려요.</p></div>
+</div></div>
+{% endblock %}

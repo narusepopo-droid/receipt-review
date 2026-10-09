@@ -1,5 +1,5 @@
 """운영자 화면"""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -29,7 +29,7 @@ def _date(v):
     if not v:
         return None
     d = datetime.strptime(v, "%Y-%m-%d")
-    return d.replace(hour=23, minute=59, second=59, tzinfo=KST)
+    return d.replace(hour=23, minute=59, second=59, tzinfo=KST).astimezone(timezone.utc)
 
 
 @router.get("")
@@ -337,7 +337,7 @@ async def settings_save(request: Request, db: AsyncSession = Depends(get_db)):
     await orders.put_setting(db, "max_discount_pct", max(0, min(95, _int(f.get("max_discount_pct"), 60))))
     await db.commit()
     flash(request, "할인 한도를 저장했습니다.")
-    return RedirectResponse(url(request.headers.get("x-back", "/ops/products")), status_code=303)
+    return RedirectResponse(url("/ops/products"), status_code=303)
 
 
 # ───────────── 프로모션 ─────────────
@@ -379,7 +379,7 @@ async def promotion_save(request: Request, db: AsyncSession = Depends(get_db)):
     promo.plan_kinds = f.getlist("plan_kinds")
     promo.min_products = max(1, _int(f.get("min_products"), 2 if promo.kind == "bundle" else 1))
     s = (f.get("starts_at") or "").strip()
-    promo.starts_at = datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=KST) if s else None
+    promo.starts_at = datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=KST).astimezone(timezone.utc) if s else None
     promo.ends_at = _date(f.get("ends_at"))
     promo.max_uses = _int(f.get("max_uses"))
     promo.active = bool(f.get("active"))
@@ -433,7 +433,8 @@ async def order_action(request: Request, oid: str, db: AsyncSession = Depends(ge
         order.status = OrderStatus.CANCELLED
         await db.commit()
         flash(request, "주문을 취소했습니다.")
-    return RedirectResponse(url(request.query_params.get("back") or "/ops/orders"), status_code=303)
+    back = request.query_params.get("back") or "/ops/orders"
+    return RedirectResponse(url(back if back.startswith("/ops") else "/ops/orders"), status_code=303)
 
 
 # ───────────── 알림 기록 ─────────────

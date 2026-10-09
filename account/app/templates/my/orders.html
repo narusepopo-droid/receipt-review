@@ -1,0 +1,30 @@
+{% extends "base_my.html" %}
+{% set nav = 'orders' %}
+{% block title %}결제 내역{% endblock %}
+{% set ST = {'pending': ('입금·결제 대기', 'amber'), 'paid': ('결제 완료', 'green'), 'failed': ('실패', 'red'), 'cancelled': ('취소', 'gray'), 'refunded': ('환불', 'gray')} %}
+{% block content %}
+<div class="page-head"><div><h1>결제 내역</h1><p>결제·신청 기록과 영수증을 확인하세요.</p></div></div>
+{% if new %}<div class="flash info">i <span>신청이 접수되었습니다. 담당자가 입금 안내를 드리고, 확인되면 바로 이용권이 적용돼요.</span></div>{% endif %}
+<div class="card"><div class="card-body tight table-wrap">
+  {% if orders %}
+  <table class="t">
+    <thead><tr><th>일시</th><th>내용</th><th class="right">정가</th><th class="right">할인</th><th class="right">결제 금액</th><th>상태</th><th></th></tr></thead>
+    <tbody>
+    {% for o in orders %}{% set s = ST[o.status.value] %}{% set disc = public_discounts(o) %}
+      <tr>
+        <td class="nowrap small muted">{{ o.created_at|kst('%Y.%m.%d %H:%M') }}</td>
+        <td><b>{{ o.title }}</b>{% if o.method == 'billing' %} <span class="badge brand plain">자동결제</span>{% endif %}
+          {% if disc %}<div class="small muted">{% for d in disc %}{{ d.label }}{% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
+          {% if o.fail_reason and o.status.value in ('failed',) %}<div class="small" style="color:var(--red)">{{ o.fail_reason }}</div>{% endif %}</td>
+        <td class="right num muted">{{ o.list_amount|won }}</td>
+        <td class="right num" style="color:var(--green)">{{ (o.list_amount - o.amount)|won if o.list_amount > o.amount else '-' }}</td>
+        <td class="right num"><b>{{ o.amount|won }}</b></td>
+        <td><span class="badge {{ s[1] }}">{{ s[0] }}</span></td>
+        <td>{% if o.receipt_url %}<a class="btn sm ghost" href="{{ o.receipt_url }}" target="_blank" rel="noopener">영수증</a>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty"><div class="ico">🧾</div>아직 결제 내역이 없어요</div>{% endif %}
+</div></div>
+{% endblock %}

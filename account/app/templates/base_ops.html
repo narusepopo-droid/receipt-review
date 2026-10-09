@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+{% include "_head.html" %}
+<title>{% block title %}운영{% endblock %} · 광고토대왕 운영</title>
+</head>
+<body>
+{% macro ico(d) %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{{ d|safe }}</svg>{% endmacro %}
+<div class="ops">
+  <aside class="side">
+    <a class="logo" href="{{ url('/ops') }}"><span class="mark">P</span>운영 센터</a>
+    <div class="group">현황</div>
+    <a class="item {{ 'on' if nav == 'dash' }}" href="{{ url('/ops') }}">{{ ico('<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>') }}대시보드</a>
+    <a class="item {{ 'on' if nav == 'accounts' }}" href="{{ url('/ops/accounts') }}">{{ ico('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') }}회원·이용권</a>
+    <a class="item {{ 'on' if nav == 'orders' }}" href="{{ url('/ops/orders') }}">{{ ico('<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>') }}결제</a>
+    <div class="group">판매 설정</div>
+    <a class="item {{ 'on' if nav == 'products' }}" href="{{ url('/ops/products') }}">{{ ico('<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/>') }}상품·요금제</a>
+    <a class="item {{ 'on' if nav == 'promos' }}" href="{{ url('/ops/promotions') }}">{{ ico('<path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.5"/>') }}할인·프로모션</a>
+    <a class="item {{ 'on' if nav == 'notify' }}" href="{{ url('/ops/notifications') }}">{{ ico('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>') }}만료 알림 기록</a>
+    <div class="foot">{{ op.email }}<br><a href="{{ url('/my') }}">점주 화면</a> · <a href="{{ url('/logout') }}">로그아웃</a></div>
+  </aside>
+  <div class="ops-main"><main class="page">
+    {% include "_flash.html" %}
+    {% block content %}{% endblock %}
+  </main></div>
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>
