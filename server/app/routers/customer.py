@@ -96,10 +96,13 @@ async def phone_input_page(
         }
     }
 
+    from ..services.otp import get_options
+    phone_verify = (await get_options(db, store.id)).phone_verify
+
     return templates.TemplateResponse(
         request=request,
         name="customer/phone.html",
-        context={"store": store_data, "table_no": table_no}
+        context={"store": store_data, "table_no": table_no, "phone_verify": phone_verify}
     )
 
 
@@ -361,6 +364,10 @@ async def start_session(
 
     store = await get_store_by_code(store_code, db)
     store_settings = await get_store_settings(store.id, db)
+
+    from ..services.otp import get_options, recently_verified
+    if (await get_options(db, store.id)).phone_verify and not await recently_verified(db, request.phone):
+        raise HTTPException(status_code=403, detail="휴대폰 인증을 먼저 해주세요")
 
     customer_service = CustomerService(db)
     assignment_service = AssignmentService(db)
@@ -677,3 +684,51 @@ async def optout_page(request: Request, store_code: str, db: AsyncSession = Depe
         request=request, name="customer/optout.html",
         context={"store": {"name": store.name, "store_code": store.store_code, "naver_review_url": None},
                  "table_no": ""})
+
+
+
+# ============================================================
+# 휴대폰 인증번호 (Phase 9, 매장에서 켠 경우만)
+# ============================================================
+
+class OtpSendRequest(BaseModel):
+    phone: str
+    store_code: str
+
+
+class OtpVerifyRequest(BaseModel):
+    phone: str
+    code: str
+
+
+@router.post("/api/v1/otp/send")
+async def otp_send(request: OtpSendRequest, req: Request, db: AsyncSession = Depends(get_db)):
+    from app.security import rate_limiter, client_ip
+    from ..services.otp import send_code
+    digits = re.sub(r"\D", "", request.phone or "")
+    if not re.fullmatch(r"01[016789]\d{7,8}", digits):
+        raise HTTPException(status_code=422, detail="휴대폰 번호를 정확히 입력해주세요")
+    if not rate_limiter.allow(f"otp:phone:{digits}", 3, 600) or \
+            not rate_limiter.allow(f"otp:ip:{client_ip(req)}", 10, 600):
+        raise HTTPException(status_code=429, detail="인증번호 요청이 너무 많습니다. 10분 후 다시 시도해주세요.")
+    store = await get_store_by_code(request.store_code, db)
+    try:
+        dev_code = await send_code(db, digits, store.name)
+    except RuntimeError as e:
+        await db.rollback()
+        raise HTTPException(status_code=503, detail=str(e))
+    await db.commit()
+    out = {"status": "sent", "expires_in": 180}
+    if dev_code and get_settings().DEBUG:
+        out["dev_code"] = dev_code
+    return out
+
+
+@router.post("/api/v1/otp/verify")
+async def otp_verify(request: OtpVerifyRequest, db: AsyncSession = Depends(get_db)):
+    from ..services.otp import verify_code
+    ok = await verify_code(db, request.phone, request.code)
+    await db.commit()
+    if not ok:
+        raise HTTPException(status_code=400, detail="인증번호가 맞지 않거나 만료되었습니다")
+    return {"status": "verified"}

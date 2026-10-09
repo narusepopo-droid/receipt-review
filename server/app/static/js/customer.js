@@ -365,7 +365,8 @@
             const phoneValid = PhoneFormatter.validate(phoneInput.value);
             const privacyValid = privacyCheck?.checked;
 
-            submitBtn.disabled = !(phoneValid && privacyValid);
+            const otpOk = !window.PHONE_VERIFY || window.OTP_VERIFIED;
+            submitBtn.disabled = !(phoneValid && privacyValid && otpOk);
         },
 
         async submit() {

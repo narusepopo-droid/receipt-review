@@ -612,6 +612,8 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
 
     store = store_data["store"]
     settings = store_data["settings"] or {}
+    from app.services.otp import get_options
+    opts = await get_options(db, store.id)
 
     return templates.TemplateResponse(
         request=request,
@@ -619,6 +621,8 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
         context={
             "store": {"id": store.id, "name": store.name, "naver_review_url": store.naver_review_url, "staff_pin": store.staff_pin},
             "active_menu": "settings",
+            "options": {"phone_verify": opts.phone_verify, "ai_text": opts.ai_text,
+                        "review_check": opts.review_check, "naver_place_id": opts.naver_place_id or ""},
             "settings": {
                 "benefit_text": settings.benefit_text if settings else "",
                 "primary_color": settings.primary_color if settings else "#03C75A",
@@ -842,3 +846,36 @@ async def sms_cancel(request: Request, campaign_id: int, db: AsyncSession = Depe
     c.status = SmsStatus.CANCELLED
     await db.commit()
     return JSONResponse({"success": True})
+
+
+
+# ============ 선택 기능 (Phase 9) ============
+
+class OptionsUpdate(BaseModel):
+    phone_verify: bool = False
+    ai_text: bool = False
+    review_check: bool = False
+    naver_place_id: Optional[str] = None
+
+
+@router.post("/options/save", name="admin_save_options")
+async def save_options(request: Request, data: OptionsUpdate, db: AsyncSession = Depends(get_db)):
+    store_data = await get_current_store(request, db)
+    if not store_data:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    import re as _re
+    from app.models.options import StoreOptions
+    store = store_data["store"]
+    place = None
+    if data.naver_place_id:
+        m = _re.search(r"(\d{5,15})", data.naver_place_id)   # 플레이스 주소를 붙여넣어도 번호만 추출
+        place = m.group(1) if m else None
+    if data.review_check and not place:
+        return JSONResponse({"success": False, "error": "리뷰 확인을 켜려면 네이버 플레이스 주소(또는 번호)가 필요합니다"}, status_code=400)
+    o = (await db.execute(select(StoreOptions).where(StoreOptions.store_id == store.id))).scalar_one_or_none()
+    if not o:
+        o = StoreOptions(store_id=store.id)
+        db.add(o)
+    o.phone_verify, o.ai_text, o.review_check, o.naver_place_id = data.phone_verify, data.ai_text, data.review_check, place
+    await db.commit()
+    return JSONResponse({"success": True, "naver_place_id": place})

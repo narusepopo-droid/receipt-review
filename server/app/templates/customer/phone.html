@@ -40,6 +40,17 @@
         >
         <p class="input-group__hint">하이픈(-)은 자동으로 입력됩니다</p>
     </div>
+    {% if phone_verify %}
+    <div id="otpBox" style="margin-top: 12px;">
+        <button type="button" id="otpSend" class="btn btn--secondary btn--full" style="height: 48px;">인증번호 받기</button>
+        <div id="otpInputRow" style="display: none; gap: 8px; margin-top: 10px;">
+            <input type="tel" id="otpCode" inputmode="numeric" maxlength="6" placeholder="인증번호 6자리"
+                   class="input-group__field" style="flex: 1;" autocomplete="one-time-code">
+            <button type="button" id="otpVerify" class="btn btn--primary" style="height: 56px; padding: 0 20px;">확인</button>
+        </div>
+        <p id="otpMsg" class="input-group__hint" style="margin-top: 8px;"></p>
+    </div>
+    {% endif %}
 </div>
 
 <!-- 동의 체크 -->
@@ -79,6 +90,39 @@
 
 {% block scripts %}
 <script>
+window.PHONE_VERIFY = {{ 'true' if phone_verify else 'false' }};
+window.OTP_VERIFIED = false;
+(function () {
+    if (!window.PHONE_VERIFY) return;
+    const phone = document.getElementById('phoneInput');
+    const msg = document.getElementById('otpMsg');
+    const say = (t, ok) => { msg.textContent = t; msg.style.color = ok ? '#03C75A' : '#ff4757'; };
+    phone.addEventListener('input', () => { window.OTP_VERIFIED = false; });
+    document.getElementById('otpSend').addEventListener('click', async () => {
+        const digits = phone.value.replace(/\D/g, '');
+        if (!/^01[016789]\d{7,8}$/.test(digits)) { say('휴대폰 번호를 먼저 정확히 입력해주세요'); return; }
+        const r = await fetch('/api/v1/otp/send', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: digits, store_code: window.STORE_CODE }) });
+        const d = await r.json();
+        if (!r.ok) { say(d.detail || '인증번호를 보내지 못했습니다'); return; }
+        document.getElementById('otpInputRow').style.display = 'flex';
+        document.getElementById('otpCode').focus();
+        say('인증번호를 문자로 보냈어요 (3분 안에 입력)', true);
+    });
+    document.getElementById('otpVerify').addEventListener('click', async () => {
+        const r = await fetch('/api/v1/otp/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: phone.value.replace(/\D/g, ''), code: document.getElementById('otpCode').value }) });
+        const d = await r.json();
+        if (!r.ok) { say(d.detail || '인증번호가 맞지 않습니다'); return; }
+        window.OTP_VERIFIED = true;
+        say('✓ 인증되었습니다', true);
+        document.getElementById('otpSend').disabled = true;
+        phone.readOnly = true;
+        phone.dispatchEvent(new Event('change'));
+        document.getElementById('privacyAgree').dispatchEvent(new Event('change'));
+    });
+})();
+
 const TERMS_STORE = {{ store.name | tojson }};
 const TERMS = {
     privacy: {
