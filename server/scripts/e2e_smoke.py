@@ -62,7 +62,10 @@ async def cleanup(store_id):
                     os.remove(p)
         cust_ids = [c for (c,) in (await s.execute(
             select(StoreCustomer.customer_id).where(StoreCustomer.store_id == store_id))).all()]
-        for model in (EventLog, TextHistory, ReviewSession, Receipt, ConsentLog, StoreCustomer, Agent, StoreSettings):
+        from app.models.options import StoreOptions, ReviewCheck, PhraseUsage
+        from app.models.sms import SmsCampaign, SmsWallet, SmsWalletLog
+        for model in (EventLog, TextHistory, PhraseUsage, ReviewCheck, StoreOptions, SmsWalletLog, SmsCampaign, SmsWallet,
+                      ReviewSession, Receipt, ConsentLog, StoreCustomer, Agent, StoreSettings):
             await s.execute(delete(model).where(model.store_id == store_id))
         # 다른 매장에 기록이 없는 테스트 고객만 삭제
         for cid in cust_ids:
