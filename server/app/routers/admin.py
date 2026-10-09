@@ -310,6 +310,11 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     )
     today_receipts = today_receipts_result.scalar() or 0
 
+    from app.services.otp import get_options
+    from app.services.review_check import verified_count
+    review_check_on = (await get_options(db, store.id)).review_check
+    verified_7d = await verified_count(db, store.id) if review_check_on else None
+
     return templates.TemplateResponse(
         request=request,
         name="admin/dashboard.html",
@@ -336,6 +341,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "capture_mode": capture_mode,
             "queue_length": queue_length,
             "today_receipts": today_receipts,
+            "verified_7d": verified_7d,
             "recent_activities": recent_activities
         }
     )

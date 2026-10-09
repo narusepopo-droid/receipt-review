@@ -100,3 +100,49 @@ async def test_ai_text_bad_key_returns_none(monkeypatch):
     from app.review import ai_text
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-invalid-test-key")
     assert await ai_text.generate(["김치찌개"], ["정말 맛있었어요."], 20, 150) is None
+
+
+@pytest.mark.asyncio
+async def test_review_check_matches_posted_review(web, tmp_path, monkeypatch):
+    """손님에게 준 문구가 네이버 리뷰에 (조금 고쳐서라도) 올라오면 확인됨으로 집계"""
+    import sys
+    from pathlib import Path
+    from datetime import datetime, timezone
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import make_sample_escpos as samples
+    from app.routers.auth import generate_token
+    from app.services import review_check
+    from app.db import get_db
+    from app.main import app
+
+    monkeypatch.setattr(settings, "RECEIPT_IMAGE_DIR", str(tmp_path / "img"))
+    monkeypatch.setattr(settings, "RECEIPT_RAW_DIR", str(tmp_path / "raw"))
+    for no in (b"30012345", b"30012388"):
+        await web.post("/agent/v1/receipts", headers={"Authorization": f"Bearer {generate_token(1)}"},
+                       files={"file": ("r.bin", samples.card_receipt().replace(b"30012345", no), "application/octet-stream")},
+                       data={"captured_at": datetime.now(timezone.utc).isoformat()})
+    await owner(web)
+    await web.post("/admin/options/save", json={"review_check": True, "naver_place_id": "1234567890"})
+    texts = []
+    for phone in ("010-6161-0001", "010-6161-0002"):
+        sid = (await web.post("/api/v1/session/start?store_code=WEB01", json={"phone": phone})).json()["session_id"]
+        texts.append((await web.post(f"/api/v1/session/{sid}/assign")).json()["generated_text"])
+
+    fake = [{"id": "r1", "body": texts[0].replace(".", "!") + " 사장님 최고예요", "created": "10.9.목"},
+            {"id": "r2", "body": "전혀 다른 손님의 리뷰입니다. 분위기가 좋네요.", "created": "10.9.목"}]
+
+    async def fake_fetch(place_id, client=None):
+        assert place_id == "1234567890"
+        return fake
+    monkeypatch.setattr(review_check, "fetch_reviews", fake_fetch)
+    async for s in app.dependency_overrides[get_db]():
+        assert await review_check.run_all(s) == 1        # 첫 손님만 확인됨
+        assert await review_check.run_all(s) == 0        # 중복 집계 없음
+    assert "네이버에서 확인된 리뷰" in (await web.get("/admin/dashboard")).text
+
+
+def test_parse_reviews_from_apollo_state():
+    from app.services.review_check import parse_reviews
+    html = ('<script>window.__APOLLO_STATE__ = {"VisitorReview:abc:true": {"id": "abc", "body": "맛있어요", '
+            '"created": "10.9.목"}, "Other:1": {}};\nwindow.x=1;</script>')
+    assert parse_reviews(html) == [{"id": "abc", "body": "맛있어요", "created": "10.9.목"}]

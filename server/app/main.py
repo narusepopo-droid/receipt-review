@@ -54,6 +54,15 @@ async def run_alert_job():
             logger.error(f"Alert job failed: {e}")
 
 
+async def run_review_check_job():
+    from app.services.review_check import run_all
+    async with async_session_factory() as session:
+        try:
+            await run_all(session)
+        except Exception as e:
+            logger.error(f"Review check job failed: {e}")
+
+
 async def ensure_schema():
     """없는 테이블만 생성 + 모델과 DB 칼럼 차이 경고 (기존 테이블은 변경하지 않음)"""
     from sqlalchemy import inspect
@@ -96,6 +105,12 @@ async def lifespan(app: FastAPI):
         run_alert_job,
         IntervalTrigger(minutes=10),
         id="alerts",
+        replace_existing=True
+    )
+    scheduler.add_job(
+        run_review_check_job,
+        IntervalTrigger(hours=6),
+        id="review_check",
         replace_existing=True
     )
     scheduler.add_job(

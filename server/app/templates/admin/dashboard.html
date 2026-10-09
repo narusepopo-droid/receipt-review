@@ -47,6 +47,15 @@
         <div class="stat-value">{{ stats.benefits_given | default(0) }}건</div>
     </div>
 </div>
+{% if verified_7d is not none %}
+<div class="card" style="margin-bottom: 24px;">
+    <div class="card-body" style="display:flex; justify-content:space-between; align-items:center;">
+        <div><strong>네이버에서 확인된 리뷰 (최근 7일)</strong>
+            <div style="font-size:13px; color:var(--gray-600);">플레이스 공개 리뷰와 손님에게 드린 문구를 비교 (6시간마다)</div></div>
+        <div class="stat-value">{{ verified_7d }}건</div>
+    </div>
+</div>
+{% endif %}
 
 <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
     <!-- Funnel Chart -->
