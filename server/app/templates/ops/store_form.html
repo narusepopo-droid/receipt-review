@@ -23,23 +23,23 @@
             <div class="form-group">
                 <label class="form-label">매장명 *</label>
                 <input type="text" name="name" class="form-input" required
-                       value="{{ store.name if store else '' }}" placeholder="맛있는 식당">
+                       value="{{ (store.name or '') if store else '' }}" placeholder="맛있는 식당">
             </div>
 
             <div class="form-group">
-                <label class="form-label">사업자번호 *</label>
-                <input type="text" name="biz_no" class="form-input" required
-                       value="{{ store.biz_no if store else '' }}" placeholder="123-45-67890">
+                <label class="form-label">사업자번호</label>
+                <input type="text" name="biz_no" class="form-input"
+                       value="{{ (store.biz_no or '') if store else '' }}" placeholder="123-45-67890">
             </div>
         </div>
 
         <div class="form-group">
-            <label class="form-label">네이버 리뷰 URL *</label>
-            <input type="url" name="naver_review_url" class="form-input" required
-                   value="{{ store.naver_review_url if store else '' }}"
-                   placeholder="https://naver.me/xxxxx">
+            <label class="form-label">네이버 영수증 리뷰 주소</label>
+            <input type="url" name="naver_review_url" class="form-input"
+                   value="{{ (store.naver_review_url or default_review_url) if store else default_review_url }}"
+                   placeholder="{{ default_review_url }}">
             <small style="color: var(--text-secondary); font-size: 13px; margin-top: 4px; display: block;">
-                스마트플레이스에서 발급받은 영수증 리뷰 QR 링크
+                모든 매장 공통 주소가 기본으로 들어가 있어요. 비워 두어도 공통 주소로 이동합니다.
             </small>
         </div>
 
@@ -55,7 +55,7 @@
             <div class="form-group">
                 <label class="form-label">직원 PIN (4자리)</label>
                 <input type="text" name="staff_pin" class="form-input" maxlength="4" pattern="[0-9]{4}"
-                       value="{{ store.staff_pin if store else '' }}" placeholder="1234">
+                       value="{{ (store.staff_pin or '') if store else '' }}" placeholder="1234">
             </div>
         </div>
 

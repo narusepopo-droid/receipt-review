@@ -129,6 +129,21 @@ async def create_campaign(db: AsyncSession, store: Store, body: str,
     return c
 
 
+def _ip_blocked(body: dict) -> bool:
+    """알리고에 이 서버 IP 가 등록 안 됨 (-101 인증오류-IP)"""
+    return str(body.get("result_code")) == "-101" and "IP" in str(body.get("message", ""))
+
+
+async def _relay_send(client: httpx.AsyncClient, s, data: dict) -> dict:
+    """플마와 같은 알리고 계정으로 플레이스랭킹 서버(IP 등록됨)를 거쳐 발송. 길이에 따라 알리고가 SMS/LMS 자동 선택"""
+    try:
+        r = await client.post(s.SMS_RELAY_URL, json={"receiver": data["receiver"], "msg": data["msg"], "sender": data["sender"]})
+        return (r.json() or {}).get("result") or {}
+    except Exception as e:
+        logger.warning("문자 중계 발송 오류: %s", e)
+        return {"result_code": "-1", "message": "중계 발송 실패"}
+
+
 async def _aligo_send(numbers: list[str], text: str, msg_type: str, title: str) -> tuple[int, int, str]:
     s = get_settings()
     ok = fail = 0
@@ -142,6 +157,8 @@ async def _aligo_send(numbers: list[str], text: str, msg_type: str, title: str) 
                 data["title"] = title[:44]
             r = await client.post(ALIGO_URL, data=data)
             body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+            if _ip_blocked(body) and s.SMS_RELAY_URL:
+                body = await _relay_send(client, s, data)
             if str(body.get("result_code")) == "1":
                 ok += int(body.get("success_cnt", len(batch)))
                 fail += int(body.get("error_cnt", 0))

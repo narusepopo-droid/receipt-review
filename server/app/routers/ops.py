@@ -24,6 +24,9 @@ KST = timezone(timedelta(hours=9))
 router = APIRouter(prefix="/ops", tags=["operations"])
 
 templates = Jinja2Templates(directory="app/templates")
+templates.env.finalize = lambda v: "" if v is None else v   # 빈 값은 "None" 대신 빈칸
+from app.config import get_settings as _gs  # noqa: E402
+templates.env.globals["default_review_url"] = _gs().DEFAULT_NAVER_REVIEW_URL
 
 
 # ============ Pydantic Models ============
@@ -333,7 +336,7 @@ async def store_detail(request: Request, store_id: int, db: AsyncSession = Depen
         raise HTTPException(status_code=404, detail="매장을 찾을 수 없습니다")
     view = {
         "id": store.id, "name": store.name, "biz_no": store.biz_no, "store_code": store.store_code,
-        "naver_review_url": store.naver_review_url, "paper_width": store.paper_width,
+        "naver_review_url": store.review_url, "paper_width": store.paper_width,
         "status": store.status.value if hasattr(store.status, "value") else store.status,
         "staff_pin": store.staff_pin, "admin_login_id": store.admin_login_id,
     }

@@ -24,9 +24,14 @@ async def send_sms(phone: str, message: str) -> bool:
     try:
         async with httpx.AsyncClient(timeout=20) as c:
             r = await c.post("https://apis.aligo.in/send/", data=data)
-        ok = str(r.json().get("result_code")) == "1"
+            body = r.json()
+            # 이 서버 IP 가 알리고 미등록이면 플마와 같은 알리고 계정으로 플레이스랭킹 서버를 거쳐 발송
+            if str(body.get("result_code")) == "-101" and "IP" in str(body.get("message", "")) and settings.SMS_RELAY_URL:
+                rr = await c.post(settings.SMS_RELAY_URL, json={"receiver": digits, "msg": message, "sender": settings.ALIGO_SENDER})
+                body = (rr.json() or {}).get("result") or {}
+        ok = str(body.get("result_code")) == "1"
         if not ok:
-            logger.warning("문자 발송 실패: %s", r.text[:200])
+            logger.warning("문자 발송 실패: %s", str(body)[:200])
         return ok
     except Exception as e:
         logger.warning("문자 발송 오류: %s", e)

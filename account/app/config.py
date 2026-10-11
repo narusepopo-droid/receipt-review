@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     ALIGO_KEY: str = ""
     ALIGO_USER_ID: str = ""
     ALIGO_SENDER: str = ""
+    SMS_RELAY_URL: str = "https://placeranking.com/api/sms/send"   # 이 서버 IP 가 알리고 미등록일 때 중계
 
     # 영수증리뷰 서버 연동 (서버끼리 공유 비밀)
     REVIEW_API_URL: str = "http://127.0.0.1:8000"

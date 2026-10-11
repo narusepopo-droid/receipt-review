@@ -39,6 +39,12 @@ class Store(Base, TimestampMixin):
     )
     agents: Mapped[list["Agent"]] = relationship(back_populates="store")
 
+    @property
+    def review_url(self) -> str:
+        """손님이 이동할 네이버 영수증 리뷰 주소 — 비어 있으면 모든 매장 공통 주소"""
+        from app.config import get_settings
+        return self.naver_review_url or get_settings().DEFAULT_NAVER_REVIEW_URL
+
     def set_password(self, password: str):
         """비밀번호 해시 저장 (bcrypt)"""
         from app.security import hash_password

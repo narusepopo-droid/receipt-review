@@ -387,3 +387,20 @@ async def test_phone_validation_withdraw_and_assign_limit(web, tmp_path, monkeyp
     s2 = (await web.post("/api/v1/session/start?store_code=WEB01", json={"phone": "010-4444-0002"})).json()["session_id"]
     assert (await web.post(f"/api/v1/session/{s1}/assign")).status_code == 200
     assert (await web.post(f"/api/v1/session/{s2}/assign")).status_code == 503   # 상한 도달
+
+
+@pytest.mark.asyncio
+async def test_store_form_no_none_and_default_review_url(web):
+    """매장 수정 화면에 'None' 이 안 보이고, 리뷰 주소는 공통 주소가 기본"""
+    from app.config import get_settings
+    r = await web.post("/ops/login", data={"username": settings.OPS_USERNAME, "password": settings.OPS_PASSWORD})
+    r = await web.get("/ops/stores")
+    import re
+    sid = re.search(r"/ops/stores/(\d+)", r.text).group(1)
+    r = await web.get(f"/ops/stores/{sid}")
+    assert r.status_code == 200
+    assert 'value="None"' not in r.text
+    assert get_settings().DEFAULT_NAVER_REVIEW_URL in r.text
+    # 손님 화면도 비어 있으면 공통 주소
+    from app.models.store import Store
+    assert Store(name="x", store_code="X").review_url == "https://m.place.naver.com/my/checkin"

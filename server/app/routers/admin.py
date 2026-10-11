@@ -21,6 +21,7 @@ from app.models.receipt import ReceiptStatus
 from app.models.session import SessionStatus
 
 templates = Jinja2Templates(directory="app/templates")
+templates.env.finalize = lambda v: "" if v is None else v   # 빈 값은 "None" 대신 빈칸
 
 
 def _kst(dt) -> str:
@@ -691,7 +692,7 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
         request=request,
         name="admin/settings.html",
         context={
-            "store": {"id": store.id, "name": store.name, "naver_review_url": store.naver_review_url, "staff_pin": store.staff_pin},
+            "store": {"id": store.id, "name": store.name, "naver_review_url": store.review_url, "staff_pin": store.staff_pin},
             "active_menu": "settings",
             "options": {"phone_verify": opts.phone_verify,
                         "review_check": opts.review_check, "naver_place_id": opts.naver_place_id or ""},

@@ -26,6 +26,7 @@ from ..review.text_generator import TextGenerator
 
 router = APIRouter(tags=["customer"])
 templates = Jinja2Templates(directory="app/templates")
+templates.env.finalize = lambda v: "" if v is None else v   # 빈 값은 "None" 대신 빈칸
 
 # 손님 진행 상태를 기억하는 쿠키 (QR 을 다시 찍어도 진행 중인 화면으로 복귀)
 SESSION_COOKIE = "rr_sid"
@@ -90,7 +91,7 @@ async def phone_input_page(
         "id": store.id,
         "name": store.name,
         "store_code": store.store_code,
-        "naver_review_url": store.naver_review_url,
+        "naver_review_url": store.review_url,
         "settings": {
             "benefit_text": store_settings.benefit_text if store_settings else "리뷰 작성 시 특별 혜택!",
         }
@@ -124,7 +125,7 @@ async def keywords_page(
         "id": store.id,
         "name": store.name,
         "store_code": store.store_code,
-        "naver_review_url": store.naver_review_url,
+        "naver_review_url": store.review_url,
         "settings": {}
     }
 
@@ -168,7 +169,7 @@ async def result_page(
         "id": store.id,
         "name": store.name,
         "store_code": store.store_code,
-        "naver_review_url": store.naver_review_url,
+        "naver_review_url": store.review_url,
         "settings": {}
     }
 
@@ -202,7 +203,7 @@ async def complete_page(
         "id": store.id,
         "name": store.name,
         "store_code": store.store_code,
-        "naver_review_url": store.naver_review_url,
+        "naver_review_url": store.review_url,
         "settings": {
             "benefit_text": store_settings.benefit_text if store_settings else "직원에게 이 화면을 보여주세요!",
         }
