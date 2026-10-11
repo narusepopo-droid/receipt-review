@@ -34,3 +34,29 @@ async def legacy_login(req: LegacyLogin, x_internal_secret: str = Header(""), db
     return {"ok": True, "store_name": store.name, "biz_no": store.biz_no or "",
             "stores": [{"id": store.id, "name": store.name, "biz_no": store.biz_no or "",
                         "store_code": store.store_code}]}
+
+
+@router.get("/ops-summary")
+async def ops_summary(x_internal_secret: str = Header(""), db: AsyncSession = Depends(get_db)):
+    """마스터 관리자 페이지용 영수증리뷰 현황 숫자"""
+    _check(x_internal_secret)
+    from sqlalchemy import func
+    from app.models.receipt import Receipt, ReceiptClassification, ReceiptStatus
+    from app.models.session import ReviewSession
+    from app.models.store import StoreStatus
+    from app.routers.ops import _kst_day_start, _latest_agents, agent_health
+    stores = (await db.execute(select(Store))).scalars().all()
+    agents = await _latest_agents(db)
+    active = [s for s in stores if s.status == StoreStatus.ACTIVE]
+    offline = [s.name for s in active if agent_health(agents.get(s.id))[0] == "offline"]
+    today = _kst_day_start()
+    return {
+        "stores": len(stores), "active_stores": len(active), "offline_stores": offline,
+        "today_sessions": (await db.execute(select(func.count(ReviewSession.id)).where(
+            ReviewSession.started_at >= today))).scalar() or 0,
+        "today_completed": (await db.execute(select(func.count(ReviewSession.id)).where(
+            ReviewSession.started_at >= today, ReviewSession.completed_at.isnot(None)))).scalar() or 0,
+        "unclassified": (await db.execute(select(func.count(Receipt.id)).where(
+            Receipt.classification == ReceiptClassification.UNCLASSIFIED,
+            Receipt.status != ReceiptStatus.DISPOSED))).scalar() or 0,
+    }

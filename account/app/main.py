@@ -14,7 +14,7 @@ from app.config import settings
 from app.db import SessionLocal, engine
 from app.models import Base
 from app.notify import send_sms
-from app.routers import api, auth, my, ops
+from app.routers import api, auth, master, my, ops
 from app.seed import seed
 from app.web import render, url
 
@@ -53,7 +53,7 @@ app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY, session_co
                    max_age=60 * 60 * 12, same_site="lax", https_only=settings.SESSION_HTTPS_ONLY)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-for r in (auth.router, my.router, ops.router, api.router):
+for r in (auth.router, my.router, master.router, ops.router, api.router):
     app.include_router(r)
 
 

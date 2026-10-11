@@ -141,6 +141,37 @@ async def _sa_access_token() -> str:
     return _sa_token["token"]
 
 
+_master_token: dict = {"exp": 0, "token": ""}
+
+
+def master_sa_available() -> bool:
+    try:
+        return bool(settings.MASTER_SA_FILE) and bool(json.load(open(settings.MASTER_SA_FILE)).get("private_key"))
+    except Exception:
+        return False
+
+
+async def master_access_token() -> str:
+    """마스터 관리 키로 구글 접근 토큰 (로그인 계정 관리 + Firestore)"""
+    if _master_token["exp"] > time.time() + 60:
+        return _master_token["token"]
+    sa = json.load(open(settings.MASTER_SA_FILE))
+    now = int(time.time())
+    enc = lambda d: base64.urlsafe_b64encode(json.dumps(d).encode()).rstrip(b"=").decode()
+    unsigned = enc({"alg": "RS256", "typ": "JWT"}) + "." + enc({
+        "iss": sa["client_email"], "scope": "https://www.googleapis.com/auth/cloud-platform",
+        "aud": "https://oauth2.googleapis.com/token", "iat": now, "exp": now + 3600})
+    key = serialization.load_pem_private_key(sa["private_key"].encode(), password=None)
+    sig = key.sign(unsigned.encode(), padding.PKCS1v15(), hashes.SHA256())
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.post("https://oauth2.googleapis.com/token", data={
+            "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+            "assertion": unsigned + "." + base64.urlsafe_b64encode(sig).rstrip(b"=").decode()})
+    tok = r.json()
+    _master_token.update(token=tok["access_token"], exp=now + int(tok.get("expires_in", 3600)))
+    return _master_token["token"]
+
+
 async def sync_plma_user(uid: str, *, active: bool, expires_at: str, email: str = "", name: str = "",
                          device_id: Optional[str] = None) -> bool:
     """플마 프로그램이 보는 Firestore users/{uid} 갱신 (active, expires_at, device_id)"""

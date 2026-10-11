@@ -265,3 +265,44 @@ async def test_plma_signup_goes_to_plma_site_until_key(client):
     d = r.json()
     assert r.headers.get("access-control-allow-origin") == "https://placemaster.co.kr"
     assert all(not p["enabled"] and p["plans"] == [] for p in d["products"]) and d["bundle_pct"] == 10
+
+
+@pytest.mark.asyncio
+async def test_master_api(client, monkeypatch):
+    """마스터 전용 API: 마스터 토큰만 통과, 관리 키 없으면 안내, 운영 화면 바로 열기"""
+    from app.config import settings
+
+    async def fake_verify(tok):
+        return {"uid": settings.MASTER_UID if tok == "master" else "someone", "email": "boss@test.com"}
+    monkeypatch.setattr(firebase, "verify_id_token", fake_verify)
+    monkeypatch.setattr(settings, "MASTER_SA_FILE", "")
+    h = {"Authorization": "Bearer master", "Origin": "https://placemaster.co.kr"}
+
+    r = await client.options("/api/v1/master/summary", headers={"Origin": "https://placemaster.co.kr"})
+    assert r.status_code == 204 and r.headers["access-control-allow-origin"] == "https://placemaster.co.kr"
+    assert (await client.get("/api/v1/master/summary")).status_code == 403
+    assert (await client.get("/api/v1/master/summary", headers={"Authorization": "Bearer other"})).status_code == 403
+    r = await client.get("/api/v1/master/summary", headers=h)
+    assert r.status_code == 200 and r.json()["ok"] and "licenses" in r.json()
+    assert r.headers["access-control-allow-origin"] == "https://placemaster.co.kr"
+
+    # 관리 키 없으면 삭제·비밀번호는 안내 (503)
+    r = await client.post("/api/v1/master/plma/delete", headers=h, json={"uid": "abc"})
+    assert r.status_code == 503 and not r.json()["ok"]
+    # 마스터 자신은 삭제 불가
+    r = await client.post("/api/v1/master/plma/delete", headers=h, json={"uid": settings.MASTER_UID})
+    assert r.status_code == 400
+    r = await client.post("/api/v1/master/plma/password", headers=h, json={"uid": "abc", "password": "12"})
+    assert r.status_code == 400
+    # 남의 토큰으로는 삭제 불가
+    r = await client.post("/api/v1/master/plma/delete", headers={"Authorization": "Bearer other"}, json={"uid": "abc"})
+    assert r.status_code == 403
+
+    # 운영 화면 바로 열기 → 운영자 로그인 상태로 /ops
+    r = await client.post("/api/v1/master/sso", headers=h)
+    link = r.json()["account_ops"]
+    assert "/ops/sso?t=" in link and "/ops/sso?t=" in r.json()["review_ops"]
+    r = await client.get("/ops/sso?t=" + link.split("t=")[1])
+    assert r.status_code == 200 and str(r.url).endswith("/ops")
+    r = await client.get("/ops/sso?t=bad")
+    assert "/login" in str(r.url)
