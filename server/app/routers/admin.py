@@ -53,6 +53,7 @@ class SettingsUpdate(BaseModel):
     naver_review_url: Optional[str] = None
     benefit_text: Optional[str] = None
     staff_pin: Optional[str] = None
+    pin_required: Optional[bool] = None      # 혜택 지급 때 직원 PIN 사용 (기본: 안 씀)
     primary_color: Optional[str] = None
     paper_width: Optional[int] = None
     assignment_policy: Optional[str] = None
@@ -686,6 +687,7 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
     store = store_data["store"]
     settings = store_data["settings"] or {}
     from app.services.otp import get_options
+    from app.models.options import pin_required
     opts = await get_options(db, store.id)
 
     return templates.TemplateResponse(
@@ -693,6 +695,7 @@ async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
         name="admin/settings.html",
         context={
             "store": {"id": store.id, "name": store.name, "naver_review_url": store.review_url, "staff_pin": store.staff_pin},
+            "pin_required": await pin_required(db, store.id),
             "active_menu": "settings",
             "options": {"phone_verify": opts.phone_verify,
                         "review_check": opts.review_check, "naver_place_id": opts.naver_place_id or ""},
@@ -719,8 +722,20 @@ async def save_settings(request: Request, data: SettingsUpdate, db: AsyncSession
     # Store 업데이트
     if data.naver_review_url:
         store.naver_review_url = data.naver_review_url
-    if data.staff_pin:
-        store.staff_pin = data.staff_pin
+    pin = (data.staff_pin or "").strip()
+    if pin and not (len(pin) == 4 and pin.isdigit()):
+        return JSONResponse({"success": False, "error": "직원 PIN은 숫자 4자리로 정해 주세요"}, status_code=400)
+    if pin:
+        store.staff_pin = pin
+    if data.pin_required is not None:
+        from app.models.options import BenefitOption
+        if data.pin_required and not store.staff_pin:
+            return JSONResponse({"success": False, "error": "PIN 확인을 쓰려면 직원 PIN 4자리를 정해 주세요"}, status_code=400)
+        o = (await db.execute(select(BenefitOption).where(BenefitOption.store_id == store.id))).scalar_one_or_none()
+        if not o:
+            o = BenefitOption(store_id=store.id)
+            db.add(o)
+        o.pin_required = bool(data.pin_required)
     if data.new_password:
         store.set_password(data.new_password)
 
@@ -749,6 +764,65 @@ async def save_settings(request: Request, data: SettingsUpdate, db: AsyncSession
 
     await db.commit()
     return JSONResponse({"success": True})
+
+
+# ============ 혜택 지급 기록 ============
+
+_KST = timezone(timedelta(hours=9))
+
+
+@router.get("/benefits", response_class=HTMLResponse, name="admin_benefits")
+async def benefits_page(request: Request, days: int = 7, page: int = 1, db: AsyncSession = Depends(get_db)):
+    """리뷰 완료·혜택 지급 기록 (번호는 가려서)"""
+    store_data = await get_current_store(request, db)
+    if not store_data:
+        return RedirectResponse(url="/admin/login", status_code=302)
+    from app.models.options import pin_required
+    store = store_data["store"]
+    days = days if days in (1, 7, 30, 90) else 7
+    page = max(page, 1)
+    per_page = 50
+    today0 = datetime.now(_KST).replace(hour=0, minute=0, second=0, microsecond=0)
+    since = (today0 - timedelta(days=days - 1)).astimezone(timezone.utc)
+    done = and_(ReviewSession.store_id == store.id, ReviewSession.completed_at.isnot(None),
+                ReviewSession.completed_at >= since)
+
+    total = (await db.execute(select(func.count()).select_from(ReviewSession).where(done))).scalar() or 0
+    given = (await db.execute(select(func.count()).select_from(ReviewSession).where(
+        done, ReviewSession.benefit_given_at.isnot(None)))).scalar() or 0
+    today_cnt = (await db.execute(select(func.count()).select_from(ReviewSession).where(
+        done, ReviewSession.completed_at >= today0.astimezone(timezone.utc)))).scalar() or 0
+    rows = (await db.execute(
+        select(ReviewSession, Customer).join(Customer, ReviewSession.customer_id == Customer.id)
+        .where(done).order_by(ReviewSession.completed_at.desc())
+        .offset((page - 1) * per_page).limit(per_page))).all()
+
+    def kst(t):
+        if not t:
+            return ""
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        return t.astimezone(_KST).strftime("%m-%d %H:%M")
+
+    records = [{
+        "completed_at": kst(s.completed_at),
+        "phone_masked": f"010-****-{c.phone_last4}" if c.phone_last4 else "010-****-****",
+        "table_no": s.table_no or "",
+        "benefit_given_at": kst(s.benefit_given_at),
+    } for s, c in rows]
+
+    return templates.TemplateResponse(
+        request=request,
+        name="admin/benefits.html",
+        context={
+            "store": {"id": store.id, "name": store.name},
+            "active_menu": "benefits",
+            "pin_required": await pin_required(db, store.id),
+            "days": days, "records": records,
+            "stats": {"total": total, "given": given, "today": today_cnt},
+            "current_page": page, "total_pages": max(1, (total + per_page - 1) // per_page),
+        }
+    )
 
 
 # ============ Tables ============

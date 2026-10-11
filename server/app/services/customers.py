@@ -74,12 +74,16 @@ class CustomerService:
         )
         customer = result.scalar_one_or_none()
 
+        last4 = normalize_phone(phone)[-4:] or None   # 화면 표시용 뒷자리 (010-****-1234)
         if customer:
+            if not customer.phone_last4 and last4:
+                customer.phone_last4 = last4
             return customer
 
         customer = Customer(
             phone_enc=encrypt_phone(phone),
-            phone_hash=phone_hash
+            phone_hash=phone_hash,
+            phone_last4=last4
         )
         self.db.add(customer)
         await self.db.flush()

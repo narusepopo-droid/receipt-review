@@ -48,3 +48,17 @@ class PhraseUsage(Base):
     store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), primary_key=True)
     phrase_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class BenefitOption(Base):
+    """혜택 지급 확인 방식 — 기본은 직원이 완료 화면만 보고 지급 (PIN 안 씀)"""
+    __tablename__ = "benefit_options"
+
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), primary_key=True)
+    pin_required: Mapped[bool] = mapped_column(Boolean, default=False)   # 켜면 직원이 PIN 4자리 입력해 지급 기록
+
+
+async def pin_required(db, store_id: int) -> bool:
+    from sqlalchemy import select
+    o = (await db.execute(select(BenefitOption).where(BenefitOption.store_id == store_id))).scalar_one_or_none()
+    return bool(o and o.pin_required)

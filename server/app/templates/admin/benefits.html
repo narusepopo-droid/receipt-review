@@ -1,0 +1,81 @@
+{% extends "admin/base.html" %}
+
+{% block title %}혜택 지급 기록{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">혜택 지급 기록</h1>
+        <p class="page-subtitle">
+            {% if pin_required %}직원 PIN으로 혜택 지급을 확인하고 있습니다.
+            {% else %}완료 화면만 확인하고 지급하는 방식입니다. 손님이 '리뷰 등록 완료'를 누른 기록이 남습니다.{% endif %}
+            <a href="{{ url_for('admin_settings') }}">확인 방식 바꾸기</a>
+        </p>
+    </div>
+    <div style="display: flex; gap: 8px;">
+        {% for d, label in [(1, '오늘'), (7, '7일'), (30, '30일'), (90, '90일')] %}
+        <a href="?days={{ d }}" class="btn {{ 'btn-primary' if days == d else 'btn-secondary' }}">{{ label }}</a>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="stat-card">
+        <div class="stat-label">오늘 리뷰 완료</div>
+        <div class="stat-value">{{ stats.today }}명</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">기간 내 리뷰 완료</div>
+        <div class="stat-value">{{ stats.total }}명</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">{{ '직원 PIN 지급 확인' if pin_required else '혜택 지급 (완료 화면 확인)' }}</div>
+        <div class="stat-value">{{ stats.given if pin_required else stats.total }}건</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">기록</h3>
+        <div style="font-size: 13px; color: var(--gray-600);">손님 번호는 뒷자리 4개만 보입니다</div>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>리뷰 완료 시각</th>
+                        <th>손님 번호</th>
+                        <th>테이블</th>
+                        <th>혜택 지급</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in records %}
+                    <tr>
+                        <td>{{ r.completed_at }}</td>
+                        <td><span style="font-family: monospace; font-weight: 500;">{{ r.phone_masked }}</span></td>
+                        <td>{{ r.table_no or '-' }}</td>
+                        <td>
+                            {% if r.benefit_given_at %}<span class="badge badge-success">PIN 확인 {{ r.benefit_given_at[6:] }}</span>
+                            {% elif pin_required %}<span class="badge" style="background: var(--gray-200); color: var(--gray-700);">미지급</span>
+                            {% else %}<span class="badge badge-info">완료 화면 확인</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--gray-500);">이 기간에는 아직 기록이 없습니다</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if total_pages > 1 %}
+<div style="display: flex; justify-content: center; gap: 8px; margin-top: 16px;">
+    {% if current_page > 1 %}<a class="btn btn-secondary" href="?days={{ days }}&page={{ current_page - 1 }}">이전</a>{% endif %}
+    <span style="align-self: center; color: var(--gray-600);">{{ current_page }} / {{ total_pages }}</span>
+    {% if current_page < total_pages %}<a class="btn btn-secondary" href="?days={{ days }}&page={{ current_page + 1 }}">다음</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

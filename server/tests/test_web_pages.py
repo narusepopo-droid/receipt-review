@@ -55,7 +55,7 @@ async def web():
 
 
 ADMIN_PAGES = ["/admin/dashboard", "/admin/customers", "/admin/receipts", "/admin/phrases",
-               "/admin/settings", "/admin/tables"]
+               "/admin/settings", "/admin/tables", "/admin/benefits", "/admin/benefits?days=30"]
 OPS_PAGES = ["/ops/dashboard", "/ops/stores", "/ops/stores/new", "/ops/agents", "/ops/receipts/unclassified",
              "/ops/stats", "/ops/installer", "/ops/signups", "/ops/api/agents/status"]
 
@@ -228,6 +228,8 @@ async def test_no_receipt_shows_retry(web):
 
 @pytest.mark.asyncio
 async def test_pin_bruteforce_limited(web):
+    await web.post("/admin/login", data={"login_id": "owner@test.com", "password": "pw1234!"})
+    assert (await web.post("/admin/settings/save", json={"staff_pin": "4321", "pin_required": True})).json()["success"]
     r = await web.post("/api/v1/session/start?store_code=WEB01", json={"phone": "010-7777-8888"})
     sid = r.json()["session_id"]
     codes = [(await web.post(f"/api/v1/session/{sid}/benefit", json={"pin": f"{i:04d}"})).status_code for i in range(7)]
@@ -404,3 +406,51 @@ async def test_store_form_no_none_and_default_review_url(web):
     # 손님 화면도 비어 있으면 공통 주소
     from app.models.store import Store
     assert Store(name="x", store_code="X").review_url == "https://m.place.naver.com/my/checkin"
+
+
+@pytest.mark.asyncio
+async def test_benefit_pin_optional_default_off(web):
+    """혜택 지급: 기본은 PIN 없이(완료 화면만 확인), 점주가 켜면 PIN 입력 + 지급 기록"""
+    from uuid import UUID
+    from datetime import timezone
+    from sqlalchemy import select
+    from app.db import get_db
+    from app.main import app
+    from app.models.session import ReviewSession
+
+    r = await web.post("/api/v1/session/start?store_code=WEB01", json={"phone": "010-2222-3434"})
+    sid = r.json()["session_id"]
+    async for s in app.dependency_overrides[get_db]():
+        sess = (await s.execute(select(ReviewSession).where(ReviewSession.id == UUID(sid)))).scalar_one()
+        sess.completed_at = datetime.now(timezone.utc)
+        await s.commit()
+
+    # 기본: PIN 안 씀 → 혜택 API 막힘, 완료 화면에 PIN 칸 없음
+    assert (await web.post(f"/api/v1/session/{sid}/benefit", json={"pin": "0000"})).status_code == 400
+    assert "pinInput" not in (await web.get("/t/WEB01/1/complete")).text
+
+    await web.post("/admin/login", data={"login_id": "owner@test.com", "password": "pw1234!"})
+    page = (await web.get("/admin/settings")).text
+    assert "완료 화면만 확인하고 지급" in page
+    r = await web.get("/admin/benefits")
+    assert r.status_code == 200 and "010-****-3434" in r.text and "완료 화면 확인" in r.text
+
+    # PIN 없이 켜기 / 잘못된 PIN 형식 → 거절
+    r = await web.post("/admin/settings/save", json={"pin_required": True})
+    assert r.status_code == 400
+    r = await web.post("/admin/settings/save", json={"staff_pin": "12a4", "pin_required": True})
+    assert r.status_code == 400
+    r = await web.post("/admin/settings/save", json={"staff_pin": "2580", "pin_required": True})
+    assert r.json()["success"]
+
+    assert (await web.post(f"/api/v1/session/{sid}/benefit", json={"pin": "1111"})).status_code == 403
+    r = await web.post(f"/api/v1/session/{sid}/benefit", json={"pin": "2580"})
+    assert r.status_code == 200 and r.json()["benefit_given"]
+    r = await web.post(f"/api/v1/session/{sid}/benefit", json={"pin": "2580"})
+    assert r.json().get("already")
+    r = await web.get("/admin/benefits")
+    assert "PIN 확인" in r.text and "미지급" not in r.text
+
+    # 다시 끄기
+    assert (await web.post("/admin/settings/save", json={"pin_required": False})).json()["success"]
+    assert (await web.post(f"/api/v1/session/{sid}/benefit", json={"pin": "2580"})).status_code == 400

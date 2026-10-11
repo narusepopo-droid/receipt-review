@@ -3,7 +3,7 @@ import hmac
 import hashlib
 import time
 import secrets as py_secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, Response
@@ -24,6 +24,7 @@ from ..services.assignment import AssignmentService, NoReceiptAvailableError
 from ..review.text_generator import TextGenerator
 
 
+_KST = timezone(timedelta(hours=9))
 router = APIRouter(tags=["customer"])
 templates = Jinja2Templates(directory="app/templates")
 templates.env.finalize = lambda v: "" if v is None else v   # 빈 값은 "None" 대신 빈칸
@@ -209,11 +210,15 @@ async def complete_page(
         }
     }
 
+    from ..models.options import pin_required
+    given = session.benefit_given_at if session else None
     return templates.TemplateResponse(
         request=request,
         name="customer/complete.html",
         context={"store": store_data, "table_no": table_no, "completion_code": completion_code,
-                 "session_id": str(session.id) if session else ""}
+                 "session_id": str(session.id) if session else "",
+                 "pin_required": await pin_required(db, store.id) and bool(session and session.receipt_id),
+                 "benefit_given_at": given.astimezone(_KST).strftime("%m월 %d일 %H:%M") if given else ""}
     )
 
 
@@ -611,6 +616,12 @@ async def confirm_benefit(
     from app.security import rate_limiter
     if not rate_limiter.allow(f"pin:{session_id}", 5, 600):
         raise HTTPException(status_code=429, detail="PIN 입력 횟수를 초과했습니다. 10분 후 다시 시도해주세요.")
+
+    from ..models.options import pin_required
+    if not await pin_required(db, session.store_id):
+        raise HTTPException(status_code=400, detail="이 매장은 PIN 확인을 쓰지 않습니다")
+    if session.benefit_given_at:
+        return {"status": "ok", "benefit_given": True, "already": True}
 
     assignment_service = AssignmentService(db)
 

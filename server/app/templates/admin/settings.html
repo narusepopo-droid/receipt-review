@@ -84,12 +84,27 @@
             </div>
 
             <div class="form-group">
-                <label class="form-label">직원 PIN (4자리)</label>
+                <label class="form-label">혜택 지급 확인 방식</label>
+                <label style="display:flex; gap:10px; align-items:flex-start; margin-bottom:10px; cursor:pointer;">
+                    <input type="radio" name="pin-mode" value="0" {{ 'checked' if not pin_required }} style="margin-top:4px;">
+                    <span><strong>완료 화면만 확인하고 지급</strong> <span class="badge badge-success" style="margin-left:4px;">기본</span><br>
+                    <span style="font-size:13px; color:var(--gray-600);">손님이 보여주는 '리뷰 등록 완료' 화면을 직원이 눈으로 확인하고 혜택을 드립니다.</span></span>
+                </label>
+                <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer;">
+                    <input type="radio" name="pin-mode" value="1" {{ 'checked' if pin_required }} style="margin-top:4px;">
+                    <span><strong>직원 PIN 입력 후 지급</strong><br>
+                    <span style="font-size:13px; color:var(--gray-600);">직원이 손님 폰에 PIN 4자리를 넣어야 지급 완료로 기록됩니다. 한 번 지급한 화면은 다시 쓸 수 없습니다.</span></span>
+                </label>
+            </div>
+
+            <div class="form-group" id="pin-group" {% if not pin_required %}style="display:none;"{% endif %}>
+                <label class="form-label">직원 PIN (숫자 4자리)</label>
                 <input type="password" id="staff-pin" class="form-input"
                        value="{{ store.staff_pin | default('') }}"
-                       placeholder="****" maxlength="4" pattern="[0-9]{4}">
-                <p class="form-hint">혜택 지급 확인 시 직원이 입력합니다</p>
+                       placeholder="****" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" autocomplete="new-password">
+                <p class="form-hint">직원들만 알도록 정해 주세요. 바꾸면 바로 적용됩니다.</p>
             </div>
+            <p class="form-hint" style="margin-top:4px;">지급 기록은 왼쪽 메뉴 <a href="{{ url_for('admin_benefits') }}">혜택 지급 기록</a>에서 볼 수 있습니다.</p>
         </div>
     </div>
 
@@ -218,6 +233,12 @@ document.getElementById('primary-color').addEventListener('input', function() {
     document.getElementById('primary-color-hex').value = this.value;
 });
 
+document.querySelectorAll('input[name="pin-mode"]').forEach(function (r) {
+    r.addEventListener('change', function () {
+        document.getElementById('pin-group').style.display = this.value === '1' ? '' : 'none';
+    });
+});
+
 function saveSettings() {
     const newPw = document.getElementById('new-password').value;
     const confirmPw = document.getElementById('confirm-password').value;
@@ -231,6 +252,7 @@ function saveSettings() {
         naver_review_url: document.getElementById('naver-url').value,
         benefit_text: document.getElementById('benefit-text').value,
         staff_pin: document.getElementById('staff-pin').value,
+        pin_required: document.querySelector('input[name="pin-mode"]:checked').value === '1',
         primary_color: document.getElementById('primary-color').value,
         paper_width: parseInt(document.getElementById('paper-width').value),
         assignment_policy: document.getElementById('assignment-policy').value,
@@ -252,7 +274,7 @@ function saveSettings() {
             document.getElementById('new-password').value = '';
             document.getElementById('confirm-password').value = '';
         } else {
-            alert('저장 실패: ' + data.error);
+            alert('저장하지 못했습니다: ' + (data.error || ''));
         }
     })
     .catch(err => alert('오류가 발생했습니다.'));

@@ -16,6 +16,25 @@
     <p class="benefit-banner__text">{{ store.settings.benefit_text or "직원에게 이 화면을 보여주세요!" }}</p>
 </div>
 
+{% if pin_required %}
+<!-- 직원 PIN 확인 (점주가 켠 매장만) -->
+<div id="benefitDone" class="card {% if not benefit_given_at %}hidden{% endif %}" style="text-align: center; margin-top: 24px;">
+    <p style="font-size: 18px; font-weight: 700; color: var(--color-primary);">✓ 혜택 지급 완료</p>
+    <p id="benefitDoneAt" style="font-size: 14px; color: var(--color-text-secondary); margin-top: 6px;">{{ benefit_given_at }}</p>
+</div>
+{% if not benefit_given_at %}
+<div id="benefitBox" style="margin-top: 24px;">
+    <button type="button" id="confirmBenefit" class="btn btn--secondary btn--large btn--full">직원 확인 (혜택 지급)</button>
+    <div id="pinSection" class="staff-confirm hidden" style="margin-top: 16px;">
+        <p style="text-align: center; margin-bottom: 12px; color: var(--color-text-secondary); font-size: 14px;">직원용 PIN 4자리를 입력하세요</p>
+        <div class="staff-confirm__pin">
+            <input type="password" id="pinInput" class="staff-confirm__pin-input" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="••••" autocomplete="off">
+        </div>
+        <p id="pinError" style="text-align: center; color: #d32f2f; font-size: 14px; min-height: 20px;"></p>
+    </div>
+</div>
+{% endif %}
+{% else %}
 <!-- 직원 확인 안내 -->
 <div class="card" style="text-align: center; margin-top: 24px;">
     <p style="font-size: 18px; font-weight: 600; color: var(--color-text); margin-bottom: 8px;">
@@ -25,8 +44,42 @@
         이 화면을 직원에게 보여주시면 됩니다
     </p>
 </div>
+{% endif %}
 
 <div class="footer">
     <p class="footer__text">© {{ store.name }} · Powered by 영수증리뷰</p>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% if pin_required and not benefit_given_at %}
+<script>
+(function () {
+    var btn = document.getElementById('confirmBenefit'), sec = document.getElementById('pinSection'),
+        inp = document.getElementById('pinInput'), err = document.getElementById('pinError'), busy = false;
+    btn.addEventListener('click', function () { btn.classList.add('hidden'); sec.classList.remove('hidden'); inp.focus(); });
+    inp.addEventListener('input', async function () {
+        inp.value = inp.value.replace(/\D/g, '').slice(0, 4);
+        if (inp.value.length !== 4 || busy) return;
+        busy = true; err.textContent = '';
+        try {
+            var r = await fetch('/api/v1/session/{{ session_id }}/benefit', {method: 'POST',
+                headers: {'Content-Type': 'application/json'}, body: JSON.stringify({pin: inp.value})});
+            var d = await r.json().catch(function () { return {}; });
+            if (r.ok) {
+                document.getElementById('benefitBox').classList.add('hidden');
+                var now = new Date();
+                document.getElementById('benefitDoneAt').textContent = (now.getMonth() + 1) + '월 ' + now.getDate() + '일 ' +
+                    String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+                document.getElementById('benefitDone').classList.remove('hidden');
+            } else {
+                err.textContent = d.detail || 'PIN이 올바르지 않습니다';
+                inp.value = '';
+            }
+        } catch (e) { err.textContent = '연결이 원활하지 않습니다. 다시 입력해 주세요.'; inp.value = ''; }
+        busy = false;
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}
