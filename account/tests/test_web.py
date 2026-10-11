@@ -306,3 +306,30 @@ async def test_master_api(client, monkeypatch):
     assert r.status_code == 200 and str(r.url).endswith("/ops")
     r = await client.get("/ops/sso?t=bad", follow_redirects=False)
     assert r.status_code == 303 and "/login" in r.headers["location"]
+
+
+@pytest.mark.asyncio
+async def test_master_customers(client, monkeypatch):
+    """전체 회원: 통합 계정 회원·이용권이 합쳐져 나오고, 운영 화면 바로 열기는 /ops 안쪽 주소로만 이동"""
+    from app.config import settings
+
+    async def fake_verify(tok):
+        return {"uid": settings.MASTER_UID, "email": "boss@test.com"}
+    monkeypatch.setattr(firebase, "verify_id_token", fake_verify)
+    monkeypatch.setattr(settings, "MASTER_SA_FILE", "")
+    await signup(client, email="shop@test.com", products=("receipt_review",), store="가게A")
+    await client.get("/logout")
+    h = {"Authorization": "Bearer master"}
+    r = await client.get("/api/v1/master/customers", headers=h)
+    j = r.json()
+    assert r.status_code == 200 and j["ok"] and j["plma_ok"] is False
+    row = [x for x in j["rows"] if x["email"] == "shop@test.com"][0]
+    assert row["account_id"] and row["rr"] and row["rr"][0]["store"] == "가게A"
+
+    r = await client.post("/api/v1/master/sso", headers=h, json={"account_next": f"/ops/accounts/{row['account_id']}"})
+    t = r.json()["account_ops"].split("t=")[1]
+    r = await client.get("/ops/sso?t=" + t, follow_redirects=False)
+    assert r.headers["location"].endswith(f"/ops/accounts/{row['account_id']}")
+    r = await client.post("/api/v1/master/sso", headers=h, json={"account_next": "https://evil.com"})
+    r = await client.get("/ops/sso?t=" + r.json()["account_ops"].split("t=")[1], follow_redirects=False)
+    assert r.headers["location"].endswith("/ops")

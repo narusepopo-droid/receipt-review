@@ -159,13 +159,15 @@ async def master_sso(request: Request, t: str = ""):
     """플마 관리자 페이지(마스터)에서 바로 열기 — 계정 서버가 만든 1분짜리 주소"""
     from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
     try:
-        URLSafeTimedSerializer(_settings.INTERNAL_SECRET, salt="master-review-ops").loads(t, max_age=60)
+        d = URLSafeTimedSerializer(_settings.INTERNAL_SECRET, salt="master-review-ops").loads(t, max_age=60)
     except (BadSignature, SignatureExpired):
         return RedirectResponse(url="/ops/login", status_code=303)
     if not _settings.INTERNAL_SECRET or _settings.INTERNAL_SECRET.startswith("change-me"):
         return RedirectResponse(url="/ops/login", status_code=303)
     request.session["ops_authenticated"] = True
-    return RedirectResponse(url="/ops/dashboard", status_code=303)
+    nxt = str((d or {}).get("n") or "")
+    ok = nxt.startswith("/ops/") and "//" not in nxt and "\\" not in nxt
+    return RedirectResponse(url=nxt if ok else "/ops/dashboard", status_code=303)
 
 
 @router.get("/logout")

@@ -187,10 +187,15 @@ async def sso(request: Request):
         info = await _master(request)
     except HTTPException as e:
         return _err(request, e)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    body = body if isinstance(body, dict) else {}
     acct = settings.BASE_URL.rstrip("/") + "/ops/sso?t=" + _sso_signer().dumps(
-        {"u": info["uid"], "e": info.get("email", "")})
+        {"u": info["uid"], "e": info.get("email", ""), "n": _safe_next(body.get("account_next"))})
     review = settings.REVIEW_PUBLIC_URL.rstrip("/") + "/ops/sso?t=" + URLSafeTimedSerializer(
-        settings.INTERNAL_SECRET, salt="master-review-ops").dumps({"u": info["uid"]})
+        settings.INTERNAL_SECRET, salt="master-review-ops").dumps({"u": info["uid"], "n": _safe_next(body.get("review_next"))})
     return _json(request, {"ok": True, "account_ops": acct, "review_ops": review})
 
 
@@ -207,4 +212,148 @@ async def ops_sso(request: Request, t: str = "", db: AsyncSession = Depends(get_
     await db.commit()
     request.session.clear()
     request.session["aid"] = acc.id
-    return RedirectResponse(url("/ops"), status_code=303)
+    return RedirectResponse(url(_safe_next(d.get("n")) or "/ops"), status_code=303)
+
+
+def _safe_next(v) -> str:
+    """운영 화면 안쪽 주소만 허용 (/ops/...)"""
+    v = str(v or "")
+    return v if v.startswith("/ops/") and "//" not in v and "\\" not in v and len(v) < 200 else ""
+
+
+
+# ───────────── 전체 회원 (플마 + 영수증리뷰 + 결제) ─────────────
+
+def _plma_state(f: dict, today: str) -> str:
+    from datetime import date
+    exp = f.get("expires_at") or ""
+    expired = bool(exp) and exp < today
+    if f.get("status") == "suspended" or (f.get("active") is False and not expired):
+        return "stop"
+    if expired:
+        return "exp"
+    if exp:
+        try:
+            if (date.fromisoformat(exp) - date.fromisoformat(today)).days <= 7:
+                return "soon"
+        except ValueError:
+            pass
+    return "ok"
+
+
+async def _plma_users() -> list[dict]:
+    """플마 회원 (Firestore users) — 관리 키로 읽기"""
+    token = await firebase.master_access_token()
+    out, page = [], None
+    base = FS.format(p=settings.FIREBASE_PROJECT_ID)
+    async with httpx.AsyncClient(timeout=30) as c:
+        while True:
+            r = await c.get(f"{base}/users?pageSize=300" + (f"&pageToken={page}" if page else ""),
+                            headers={"Authorization": f"Bearer {token}"})
+            data = r.json()
+            for d in data.get("documents", []):
+                f = {k: next(iter(v.values()), None) for k, v in d.get("fields", {}).items() if isinstance(v, dict) and v}
+                f["uid"] = d["name"].rsplit("/", 1)[-1]
+                out.append(f)
+            page = data.get("nextPageToken")
+            if not page:
+                return out
+
+
+@router.get("/api/v1/master/customers")
+async def customers(request: Request, db: AsyncSession = Depends(get_db)):
+    try:
+        await _master(request)
+    except HTTPException as e:
+        return _err(request, e)
+    from app.models import Plan, Store
+    from app.web import KST
+    now = now_utc()
+    today = now.astimezone(KST).strftime("%Y-%m-%d")
+    people: dict = {}
+
+    def person(email: str, fallback: str) -> dict:
+        key = (email or "").strip().lower() or fallback
+        return people.setdefault(key, {"email": (email or "").strip().lower(), "name": "", "phone": "", "company": "",
+                                       "plma": None, "plma_license": None, "rr": [], "account_id": None,
+                                       "paid_total": 0, "plans": []})
+
+    def fill(p: dict, **kv):
+        for k, v in kv.items():
+            if v and not p.get(k):
+                p[k] = v
+
+    products = {x.id: x for x in (await db.execute(select(Product))).scalars()}
+    plans = {x.id: x for x in (await db.execute(select(Plan))).scalars()}
+    stores = {x.id: x for x in (await db.execute(select(Store))).scalars()}
+    paid = dict((await db.execute(select(Order.account_id, func.sum(Order.amount)).where(
+        Order.status == OrderStatus.PAID).group_by(Order.account_id))).all())
+    linked_review_ids = {s.review_store_id for s in stores.values() if s.review_store_id}
+
+    # 1) 통합 계정 (이용권·결제)
+    by_acc = {}
+    for a in (await db.execute(select(Account))).scalars():
+        if a.firebase_uid == settings.MASTER_UID or a.is_operator:
+            continue
+        p = person(a.email, f"acc{a.id}")
+        p["account_id"] = a.id
+        p["paid_total"] = int(paid.get(a.id) or 0)
+        fill(p, name=a.name, phone=a.phone, company=a.company)
+        by_acc[a.id] = p
+    for l in (await db.execute(select(License))).scalars():
+        p = by_acc.get(l.account_id)
+        prod = products.get(l.product_id)
+        if not p or not prod:
+            continue
+        plan = plans.get(l.plan_id)
+        kind = plan.kind.value if plan else "free"
+        st = licensing.state(l, now)
+        exp = l.expires_at.astimezone(KST).strftime("%Y-%m-%d") if l.expires_at else ""
+        if kind != "free" and plan:
+            p["plans"].append(plan.name)
+        if prod.code == "receipt_review":
+            s = stores.get(l.store_id)
+            p["rr"].append({"store": s.name if s else "", "state": st, "expires_at": exp, "plan": plan.name if plan else "",
+                            "review_store_id": s.review_store_id if s else None, "source": "account"})
+        elif prod.code == "plma":
+            p["plma_license"] = {"state": st, "expires_at": exp, "plan": plan.name if plan else ""}
+
+    # 2) 플마 회원 (Firestore)
+    plma_ok = firebase.master_sa_available()
+    if plma_ok:
+        try:
+            for f in await _plma_users():
+                if f["uid"] == settings.MASTER_UID:
+                    continue
+                p = person(f.get("email", ""), "plma" + f["uid"])
+                fill(p, name=f.get("name"), phone=f.get("phone"), company=f.get("company"))
+                p["plma"] = {"uid": f["uid"], "state": _plma_state(f, today), "expires_at": f.get("expires_at") or "",
+                             "pc": bool(f.get("device_id"))}
+        except Exception:
+            plma_ok = False
+
+    # 3) 영수증리뷰 매장 (통합 계정으로 아직 안 옮긴 예전 매장 계정 포함)
+    review_ok = True
+    try:
+        async with httpx.AsyncClient(timeout=8) as c:
+            r = await c.get(f"{settings.REVIEW_API_URL}/internal/ops-stores",
+                            headers={"X-Internal-Secret": settings.INTERNAL_SECRET})
+        pos = {}
+        for s in r.json().get("stores", []):
+            pos[s["id"]] = s["pos"]
+            if s["id"] in linked_review_ids:
+                continue
+            login = s.get("login") or ""
+            p = person(login if "@" in login else "", "store" + str(s["id"]))
+            fill(p, company=s["name"])
+            p["rr"].append({"store": s["name"], "state": "active" if s["active"] else "suspended", "expires_at": "",
+                            "plan": "", "review_store_id": s["id"], "source": "legacy", "login": login})
+        for p in people.values():
+            for x in p["rr"]:
+                if x.get("review_store_id") in pos:
+                    x["pos"] = pos[x["review_store_id"]]
+    except Exception:
+        review_ok = False
+
+    rows = sorted(people.values(), key=lambda p: (p["company"] or p["name"] or p["email"]))
+    return _json(request, {"ok": True, "rows": rows, "plma_ok": plma_ok, "review_ok": review_ok})

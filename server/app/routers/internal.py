@@ -60,3 +60,18 @@ async def ops_summary(x_internal_secret: str = Header(""), db: AsyncSession = De
             Receipt.classification == ReceiptClassification.UNCLASSIFIED,
             Receipt.status != ReceiptStatus.DISPOSED))).scalar() or 0,
     }
+
+
+@router.get("/ops-stores")
+async def ops_stores(x_internal_secret: str = Header(""), db: AsyncSession = Depends(get_db)):
+    """마스터 '전체 회원' 화면용 매장 목록 (예전 매장 계정 포함)"""
+    _check(x_internal_secret)
+    from app.models.store import StoreStatus
+    from app.routers.ops import _latest_agents, agent_health
+    agents = await _latest_agents(db)
+    out = []
+    for s in (await db.execute(select(Store).order_by(Store.id))).scalars():
+        out.append({"id": s.id, "name": s.name, "store_code": s.store_code, "login": s.admin_login_id or "",
+                    "active": s.status == StoreStatus.ACTIVE, "pos": agent_health(agents.get(s.id))[0],
+                    "created_at": s.created_at.isoformat() if s.created_at else ""})
+    return {"stores": out}
