@@ -10,6 +10,7 @@ CP949 ESC/POS 바이트로 만든다. 포스 없이 파서·렌더러·업로드
     python scripts/make_sample_escpos.py --kind kitchen -o out/kitchen.bin
 """
 import argparse
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ESC, GS = b"\x1b", b"\x1d"
@@ -20,6 +21,11 @@ BIG, NORMAL = GS + b"!\x11", GS + b"!\x00"
 CUT = GS + b"V\x42\x00"
 WIDTH = 42  # 80mm 프린터에서 흔한 42칸 설정
 
+
+
+def _now_str() -> str:
+    """지금 한국 시각 (1분 전) — 배정은 같은 영업일 영수증만 되므로 샘플도 오늘 날짜"""
+    return (datetime.now(timezone(timedelta(hours=9))) - timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
 
 def t(s: str) -> bytes:
     return s.encode("cp949")
@@ -76,7 +82,7 @@ def card_receipt(cancel: bool = False) -> bytes:
     if cancel:
         out += CENTER + BIG + t("[ 취 소 ]\n") + NORMAL + LEFT
     out += row("주문번호: 0042", "테이블: 7")
-    out += row("판매일시:", "2026-10-09 12:34:56")
+    out += row("판매일시:", _now_str())
     out += t("-" * WIDTH + "\n")
     out += t("상품명                단가 수량       금액\n")
     out += t("-" * WIDTH + "\n")
@@ -94,7 +100,7 @@ def card_receipt(cancel: bool = False) -> bytes:
     out += row("카드번호", "4518-42**-****-1234")
     out += row("할부", "일시불")
     out += row("승인번호", "30012345")
-    out += row("승인일시", "2026-10-09 12:34:56")
+    out += row("승인일시", _now_str())
     out += row("가맹점번호", "0123456789")
     out += t("-" * WIDTH + "\n")
     out += row("포인트 적립 회원", "010-1234-5678")
