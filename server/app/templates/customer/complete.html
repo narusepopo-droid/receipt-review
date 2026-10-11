@@ -10,6 +10,11 @@
     <p class="completion__subtitle">{{ store.name }}에 리뷰를 남겨주셔서 감사합니다</p>
 </div>
 
+<!-- 내 리뷰 확인 (네이버 MY플레이스 리뷰 탭) -->
+<a href="{{ my_review_url }}" target="_blank" rel="noopener" id="myReviewBtn" class="btn btn--primary btn--large btn--full" style="margin-bottom: 20px;">
+    내 리뷰 확인하기
+</a>
+
 <!-- 혜택 안내 -->
 <div class="benefit-banner">
     <div class="benefit-banner__icon">🎁</div>
@@ -38,10 +43,10 @@
 <!-- 직원 확인 안내 -->
 <div class="card" style="text-align: center; margin-top: 24px;">
     <p style="font-size: 18px; font-weight: 600; color: var(--color-text); margin-bottom: 8px;">
-        직원 확인 후 혜택을 받으세요
+        리뷰 확인 후 직원에게 보여주세요
     </p>
     <p style="font-size: 14px; color: var(--color-text-secondary);">
-        이 화면을 직원에게 보여주시면 됩니다
+        위 버튼으로 등록된 리뷰를 확인하고, 이 화면을 직원에게 보여주시면 됩니다
     </p>
 </div>
 {% endif %}

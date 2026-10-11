@@ -427,7 +427,9 @@ async def test_benefit_pin_optional_default_off(web):
 
     # 기본: PIN 안 씀 → 혜택 API 막힘, 완료 화면에 PIN 칸 없음
     assert (await web.post(f"/api/v1/session/{sid}/benefit", json={"pin": "0000"})).status_code == 400
-    assert "pinInput" not in (await web.get("/t/WEB01/1/complete")).text
+    done_page = (await web.get("/t/WEB01/1/complete")).text
+    assert "pinInput" not in done_page
+    assert "내 리뷰 확인하기" in done_page and "https://m.place.naver.com/my/review/list" in done_page
 
     await web.post("/admin/login", data={"login_id": "owner@test.com", "password": "pw1234!"})
     page = (await web.get("/admin/settings")).text

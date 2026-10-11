@@ -218,6 +218,7 @@ async def complete_page(
         context={"store": store_data, "table_no": table_no, "completion_code": completion_code,
                  "session_id": str(session.id) if session else "",
                  "pin_required": await pin_required(db, store.id) and bool(session and session.receipt_id),
+                 "my_review_url": get_settings().NAVER_MY_REVIEW_URL,
                  "benefit_given_at": given.astimezone(_KST).strftime("%m월 %d일 %H:%M") if given else ""}
     )
 
