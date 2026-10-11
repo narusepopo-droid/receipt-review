@@ -304,5 +304,5 @@ async def test_master_api(client, monkeypatch):
     assert "/ops/sso?t=" in link and "/ops/sso?t=" in r.json()["review_ops"]
     r = await client.get("/ops/sso?t=" + link.split("t=")[1])
     assert r.status_code == 200 and str(r.url).endswith("/ops")
-    r = await client.get("/ops/sso?t=bad")
-    assert "/login" in str(r.url)
+    r = await client.get("/ops/sso?t=bad", follow_redirects=False)
+    assert r.status_code == 303 and "/login" in r.headers["location"]
