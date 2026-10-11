@@ -135,6 +135,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+
+@app.middleware("http")
+async def _ops_frame_policy(request, call_next):
+    """운영 화면은 마스터 관리 페이지(placemaster.co.kr/admin.html) 안에서만 열 수 있게"""
+    resp = await call_next(request)
+    if request.url.path.startswith("/ops"):
+        resp.headers["Content-Security-Policy"] = "frame-ancestors 'self' https://placemaster.co.kr https://www.placemaster.co.kr"
+    return resp
+
 # CORS 미들웨어 (외부 사이트에서 API 호출 허용)
 app.add_middleware(
     CORSMiddleware,

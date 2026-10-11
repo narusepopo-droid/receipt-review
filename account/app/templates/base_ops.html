@@ -9,7 +9,7 @@
 <div class="ops">
   <aside class="side">
     <a class="logo" href="{{ url('/ops') }}"><span class="mark">P</span>운영 센터</a>
-    <a class="item" href="https://placemaster.co.kr/admin.html#members" style="background:rgba(3,199,90,.12);color:#34e08a;font-weight:700;margin-bottom:6px">← 마스터 관리로</a>
+    <a id="toMaster" target="_top" class="item" href="https://placemaster.co.kr/admin.html#members" style="background:rgba(3,199,90,.12);color:#34e08a;font-weight:700;margin-bottom:6px">← 마스터 관리로</a>
     <div class="group">현황</div>
     <a class="item {{ 'on' if nav == 'dash' }}" href="{{ url('/ops') }}">{{ ico('<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>') }}대시보드</a>
     <a class="item {{ 'on' if nav == 'accounts' }}" href="{{ url('/ops/accounts') }}">{{ ico('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>') }}회원·이용권</a>
@@ -28,5 +28,6 @@
   </main></div>
 </div>
 {% block scripts %}{% endblock %}
+<script>try{if(window.top!==window.self){var _m=document.getElementById("toMaster");if(_m)_m.style.display="none";}}catch(e){}</script>
 </body>
 </html>

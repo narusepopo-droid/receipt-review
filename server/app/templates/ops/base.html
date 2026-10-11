@@ -430,7 +430,7 @@
             </div>
 
             <nav>
-                <a href="https://placemaster.co.kr/admin.html#members" class="nav-item" style="margin:8px 12px;background:rgba(3,199,90,.14);color:#34e08a;font-weight:700;border-radius:10px">← 마스터 관리로</a>
+                <a id="toMaster" target="_top" href="https://placemaster.co.kr/admin.html#members" class="nav-item" style="margin:8px 12px;background:rgba(3,199,90,.14);color:#34e08a;font-weight:700;border-radius:10px">← 마스터 관리로</a>
                 <div class="nav-section">
                     <div class="nav-section-title">Overview</div>
                     <a href="/ops/dashboard" class="nav-item {% if request.url.path == '/ops/dashboard' %}active{% endif %}">
@@ -539,5 +539,6 @@
         setInterval(updateSignupBadge, 30000);
     </script>
     {% block extra_js %}{% endblock %}
+<script>try{if(window.top!==window.self){var _m=document.getElementById("toMaster");if(_m)_m.style.display="none";}}catch(e){}</script>
 </body>
 </html>

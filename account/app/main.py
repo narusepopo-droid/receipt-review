@@ -60,7 +60,12 @@ for r in (auth.router, my.router, master.router, ops.router, api.router):
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     resp = await call_next(request)
-    resp.headers.setdefault("X-Frame-Options", "DENY")
+    path = request.url.path[len(settings.BASE_PATH):] if settings.BASE_PATH and request.url.path.startswith(settings.BASE_PATH) else request.url.path
+    if path.startswith("/ops") or path.startswith("/login"):
+        # 마스터 관리 페이지(placemaster.co.kr/admin.html) 안에서만 열 수 있게
+        resp.headers.setdefault("Content-Security-Policy", "frame-ancestors 'self' https://placemaster.co.kr https://www.placemaster.co.kr")
+    else:
+        resp.headers.setdefault("X-Frame-Options", "DENY")
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     return resp
