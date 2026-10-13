@@ -126,9 +126,13 @@ async def login(
                 return templates.TemplateResponse(request=request, name="admin/login.html",
                                                   context={"error": msg, "account_url": _cfg.ACCOUNT_WEB_URL})
             ids = []
-            for s_ in usable:
-                st = await account_link.ensure_review_store(db, s_, login_id)
-                ids.append(st.id)
+            try:
+                for s_ in usable:
+                    st = await account_link.ensure_review_store(db, s_, login_id)
+                    ids.append(st.id)
+            except account_link.LinkError as e:
+                return templates.TemplateResponse(request=request, name="admin/login.html",
+                                                  context={"error": str(e), "account_url": _cfg.ACCOUNT_WEB_URL})
             request.session.clear()
             request.session["owner_store_ids"] = ids
             request.session["store_id"] = ids[0]
@@ -173,7 +177,10 @@ async def sso(request: Request, t: str = "", db: AsyncSession = Depends(get_db))
                                           context={"error": "바로가기 링크가 만료되었습니다. 마이페이지에서 다시 눌러 주세요."})
     ids, pick = [], None
     for s_ in data.get("stores", []):
-        st = await account_link.ensure_review_store(db, s_, data.get("email", ""))
+        try:
+            st = await account_link.ensure_review_store(db, s_, data.get("email", ""))
+        except account_link.LinkError as e:
+            return templates.TemplateResponse(request=request, name="admin/login.html", context={"error": str(e)})
         ids.append(st.id)
         if s_["id"] == data.get("pick"):
             pick = st.id

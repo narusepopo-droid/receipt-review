@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import licensing, payments
@@ -58,8 +58,14 @@ async def create_order(db: AsyncSession, account: Account, lines: list[Line], pr
 
 
 async def fulfill(db: AsyncSession, order: Order, actor: str, payment_key: str = None, receipt_url: str = None):
-    """결제 완료 → 이용권 적용 (중복 호출 안전)"""
+    """결제 완료 → 이용권 적용 (중복 호출 안전: 결제 대기 → 완료로 바꾸는 데 성공한 요청 하나만 적용)"""
     if order.status == OrderStatus.PAID:
+        return order
+    res = await db.execute(update(Order).where(Order.id == order.id, Order.status != OrderStatus.PAID,
+                                               Order.status != OrderStatus.REFUNDED)
+                           .values(status=OrderStatus.PAID).execution_options(synchronize_session=False))
+    if res.rowcount != 1:
+        await db.refresh(order)
         return order
     items = (await db.execute(select(OrderItem).where(OrderItem.order_id == order.id))).scalars().all()
     for it in items:
@@ -92,62 +98,81 @@ async def active_billing_key(db: AsyncSession, account_id: int) -> Optional[Bill
 async def run_autopay(db: AsyncSession, send_sms, now: Optional[datetime] = None) -> dict:
     now = now or now_utc()
     stats = {"charged": 0, "failed": 0, "stopped": 0}
-    due = (await db.execute(select(License).where(
+    due = (await db.execute(select(License.id).where(
         License.autopay.is_(True), License.next_charge_at.isnot(None), License.next_charge_at <= now,
         License.status == LicenseStatus.ACTIVE))).scalars().all()
-    for lic in due:
-        account = await db.get(Account, lic.account_id)
-        product = await db.get(Product, lic.product_id)
-        plan = await db.get(Plan, lic.plan_id) if lic.plan_id else None
-        # 해지 신청: 약정이 끝났으면 청구 멈춤 (남은 기간까지 이용 후 만료)
-        commit_end = licensing.aware(lic.commitment_ends_at)
-        if lic.autopay_cancel_requested and (not commit_end or commit_end <= now):
-            lic.autopay = False
-            lic.next_charge_at = None
-            await licensing.log(db, lic, "system", "autopay_stopped")
-            stats["stopped"] += 1
-            continue
-        if not plan or plan.kind != PlanKind.MONTHLY:
-            lic.autopay = False
-            continue
-        amount = plan_price(product, plan)
-        bk = await active_billing_key(db, account.id)
-        order = Order(account_id=account.id, title=f"{product.name} {plan.name} 월 청구", list_amount=product.monthly_price,
-                      discounts=[], amount=amount, method="billing", status=OrderStatus.PENDING)
-        db.add(order)
-        await db.flush()
-        db.add(OrderItem(order_id=order.id, product_id=product.id, plan_id=plan.id, store_id=lic.store_id,
-                         license_id=lic.id, list_amount=product.monthly_price, amount=amount))
+    for lid in due:
         try:
-            if amount > 0:
-                if not bk:
-                    raise payments.TossError("등록된 카드가 없습니다")
-                res = await payments.charge_billing(payments.decrypt(bk.billing_key_enc), account.toss_customer_key,
-                                                    amount, order.id, order.title)
-                order.toss_payment_key = res.get("paymentKey")
-                order.receipt_url = (res.get("receipt") or {}).get("url")
-            order.status = OrderStatus.PAID
-            order.paid_at = now
-            before = licensing._snap(lic)
-            lic.expires_at = licensing._add_months(licensing.aware(lic.expires_at) or now, 1)
-            lic.next_charge_at = lic.expires_at
-            await licensing.log(db, lic, f"autopay:{order.id}", "charged", amount=amount, before=before,
-                                after=licensing._snap(lic))
-            stats["charged"] += 1
+            lic = await db.get(License, lid, populate_existing=True)
+            await _charge_one(db, lic, send_sms, now, stats)
+            await db.commit()       # 매장마다 저장 (뒤에서 오류가 나도 앞의 청구가 사라져 다시 청구되지 않게)
         except Exception as e:
-            order.status = OrderStatus.FAILED
-            order.fail_reason = str(e)[:300]
-            # 다음 날 다시 시도, 유예(만료 다음 날)까지 실패하면 정지
-            if now > licensing.grace_end(lic.expires_at):
-                lic.status = LicenseStatus.SUSPENDED
-                lic.note = "auto-expired"
-                await licensing.log(db, lic, "system", "autopay_failed_suspended", reason=str(e)[:200])
-            else:
-                lic.next_charge_at = now + timedelta(days=1)
-                await licensing.log(db, lic, "system", "autopay_failed_retry", reason=str(e)[:200])
-            if account.phone:
-                await send_sms(account.phone, f"[플레이스마스터] {product.name} 월 이용료 결제에 실패했습니다. "
-                                              f"마이페이지에서 카드를 확인해 주세요. ({str(e)[:40]})")
-            stats["failed"] += 1
-    await db.commit()
+            await db.rollback()
+            logger.exception("autopay license %s failed: %s", lid, e)
     return stats
+
+
+async def _charge_one(db: AsyncSession, lic: License, send_sms, now: datetime, stats: dict):
+    account = await db.get(Account, lic.account_id)
+    product = await db.get(Product, lic.product_id)
+    plan = await db.get(Plan, lic.plan_id) if lic.plan_id else None
+    if not account or not product:
+        return
+    # 해지 신청: 약정이 끝났으면 청구 멈춤 (남은 기간까지 이용 후 만료)
+    commit_end = licensing.aware(lic.commitment_ends_at)
+    if lic.autopay_cancel_requested and (not commit_end or commit_end <= now):
+        lic.autopay = False
+        lic.next_charge_at = None
+        await licensing.log(db, lic, "system", "autopay_stopped")
+        stats["stopped"] += 1
+        return
+    if not plan or plan.kind != PlanKind.MONTHLY:
+        lic.autopay = False
+        return
+    amount = plan_price(product, plan)
+    bk = await active_billing_key(db, account.id)
+    order = Order(account_id=account.id, title=f"{product.name} {plan.name} 월 청구", list_amount=product.monthly_price,
+                  discounts=[], amount=amount, method="billing", status=OrderStatus.PENDING)
+    db.add(order)
+    await db.flush()
+    db.add(OrderItem(order_id=order.id, product_id=product.id, plan_id=plan.id, store_id=lic.store_id,
+                     license_id=lic.id, list_amount=product.monthly_price, amount=amount))
+    try:
+        if amount > 0:
+            if not bk:
+                raise payments.TossError("등록된 카드가 없습니다")
+            try:
+                res = await payments.charge_billing(payments.decrypt(bk.billing_key_enc),
+                                                    account.toss_customer_key, amount, order.id, order.title)
+            except payments.TossError:
+                raise
+            except Exception:
+                # 응답을 못 받음(망 오류) → 실제로 결제됐는지 토스에 확인 (모르고 다음 날 또 청구하지 않게)
+                res = await payments.find_by_order(order.id)
+                if not res or res.get("status") != "DONE":
+                    raise
+            order.toss_payment_key = res.get("paymentKey")
+            order.receipt_url = (res.get("receipt") or {}).get("url")
+        order.status = OrderStatus.PAID
+        order.paid_at = now
+        before = licensing._snap(lic)
+        lic.expires_at = licensing._add_months(licensing.aware(lic.expires_at) or now, 1)
+        lic.next_charge_at = lic.expires_at
+        await licensing.log(db, lic, f"autopay:{order.id}", "charged", amount=amount, before=before,
+                            after=licensing._snap(lic))
+        stats["charged"] += 1
+    except Exception as e:
+        order.status = OrderStatus.FAILED
+        order.fail_reason = str(e)[:300]
+        # 다음 날 다시 시도, 유예(만료 다음 날)까지 실패하면 정지
+        if lic.expires_at is None or now > licensing.grace_end(lic.expires_at):
+            lic.status = LicenseStatus.SUSPENDED
+            lic.note = "auto-expired"
+            await licensing.log(db, lic, "system", "autopay_failed_suspended", reason=str(e)[:200])
+        else:
+            lic.next_charge_at = now + timedelta(days=1)
+            await licensing.log(db, lic, "system", "autopay_failed_retry", reason=str(e)[:200])
+        if account.phone:
+            await send_sms(account.phone, f"[플레이스마스터] {product.name} 월 이용료 결제에 실패했습니다. "
+                                          f"마이페이지에서 카드를 확인해 주세요. ({str(e)[:40]})")
+        stats["failed"] += 1

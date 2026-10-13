@@ -456,3 +456,62 @@ async def test_benefit_pin_optional_default_off(web):
     # 다시 끄기
     assert (await web.post("/admin/settings/save", json={"pin_required": False})).json()["success"]
     assert (await web.post(f"/api/v1/session/{sid}/benefit", json={"pin": "2580"})).status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_paused_store_blocks_customers(web):
+    """운영자가 정지한 매장은 손님 참여 불가"""
+    from sqlalchemy import select
+    from app.db import get_db
+    from app.main import app
+    from app.models.store import StoreStatus
+    async for s in app.dependency_overrides[get_db]():
+        st = (await s.execute(select(Store).where(Store.store_code == "WEB01"))).scalar_one()
+        st.status = StoreStatus.PAUSED
+        await s.commit()
+    r = await web.post("/api/v1/session/start?store_code=WEB01", json={"phone": "010-4545-1212"})
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_account_link_failure_creates_no_store(web, monkeypatch):
+    """계정 서버에 매장 연결이 안 되면 영수증리뷰 매장을 만들지 않음 (연결 안 된 매장 = 이용권 확인 우회 방지)"""
+    from sqlalchemy import select, func
+    from app.db import get_db
+    from app.main import app
+    from app.services import account_link
+
+    async def fail_post(path, body, internal=False):
+        return None
+    monkeypatch.setattr(account_link, "_post", fail_post)
+    async for s in app.dependency_overrides[get_db]():
+        before = (await s.execute(select(func.count()).select_from(Store))).scalar()
+        with pytest.raises(account_link.LinkError):
+            await account_link.ensure_review_store(s, {"id": 5, "name": "새매장"}, "a@b.c")
+        after = (await s.execute(select(func.count()).select_from(Store))).scalar()
+        assert before == after
+
+
+@pytest.mark.asyncio
+async def test_license_cache_keeps_last_answer_when_account_down(monkeypatch):
+    from app.services import account_link
+    monkeypatch.setattr(account_link, "enabled", lambda: True)
+    account_link.clear_cache()
+
+    class R:
+        status_code = 200
+        def json(self):
+            return {"usable": False}
+
+    async def ok_post(path, body, internal=False):
+        return R()
+
+    async def down_post(path, body, internal=False):
+        return None
+    monkeypatch.setattr(account_link, "_post", ok_post)
+    assert await account_link.license_usable(42) is False
+    account_link._cache[42] = (0, False)          # 캐시 만료
+    monkeypatch.setattr(account_link, "_post", down_post)
+    assert await account_link.license_usable(42) is False     # 서버가 꺼져도 '사용 불가' 유지
+    account_link.clear_cache()
+    assert await account_link.license_usable(43) is True      # 한 번도 답을 못 받은 매장은 사용 가능

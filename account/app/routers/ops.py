@@ -197,6 +197,9 @@ async def license_action(request: Request, lid: int, db: AsyncSession = Depends(
         if prod0.code == "plma" and action in ("approve", "grant") and not _fb.sa_available() and lic.note != "plma-import":
             raise licensing.LicenseError("플마 신규 승인은 서비스 계정 키 연결 전까지 플마 관리자 프로그램에서 해주세요 "
                                          "(여기서 승인해도 플마 프로그램이 인식하지 못해요)")
+        if action == "approve" and licensing.paid_mode(prod0):
+            raise licensing.LicenseError("결제제로 운영 중이라 무료 승인은 막혀 있습니다. "
+                                         "꼭 필요하면 '요금제 지급'으로 기간을 정해 지급해 주세요.")
         if action == "approve":                  # 승인 = 무료(무제한) 지급
             plan = (await db.execute(select(Plan).where(Plan.product_id == lic.product_id,
                                                         Plan.kind == PlanKind.FREE))).scalars().first()
@@ -254,7 +257,6 @@ async def license_action(request: Request, lid: int, db: AsyncSession = Depends(
         else:
             raise licensing.LicenseError("알 수 없는 작업")
         await db.commit()
-        await _sync_plma(db, lic)
         flash(request, msg)
     except licensing.LicenseError as e:
         await db.rollback()
@@ -262,23 +264,31 @@ async def license_action(request: Request, lid: int, db: AsyncSession = Depends(
     return RedirectResponse(url(f"/ops/accounts/{account_id}#lic{lid}"), status_code=303)
 
 
-async def _sync_plma(db: AsyncSession, lic: License):
-    """플마 이용권이면 플마 프로그램이 보는 Firestore 갱신 (서비스 계정 키 있을 때)"""
-    from app import firebase
-    product = await db.get(Product, lic.product_id)
-    if product.code != "plma" or not firebase.sa_available():
-        return
-    acc = await db.get(Account, lic.account_id)
-    exp = "2099-12-31" if lic.expires_at is None else \
-        licensing.grace_end(lic.expires_at).astimezone(KST).strftime("%Y-%m-%d")
-    try:
-        await firebase.sync_plma_user(acc.firebase_uid, active=licensing.usable(lic), expires_at=exp,
-                                      email=acc.email, name=acc.name, device_id=lic.device_id or "")
-    except Exception:
-        pass
-
-
 # ───────────── 상품·요금제 ─────────────
+
+@router.post("/products/{pid}/free-until")
+async def free_until(request: Request, pid: int, db: AsyncSession = Depends(get_db)):
+    """유료 전환: 이 상품의 무료(무제한) 이용권을 정한 날짜까지로 한꺼번에 바꿈 (그 뒤엔 결제해야 계속 사용)"""
+    op = await require_operator(request, db)
+    product = await db.get(Product, pid)
+    if not product:
+        raise HTTPException(404)
+    f = await request.form()
+    until = _date(f.get("until"))
+    if not until or until < now_utc():
+        flash(request, "오늘 이후 날짜를 골라 주세요.", "err")
+        return RedirectResponse(url("/ops/products"), status_code=303)
+    free_ids = [x.id for x in (await db.execute(select(Plan).where(Plan.product_id == pid,
+                                                                    Plan.kind == PlanKind.FREE))).scalars()]
+    rows = (await db.execute(select(License).where(
+        License.product_id == pid, License.plan_id.in_(free_ids), License.expires_at.is_(None),
+        License.status == LicenseStatus.ACTIVE))).scalars().all()
+    for lic in rows:
+        await licensing.set_expiry(db, lic, until, f"operator:{op.email}", reason="유료 전환 (무료 무제한 → 기한)")
+    await db.commit()
+    flash(request, f"{product.name} 무료(무제한) 이용권 {len(rows)}개를 {until.astimezone(KST):%Y-%m-%d}까지로 바꿨습니다.")
+    return RedirectResponse(url("/ops/products"), status_code=303)
+
 
 @router.get("/products")
 async def products_page(request: Request, db: AsyncSession = Depends(get_db)):
@@ -440,7 +450,14 @@ async def order_action(request: Request, oid: str, db: AsyncSession = Depends(ge
             if order.toss_payment_key:
                 await payments.cancel_payment(order.toss_payment_key, str(f.get("reason") or "운영자 환불"))
             order.status = OrderStatus.REFUNDED
-            # 환불 시 이용권은 운영자가 직접 조정 (자동 회수하지 않음)
+            # 환불 시 이용권 기간은 운영자가 직접 조정 (자동 회수하지 않음). 월 자동결제는 멈춤 (다음 달 또 청구되지 않게)
+            from app.models import OrderItem
+            for it in (await db.execute(select(OrderItem).where(OrderItem.order_id == order.id))).scalars():
+                lic = await db.get(License, it.license_id)
+                if lic and lic.autopay:
+                    lic.autopay = False
+                    lic.next_charge_at = None
+                    await licensing.log(db, lic, f"operator:{op.email}", "autopay_stopped", reason="refund")
             await db.commit()
             flash(request, "환불했습니다. 필요하면 회원 화면에서 이용권 기간을 조정해 주세요.")
         except payments.TossError as e:

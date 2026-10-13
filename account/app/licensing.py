@@ -73,6 +73,24 @@ def days_left(lic: License, now: Optional[datetime] = None) -> Optional[int]:
 
 async def log(db: AsyncSession, lic: License, actor: str, action: str, **detail):
     db.add(LicenseLog(license_id=lic.id, actor=actor, action=action, detail=detail))
+    from app.plma_sync import push
+    await push(db, lic, action)       # 플마면 플마 프로그램(Firestore)에도 반영
+
+
+def paid_mode(product: Product) -> bool:
+    """결제제 상품 (무료 승인·예전 계정 무료 이전·연결 안 된 매장 무료 사용을 막음)"""
+    from app.models import SignupPolicy
+    return product.signup_policy == SignupPolicy.PAYMENT
+
+
+def purchase_block(lic: License) -> Optional[str]:
+    """이 이용권에 결제하면 안 되는 이유 (없으면 None)"""
+    st = state(lic)
+    if st in ("suspended", "cancelled"):
+        return "사용이 중지된 이용권입니다. 고객센터로 문의해 주세요."
+    if lic.status == LicenseStatus.ACTIVE and lic.expires_at is None and lic.plan and lic.plan.kind == PlanKind.LIFETIME:
+        return "이미 영구 이용권이라 추가 결제가 필요 없습니다."
+    return None
 
 
 def _snap(lic: License) -> dict:
@@ -237,8 +255,11 @@ async def run_expiry_jobs(db: AsyncSession, send_sms, now: Optional[datetime] = 
             target = f"{product.name}" + (f" ({store.name})" if store else "")
             msg = (f"[플레이스마스터] {target} 이용 기간이 {dl}일 후({ref}) 끝납니다. "
                    f"연장하시려면 마이페이지에서 결제해 주세요. (만료 다음 날까지 이용 가능)")
-            ok = await send_sms(account.phone, msg) if account and account.phone else False
-            db.add(NotificationLog(license_id=lic.id, kind=f"d{dl}", ref=ref, message=msg, sent=bool(ok)))
+            note = NotificationLog(license_id=lic.id, kind=f"d{dl}", ref=ref, message=msg, sent=False)
+            db.add(note)
+            await db.commit()
+            note.sent = bool(await send_sms(account.phone, msg)) if account and account.phone else False
+            await db.commit()
             stats["notified"] += 1
     await db.commit()
     return stats

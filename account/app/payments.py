@@ -9,6 +9,8 @@
 import base64
 import hashlib
 
+from typing import Optional
+
 import httpx
 from cryptography.fernet import Fernet
 
@@ -40,6 +42,16 @@ async def _post(path: str, body: dict, idem: str = "") -> dict:
     return data
 
 
+async def find_by_order(order_id: str) -> Optional[dict]:
+    """주문번호로 결제 조회 (없거나 실패하면 None)"""
+    try:
+        async with httpx.AsyncClient(timeout=20) as c:
+            r = await c.get(API + f"/v1/payments/orders/{order_id}", headers=_headers())
+        return r.json() if r.status_code == 200 else None
+    except Exception:
+        return None
+
+
 async def confirm_payment(payment_key: str, order_id: str, amount: int) -> dict:
     return await _post("/v1/payments/confirm", {"paymentKey": payment_key, "orderId": order_id, "amount": amount},
                        idem=f"confirm-{order_id}")
@@ -65,7 +77,9 @@ async def charge_billing(billing_key: str, customer_key: str, amount: int, order
 # ───────────── 빌링키 암호화 ─────────────
 
 def _fernet() -> Fernet:
-    key = base64.urlsafe_b64encode(hashlib.sha256(("billing:" + settings.SECRET_KEY).encode()).digest())
+    # 카드 자동결제 키 암호화 — 로그인용 SECRET_KEY 와 따로 (SECRET_KEY 를 바꿔도 등록 카드가 안 깨지게)
+    secret = settings.BILLING_KEY_SECRET or settings.SECRET_KEY
+    key = base64.urlsafe_b64encode(hashlib.sha256(("billing:" + secret).encode()).digest())
     return Fernet(key)
 
 

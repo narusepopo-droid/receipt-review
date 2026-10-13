@@ -34,7 +34,7 @@ async def client(monkeypatch):
     monkeypatch.setattr(firebase, "sign_up", fake_sign_up)
     monkeypatch.setattr(firebase, "sign_in", fake_sign_in)
 
-    async def no_legacy(db, email, pw):
+    async def no_legacy(db, email, pw, acc=None):
         return None
     from app import legacy as legacy_mod
     monkeypatch.setattr(legacy_mod, "try_migrate_review_owner", no_legacy)
@@ -333,3 +333,111 @@ async def test_master_customers(client, monkeypatch):
     r = await client.post("/api/v1/master/sso", headers=h, json={"account_next": "https://evil.com"})
     r = await client.get("/ops/sso?t=" + r.json()["account_ops"].split("t=")[1], follow_redirects=False)
     assert r.headers["location"].endswith("/ops")
+
+
+async def _ops_login(client):
+    await client.get("/logout")
+    await signup(client, email="ops@test.com", products=("receipt_review",))
+
+
+async def _set_policy(code, policy):
+    from app.models import SignupPolicy
+    async with SessionLocal() as db:
+        p = (await db.execute(select(Product).where(Product.code == code))).scalar_one()
+        p.signup_policy = SignupPolicy(policy)
+        await db.commit()
+
+
+@pytest.mark.asyncio
+async def test_paid_mode_blocks_free_paths(client):
+    """결제제: 무료 승인 막힘, 연결 안 된 영수증 매장 사용 불가, 무료 무제한 → 기한 일괄 전환"""
+    from app import licensing
+    await signup(client)
+    async with SessionLocal() as db:
+        lic = (await db.execute(select(License))).scalars().first()
+    h = {"X-Internal-Secret": "internal-test"}
+    assert (await client.post("/internal/review-store", json={"review_store_id": 999}, headers=h)).json()["usable"]
+    await _ops_login(client)
+    await _set_policy("receipt_review", "payment")
+    r = await client.post(f"/ops/licenses/{lic.id}", data={"action": "approve"})
+    assert "무료 승인은 막혀" in r.text
+    assert (await client.post("/internal/review-store", json={"review_store_id": 999}, headers=h)).json()["usable"] is False
+    # 무료로 쓰던 이용권은 일괄로 기한 지정
+    await _set_policy("receipt_review", "approval")
+    await client.post(f"/ops/licenses/{lic.id}", data={"action": "approve"})
+    async with SessionLocal() as db:
+        assert (await db.get(License, lic.id)).expires_at is None
+        pid = (await db.get(License, lic.id)).product_id
+    r = await client.post(f"/ops/products/{pid}/free-until", data={"until": "2099-01-31"})
+    assert "1개를 2099-01-31까지로" in r.text
+    async with SessionLocal() as db:
+        l2 = await db.get(License, lic.id)
+        assert l2.expires_at is not None and licensing.state(l2) == "active"
+
+
+@pytest.mark.asyncio
+async def test_monthly_hidden_without_toss_and_blocked_purchases(client):
+    from app.models import LicenseStatus
+    await signup(client)
+    async with SessionLocal() as db:
+        lic = (await db.execute(select(License))).scalars().first()
+        m12 = (await db.execute(select(Plan).where(Plan.product_id == lic.product_id, Plan.kind == PlanKind.MONTHLY,
+                                                   Plan.months == 12))).scalar_one()
+        y1 = (await db.execute(select(Plan).where(Plan.product_id == lic.product_id, Plan.kind == PlanKind.PREPAID,
+                                                  Plan.months == 12))).scalar_one()
+    r = await client.get(f"/my/buy/{lic.id}")
+    assert "월 결제 · 12개월 약정" not in r.text and "1년 일시불" in r.text
+    r = await client.post("/my/checkout", json={"items": [{"license_id": lic.id, "plan_id": m12.id}]})
+    assert r.status_code == 400
+    async with SessionLocal() as db:
+        l = await db.get(License, lic.id)
+        l.status = LicenseStatus.SUSPENDED
+        await db.commit()
+    r = await client.post("/my/checkout", json={"items": [{"license_id": lic.id, "plan_id": y1.id}]})
+    assert r.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_login_redirect_keeps_payment_query(client):
+    r = await client.get("/my/pay/success?paymentKey=pk1&orderId=o1&amount=100", follow_redirects=False)
+    loc = r.headers["location"]
+    assert "paymentKey" in loc and "orderId" in loc and "amount" in loc
+
+
+@pytest.mark.asyncio
+async def test_plma_payment_syncs_to_program(client, monkeypatch):
+    """플마 결제(입금 확인) → 플마 프로그램이 보는 Firestore 에 기간 반영"""
+    calls = []
+
+    async def fake_sync(uid, **kw):
+        calls.append((uid, kw))
+        return True
+    monkeypatch.setattr(firebase, "sa_available", lambda: True)
+    monkeypatch.setattr(firebase, "sync_plma_user", fake_sync)
+    await signup(client, email="pm@test.com")
+    from app import licensing
+    from app.models import Account
+    async with SessionLocal() as db:
+        acc = (await db.execute(select(Account).where(Account.email == "pm@test.com"))).scalar_one()
+        prod = (await db.execute(select(Product).where(Product.code == "plma"))).scalar_one()
+        lic = await licensing.get_or_create(db, acc, prod, None)
+        await db.commit()
+        y1 = (await db.execute(select(Plan).where(Plan.product_id == prod.id, Plan.kind == PlanKind.PREPAID,
+                                                  Plan.months == 12))).scalar_one()
+    r = (await client.post("/my/checkout", json={"items": [{"license_id": lic.id, "plan_id": y1.id}]})).json()
+    assert r["manual"] and not calls
+    await _ops_login(client)
+    async with SessionLocal() as db:
+        order = (await db.execute(select(Order))).scalars().first()
+    await client.post(f"/ops/orders/{order.id}", data={"action": "mark_paid"})
+    await client.post(f"/ops/orders/{order.id}", data={"action": "mark_paid"})     # 두 번 눌러도 한 번만
+    assert len(calls) == 1
+    uid, kw = calls[0]
+    assert uid == acc.firebase_uid and kw["active"] is True and kw["expires_at"] >= "2027-"
+    assert kw.get("device_id") is None        # PC 기록은 건드리지 않음
+    async with SessionLocal() as db:
+        l = await db.get(License, lic.id)
+        assert 360 <= licensing.days_left(l) <= 367
+    # PC 변경 → 프로그램 쪽 PC 기록도 지움
+    await client.post(f"/ops/licenses/{lic.id}", data={"action": "device_reset"})
+    assert calls[-1][1].get("device_id") == ""

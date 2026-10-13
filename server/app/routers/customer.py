@@ -369,7 +369,8 @@ async def start_session(
     store_settings = await get_store_settings(store.id, db)
 
     from ..services.account_link import license_usable
-    if not await license_usable(store.id):
+    from ..models.store import StoreStatus
+    if store.status == StoreStatus.PAUSED or not await license_usable(store.id):
         raise HTTPException(status_code=403, detail="지금은 이 매장의 리뷰 이벤트가 쉬는 중이에요. 직원에게 문의해 주세요.")
 
     from ..services.otp import get_options, recently_verified

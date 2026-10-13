@@ -104,6 +104,12 @@ async def license_login(request: Request, db: AsyncSession = Depends(get_db)):
     # 2) 이용권 찾기 (매장 단위면 매장 선택)
     lics = (await db.execute(select(License).where(License.account_id == acc.id, License.product_id == product.id)
                              .order_by(License.id))).scalars().all()
+    if not lics and code == "receipt_review" and not body.get("id_token"):
+        from app.legacy import try_migrate_review_owner
+        if await try_migrate_review_owner(db, acc.email, body.get("password") or "", acc=acc):
+            lics = (await db.execute(select(License).where(License.account_id == acc.id,
+                                                           License.product_id == product.id)
+                                     .order_by(License.id))).scalars().all()
     if not lics:
         await db.commit()
         return _fail(f"{product.name} 이용권이 없습니다. 마이페이지에서 신청해 주세요.", "no_license")
@@ -187,14 +193,15 @@ def _check_internal(secret: str):
 @router.post("/internal/review-store")
 async def internal_review_store(request: Request, x_internal_secret: str = Header(""),
                                 db: AsyncSession = Depends(get_db)):
-    """영수증리뷰 서버가 매장 이용 가능 여부를 물을 때. 계정 서버에 연결 안 된 매장은 'unknown'(제한 안 함)"""
+    """영수증리뷰 서버가 매장 이용 가능 여부를 물을 때.
+    계정 서버에 연결 안 된 매장은 'unknown' — 무료 운영 중엔 사용 가능, 결제제로 바꾸면 사용 불가 (마이페이지 연결·결제 필요)"""
     _check_internal(x_internal_secret)
     body = await request.json()
     store = (await db.execute(select(Store).where(Store.review_store_id == int(body["review_store_id"]))))\
         .scalars().first()
-    if not store:
-        return {"state": "unknown", "usable": True}
     product = (await db.execute(select(Product).where(Product.code == "receipt_review"))).scalar_one()
+    if not store:
+        return {"state": "unknown", "usable": not licensing.paid_mode(product)}
     lic = (await db.execute(select(License).where(License.store_id == store.id,
                                                   License.product_id == product.id))).scalars().first()
     if not lic:
@@ -240,6 +247,12 @@ async def internal_owner_login(request: Request, x_internal_secret: str = Header
     product = (await db.execute(select(Product).where(Product.code == "receipt_review"))).scalar_one()
     lics = (await db.execute(select(License).where(License.account_id == acc.id, License.product_id == product.id)
                              .order_by(License.id))).scalars().all()
+    if not lics:
+        from app.legacy import try_migrate_review_owner
+        if await try_migrate_review_owner(db, acc.email, body.get("password") or "", acc=acc):
+            lics = (await db.execute(select(License).where(License.account_id == acc.id,
+                                                           License.product_id == product.id)
+                                     .order_by(License.id))).scalars().all()
     stores = []
     for l in lics:
         s = await db.get(Store, l.store_id) if l.store_id else None

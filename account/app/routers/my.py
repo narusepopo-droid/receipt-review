@@ -97,8 +97,9 @@ async def buy_page(request: Request, license_id: int, db: AsyncSession = Depends
     acc = await require_account(request, db)
     lic = await _my_license(db, acc, license_id)
     await db.refresh(lic, ["product", "store", "plan"])
-    plans = (await db.execute(select(Plan).where(Plan.product_id == lic.product_id, Plan.public.is_(True))
-                              .order_by(Plan.sort))).scalars().all()
+    plans = [p for p in (await db.execute(select(Plan).where(Plan.product_id == lic.product_id, Plan.public.is_(True))
+                                          .order_by(Plan.sort))).scalars().all()
+             if settings.toss_enabled or p.kind != PlanKind.MONTHLY]      # 카드 결제 전에는 월 자동결제 불가
     # 함께 사면 할인 받을 수 있는 다른 상품 이용권
     others = (await db.execute(select(License).where(License.account_id == acc.id, License.id != lic.id,
                                                      License.product_id != lic.product_id))).scalars().all()
@@ -121,6 +122,12 @@ async def _lines_from(db: AsyncSession, acc: Account, data: dict) -> list[Line]:
         plan = await db.get(Plan, int(item["plan_id"]))
         if not plan or plan.product_id != lic.product_id or not plan.public:
             raise HTTPException(400, "요금제를 다시 선택해 주세요")
+        if plan.kind == PlanKind.MONTHLY and not settings.toss_enabled:
+            raise HTTPException(400, "월 자동결제는 카드 결제가 열리면 신청할 수 있어요. 일시불 요금제를 골라 주세요.")
+        await db.refresh(lic, ["plan"])
+        why = licensing.purchase_block(lic)
+        if why:
+            raise HTTPException(400, why)
         product = await db.get(Product, lic.product_id)
         lines.append(Line(product=product, plan=plan, store_id=lic.store_id))
     if not lines:

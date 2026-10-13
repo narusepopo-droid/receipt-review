@@ -97,7 +97,9 @@ class LoginRequired(HTTPException):
 async def require_account(request: Request, db: AsyncSession) -> Account:
     acc = await current_account(request, db)
     if not acc:
-        raise LoginRequired(request.url.path)
+        from urllib.parse import quote
+        nxt = request.url.path + (f"?{request.url.query}" if request.url.query else "")
+        raise LoginRequired(quote(nxt, safe="/"))
     return acc
 
 

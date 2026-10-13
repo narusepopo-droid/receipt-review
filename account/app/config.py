@@ -17,7 +17,8 @@ class Settings(BaseSettings):
     FIREBASE_API_KEY: str = ""
     FIREBASE_PROJECT_ID: str = ""
     FIREBASE_SA_FILE: str = ""          # 서비스 계정 키 (있으면 플마 Firestore 동기화)
-    MASTER_SA_FILE: str = ""            # 마스터 전용 관리 키 (플마 회원 완전 삭제·비밀번호 변경) — 가입 흐름에는 안 씀
+    MASTER_SA_FILE: str = ""
+    BILLING_KEY_SECRET: str = ""          # 카드 자동결제 키 암호화용 (비우면 SECRET_KEY)            # 마스터 전용 관리 키 (플마 회원 완전 삭제·비밀번호 변경) — 가입 흐름에는 안 씀
     MASTER_UID: str = "104K4S7E4bNm9Cl4dQsg7Sz18Zf1"   # 마스터(광고토대왕) Firebase UID
 
     # 운영자: 이 이메일로 로그인하면 운영자 권한

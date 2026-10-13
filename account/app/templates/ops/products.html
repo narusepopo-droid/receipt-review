@@ -14,12 +14,20 @@
       <div class="field" style="margin:0"><label class="f">정가 (월, 원)</label><input class="in sm" name="monthly_price" value="{{ p.monthly_price }}" inputmode="numeric"></div>
       <div class="field" style="margin:0"><label class="f">가입 방식</label>
         <select class="in sm" name="signup_policy">
-          <option value="approval" {{ 'selected' if p.signup_policy.value == 'approval' }}>가입 → 운영자 승인 (현재 무료)</option>
-          <option value="payment" {{ 'selected' if p.signup_policy.value == 'payment' }}>가입 → 결제 → 다운로드</option></select></div>
+          <option value="approval" {{ 'selected' if p.signup_policy.value == 'approval' }}>무료 운영: 가입 → 운영자 승인</option>
+          <option value="payment" {{ 'selected' if p.signup_policy.value == 'payment' }}>유료(결제제): 가입 → 결제 → 다운로드 (무료 승인·예전 계정 무료 이전 막힘)</option></select></div>
       <div class="field" style="margin:0"><label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if p.active }}><span>판매 중</span></label></div>
       <div class="field" style="margin:0;grid-column:span 2"><label class="f">소개 문구</label><input class="in sm" name="tagline" value="{{ p.tagline }}"></div>
       <div class="field" style="margin:0;grid-column:span 2"><label class="f">다운로드 주소</label><input class="in sm" name="download_url" value="{{ p.download_url }}" placeholder="https://..."></div>
       <div><button class="btn sm primary">상품 저장</button></div>
+    </form>
+    <form method="post" action="{{ url('/ops/products/' ~ p.id ~ '/free-until') }}" class="row mt" style="gap:8px;align-items:center;flex-wrap:wrap"
+          onsubmit="return confirm('{{ p.name }} 무료(무제한) 이용 중인 회원 모두를 이 날짜까지로 바꿉니다. 그 뒤에는 결제해야 계속 쓸 수 있어요. 진행할까요?')">
+      <span class="small muted">유료 전환:</span>
+      <span class="small">무료(무제한) 이용권을 모두</span>
+      <input class="in sm" type="date" name="until" required style="width:160px">
+      <span class="small">까지로</span>
+      <button class="btn sm">한꺼번에 바꾸기</button>
     </form>
     {% if v.warnings %}<div class="warn-list mt">⚠ 할인 규칙 확인:<br>{% for w in v.warnings %}· {{ w }}<br>{% endfor %}</div>{% endif %}
   </div>

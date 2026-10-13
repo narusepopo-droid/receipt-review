@@ -113,14 +113,21 @@ async def verify_id_token(token: str) -> Optional[dict]:
 _sa_token: dict = {"exp": 0, "token": ""}
 
 
-def sa_available() -> bool:
+def _own_sa_available() -> bool:
     try:
         return bool(settings.FIREBASE_SA_FILE) and bool(json.load(open(settings.FIREBASE_SA_FILE)))
     except Exception:
         return False
 
 
+def sa_available() -> bool:
+    """플마 Firestore 를 서버에서 읽고 쓸 수 있는지 (가입용 키 또는 마스터 관리 키)"""
+    return _own_sa_available() or master_sa_available()
+
+
 async def _sa_access_token() -> str:
+    if not _own_sa_available():
+        return await master_access_token()
     if _sa_token["exp"] > time.time() + 60:
         return _sa_token["token"]
     sa = json.load(open(settings.FIREBASE_SA_FILE))
@@ -170,6 +177,18 @@ async def master_access_token() -> str:
     tok = r.json()
     _master_token.update(token=tok["access_token"], exp=now + int(tok.get("expires_in", 3600)))
     return _master_token["token"]
+
+
+async def lookup_uid(email: str) -> Optional[str]:
+    """이메일로 Firebase 로그인 계정 UID 찾기 (마스터 관리 키 필요). 없으면 None"""
+    if not master_sa_available() or not email:
+        return None
+    token = await master_access_token()
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.post(f"https://identitytoolkit.googleapis.com/v1/projects/{settings.FIREBASE_PROJECT_ID}/accounts:lookup",
+                         headers={"Authorization": f"Bearer {token}"}, json={"email": [email]})
+    users = r.json().get("users", []) if r.status_code == 200 else []
+    return users[0]["localId"] if users else None
 
 
 async def sync_plma_user(uid: str, *, active: bool, expires_at: str, email: str = "", name: str = "",
