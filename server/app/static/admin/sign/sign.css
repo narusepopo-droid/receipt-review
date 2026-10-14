@@ -541,16 +541,16 @@
 .sign .sign-auto-main {
   display: inline-block;
   font-family: 'Black Han Sans', 'Noto Sans KR', sans-serif;
-  font-size: 19px;
+  font-size: 27px;
   letter-spacing: -0.3px;
   word-break: keep-all;
   color: var(--sign-accent, #03C75A);
 }
 .sign .sign-auto-sub {
-  margin-top: 4px;
-  font-size: 12px;
-  font-weight: 700;
-  opacity: 0.75;
+  margin-top: 5px;
+  font-size: 14px;
+  font-weight: 800;
+  opacity: 0.85;
 }
 .sign.tpl-neon .sign-auto-main,
 .sign.tpl-luxury .sign-auto-main { color: #fff; text-shadow: 0 0 12px var(--sign-accent, #03C75A); }

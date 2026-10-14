@@ -841,7 +841,7 @@ SIGN_DEFAULT_STEPS = ("음식/매장 사진 2장 먼저 촬영\n"
                       "앨범에서 영수증+사진 첨부\n"
                       "글 붙여넣기 → 등록 완료!")
 # 손님이 '일반 네이버 영수증 QR'로 착각하지 않게 맨 위 강조 문구 (점주가 시안 중 고르거나 직접 수정)
-SIGN_DEFAULT_HEADLINE = "영수증 찾지 마세요, QR 한 번이면 끝!\n영수증도 리뷰 글도 알아서 준비돼요"
+SIGN_DEFAULT_HEADLINE = "영수증리뷰 자동완성\n영수증 요청 안 하셔도 됩니다!!"   # 핵심 키워드 '영수증리뷰 자동완성' (요청자 결정)
 SIGN_TEMPLATES = ("glass", "neon", "minimal", "luxury")
 SIGN_SIZES = ("a6", "a5", "tablet", "square", "custom")
 

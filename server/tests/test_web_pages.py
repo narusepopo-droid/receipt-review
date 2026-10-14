@@ -522,7 +522,7 @@ async def test_sign_editor_design_and_qr(web):
     """테이블 안내판 편집기: 템플릿 4종·강조 문구 기본값, 저장·검사, 매장 공용/테이블 QR 이미지"""
     await web.post("/admin/login", data={"login_id": "owner@test.com", "password": "pw1234!"})
     page = (await web.get("/admin/tables")).text
-    assert "sign-templates.js" in page and "영수증 찾지 마세요" in page and "매장 공용 QR" in page
+    assert "sign-templates.js" in page and "영수증리뷰 자동완성" in page and "매장 공용 QR" in page
 
     bad = {"template": "hack", "color": "red;}", "headline": "<script>x</script>\n둘째", "qrMode": "table",
            "tableStart": 5, "tableEnd": 400, "logo": "javascript:alert(1)", "size": "a5", "extra": 1}

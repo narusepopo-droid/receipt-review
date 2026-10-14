@@ -5,7 +5,7 @@
 {% block head %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@300;400;500;700;900&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', path='admin/sign/sign.css') }}?v=2">
+<link rel="stylesheet" href="{{ url_for('static', path='admin/sign/sign.css') }}?v=3">
 <style>
 .sg-wrap { display: grid; grid-template-columns: 380px 1fr; gap: 24px; align-items: start; }
 .sg-panel .card-body { padding: 20px; }
@@ -179,12 +179,12 @@ const QR_URL = "{{ url_for('admin_sign_qr') }}";
 const SAVE_URL = "{{ url_for('admin_save_sign_design') }}";
 let D = {{ design | tojson }};
 const PRESETS = [
-    "영수증 찾지 마세요, QR 한 번이면 끝!\n영수증도 리뷰 글도 알아서 준비돼요",
-    "리뷰, 이제 30초면 충분해요\n영수증·리뷰 글 자동 준비 — 붙여넣기만 하세요",
-    "지갑 속 영수증, 안 꺼내셔도 돼요\nQR 찍고 번호만 넣으면 영수증이 폰으로 쏙",
-    "쓰기 어려운 리뷰, 글까지 대신 써드려요\n영수증과 리뷰 문구를 자동으로 준비해요",
-    "찍고, 붙이고, 끝!\n영수증·리뷰 글은 저희가 준비할게요",
-    "영수증 없어도 영수증 리뷰 OK!\n번호만 입력하면 모두 자동으로 준비돼요",
+    "영수증리뷰 자동완성\n영수증 요청 안 하셔도 됩니다!!",
+    "⚡ 영수증리뷰 자동완성\n직원에게 영수증 요청 안 하셔도 됩니다!!",
+    "영수증리뷰 자동완성, QR 한 번이면 끝!\n영수증 요청 안 하셔도 됩니다!!",
+    "30초 영수증리뷰 자동완성\n영수증도 리뷰 글도 자동으로 준비돼요",
+    "영수증리뷰 자동완성\n지갑 속 영수증, 안 꺼내셔도 돼요",
+    "영수증리뷰 자동완성\n찍고, 붙이고, 끝! 영수증 요청 필요 없어요",
 ];
 const MM = 3.78;   // 1mm = 3.78px (96dpi) — 인쇄 시 실제 크기
 const $ = id => document.getElementById(id);
