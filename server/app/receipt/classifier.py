@@ -58,6 +58,22 @@ REPRINT_PATTERNS = [
 ]
 
 
+def _paid_within(paid_at: Optional[str], hours: int) -> bool:
+    """영수증 결제 시각(한국시간 글자)이 지금부터 hours 안인지"""
+    from datetime import datetime, timedelta, timezone
+    if not paid_at:
+        return False
+    digits = re.sub(r"\D", "", paid_at)
+    if len(digits) < 12:
+        return False
+    try:
+        t = datetime.strptime(digits[:12], "%Y%m%d%H%M").replace(tzinfo=timezone(timedelta(hours=9)))
+    except ValueError:
+        return False
+    now = datetime.now(timezone.utc)
+    return now - timedelta(hours=hours) <= t <= now + timedelta(minutes=10)
+
+
 def classify_receipt(
     parsed: ParsedReceipt,
     existing_approval_nos: Optional[set[str]] = None
@@ -112,11 +128,17 @@ def classify_receipt(
 
     for pattern in REPRINT_PATTERNS:
         if re.search(pattern, compact_text, re.IGNORECASE):
-            return ClassificationResult(
-                type=ReceiptType.REPRINT,
-                reason=f"재출력 패턴 감지: {pattern}",
-                should_store=False,
-            )
+            # 재발행이라도 처음 들어온 결제(승인번호 처음)이고 결제 24시간 안이면 받음
+            # (프로그램 설치 전 결제·영수증 다시 뽑기). 이미 받은 승인번호(사용·폐기 포함)는 아래에서 거름
+            fresh = _paid_within(parsed.paid_at, hours=24)
+            if not (parsed.approval_no and fresh):
+                return ClassificationResult(
+                    type=ReceiptType.REPRINT,
+                    reason=f"재출력 패턴 감지: {pattern}" + ("" if parsed.approval_no else " (승인번호 없음)")
+                           + ("" if fresh else " (결제 24시간 지남/시각 모름)"),
+                    should_store=False,
+                )
+            break
 
     if existing_approval_nos and parsed.approval_no:
         if parsed.approval_no in existing_approval_nos:

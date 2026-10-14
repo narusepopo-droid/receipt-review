@@ -204,9 +204,10 @@ async def upload_receipt(
     parsed = parse_escpos(raw_bytes)
 
     if parsed.approval_no:
+        # 폐기(사용 끝)된 영수증도 포함 — 다시 뽑은 영수증이 또 배정되지 않게
         stmt = select(Receipt.approval_no).where(
             Receipt.store_id == store.id,
-            Receipt.status != ReceiptStatus.DISPOSED
+            Receipt.approval_no == parsed.approval_no,
         )
         result = await db.execute(stmt)
         existing_approval_nos = {r[0] for r in result.fetchall() if r[0]}

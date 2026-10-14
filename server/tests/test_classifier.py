@@ -87,6 +87,19 @@ class TestClassifier:
         assert result.type == ReceiptType.REPRINT
         assert result.should_store is False
 
+    def test_reprint_first_time_recent_is_stored(self):
+        """프로그램 설치 전 결제를 다시 뽑은 영수증: 승인번호 처음 + 24시간 안 → 받음, 이미 받은 승인번호·오래된 건 거름"""
+        from datetime import datetime, timedelta, timezone
+        kst = timezone(timedelta(hours=9))
+        recent = (datetime.now(kst) - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S")
+        old = (datetime.now(kst) - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S")
+        r = make_receipt(raw_text="[영 수 증]-재발행 승인번호: 30014958", approval_no="30014958", amount=39000)
+        r.paid_at = recent
+        assert classify_receipt(r).should_store is True
+        assert classify_receipt(r, {"30014958"}).type == ReceiptType.REPRINT
+        r.paid_at = old
+        assert classify_receipt(r).should_store is False
+
     def test_reprint_by_existing(self):
         receipt = make_receipt(
             raw_text="신한카드",
