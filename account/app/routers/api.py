@@ -266,6 +266,21 @@ PUBLIC_ORIGINS = {"https://placemaster.co.kr", "https://www.placemaster.co.kr", 
                   "http://127.0.0.1:8765"}
 
 
+@router.get("/api/v1/me")
+async def public_me(request: Request, db: AsyncSession = Depends(get_db)):
+    """사이트(placemaster.co.kr) 상단 메뉴용 로그인 상태. 같은 사이트라 계정 쿠키가 함께 옴 (이름만, 이메일·번호 없음)"""
+    from app.web import current_account
+    acc = await current_account(request, db)
+    resp = JSONResponse({"logged_in": bool(acc), "name": (acc.name or "").strip()[:20] if acc else ""},
+                        headers={"Cache-Control": "no-store"})
+    origin = request.headers.get("origin", "")
+    if origin in PUBLIC_ORIGINS:
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Access-Control-Allow-Credentials"] = "true"
+        resp.headers["Vary"] = "Origin"
+    return resp
+
+
 @router.get("/api/v1/pricing")
 async def public_pricing(request: Request, db: AsyncSession = Depends(get_db)):
     """사이트 요금제 표. 상품이 '가입 → 결제' 로 바뀐 경우에만 가격 공개 (그 전엔 enabled=false)"""

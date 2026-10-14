@@ -465,3 +465,17 @@ async def test_store_new_place_search_dropdown(client, monkeypatch):
     monkeypatch.setattr(ps, "search", fake)
     j = (await client.get("/my/place-search?query=수작나베")).json()
     assert j["results"][0]["name"] == "수작나베 석촌호수직영점"
+
+
+@pytest.mark.asyncio
+async def test_public_me_for_site_header(client):
+    """사이트 상단 메뉴: 로그인 상태만 (이름), 사이트 주소에만 쿠키 포함 응답 허용"""
+    h = {"origin": "https://placemaster.co.kr"}
+    r = await client.get("/api/v1/me", headers=h)
+    assert r.json() == {"logged_in": False, "name": ""}
+    assert r.headers["access-control-allow-origin"] == "https://placemaster.co.kr"
+    assert r.headers["access-control-allow-credentials"] == "true"
+    await signup(client, email="me@test.com")
+    j = (await client.get("/api/v1/me", headers=h)).json()
+    assert j["logged_in"] is True and "email" not in j
+    assert "access-control-allow-origin" not in (await client.get("/api/v1/me", headers={"origin": "https://evil.example"})).headers
