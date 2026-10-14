@@ -160,3 +160,14 @@ class TestClassifier:
             result = classify_receipt(receipt)
 
             assert result.type == ReceiptType.KITCHEN, f"Pattern '{pattern}' should be kitchen"
+
+
+def test_parser_reads_spaced_approval_label():
+    """'승 인 번 호' 처럼 글자 사이를 띄어 찍는 포스 (수작나베 실제 영수증)"""
+    from app.receipt.escpos_parser import parse_escpos
+    raw = ("[영 수 증]-재발행\n승 인 금 액:      39,000\n승 인 번 호: 30014958\n"
+           "승 인 일 시: 2026-10-14 14:04:10\n").encode("cp949") + b"\x1dV\x00"
+    p = parse_escpos(raw)
+    assert p.approval_no == "30014958" and p.amount == 39000
+    empty = "승 인 번 호: \n승 인 일 시: 2026-10-14 16:51:05\n".encode("cp949")
+    assert parse_escpos(empty).approval_no is None

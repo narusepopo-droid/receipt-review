@@ -355,7 +355,8 @@ class ESCPOSParser:
         if biz_match:
             result.biz_no = f"{biz_match.group(1)}-{biz_match.group(2)}-{biz_match.group(3)}"
 
-        approval_match = re.search(r"승인번호[:\s]*(\d{6,12})", text)
+        # "승인번호" / "승 인 번 호" (글자 사이 띄어쓴 포스) — 같은 줄의 숫자만
+        approval_match = re.search(r"승\s*인\s*번\s*호[ 	]*[:：]?[ 	]*(\d{6,12})", text)
         if approval_match:
             result.approval_no = approval_match.group(1)
 
@@ -367,7 +368,7 @@ class ESCPOSParser:
             result.paid_at = datetime_match.group(1)
 
         amount_patterns = [
-            r"(?:받을|결제|승인)\s*금\s*액[:\s]*(-?[0-9][0-9,]*)\s*원?",
+            r"(?:받\s*을|결\s*제|승\s*인)\s*금\s*액[:\s]*(-?[0-9][0-9,]*)\s*원?",
             r"합\s*계(?:\s*금\s*액)?[:\s]*(-?[0-9][0-9,]*)\s*원?",
             r"총\s*(?:금\s*액|합\s*계)[:\s]*(-?[0-9][0-9,]*)\s*원?",
         ]
