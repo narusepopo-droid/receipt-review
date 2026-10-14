@@ -31,6 +31,9 @@ if exist "%~dp0hhdspmc.dll" (
 )
 
 :done
+rem 포스 PC를 켤 때 자동 실행 (자동 업데이트도 같은 폴더를 교체하므로 이 경로 유지)
+reg add "HKLM\Software\Microsoft\Windows\CurrentVersion\Run" /v ReceiptTap /t REG_SZ /d "\"%~dp0ReceiptTap.exe\"" /f >nul
+echo [자동 실행] PC를 켜면 영수증리뷰가 자동으로 실행됩니다. (이 폴더를 옮기지 마세요)
 echo.
 echo 완료! ReceiptTap.exe 를 실행하세요.
 echo 실행 후 포스에서 영수증을 1장 출력하면 프린터가 자동으로 연결됩니다.
