@@ -1,4 +1,4 @@
-; 영수증리뷰 (ReceiptTap) 설치 스크립트 - Inno Setup 6
+﻿; 영수증리뷰 (ReceiptTap) 설치 스크립트 - Inno Setup 6
 ; 빌드: scripts\build_agent.ps1 이 버전을 넘겨줌 (ISCC /DMyAppVersion=1.1.1 ...)
 
 #ifndef MyAppVersion
@@ -57,7 +57,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 
 [Registry]
 ; 어떤 계정으로 로그인해도 자동 실행 (포스는 보통 자동 로그인)
-Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ReceiptTap"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue
+Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ReceiptTap"; ValueData: """{app}\{#MyAppExeName}"" --autostart"; Flags: uninsdeletevalue
 ; 예전 버전(zip 설치)이 남긴 사용자별 자동 실행 제거
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "ReceiptTap"; ValueType: none; Flags: deletevalue
 

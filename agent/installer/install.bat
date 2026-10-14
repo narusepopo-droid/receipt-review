@@ -45,7 +45,7 @@ echo [3/4] SPMC 등록 이미 되어 있음 - 건너뜀
 
 :autorun
 echo [4/4] PC 켤 때 자동 실행 + 바탕화면 바로가기
-reg add "HKLM\Software\Microsoft\Windows\CurrentVersion\Run" /v ReceiptTap /t REG_SZ /d "\"%APP%\ReceiptTap.exe\"" /f >nul
+reg add "HKLM\Software\Microsoft\Windows\CurrentVersion\Run" /v ReceiptTap /t REG_SZ /d "\"%APP%\ReceiptTap.exe\" --autostart" /f >nul
 powershell -NoProfile -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('CommonDesktopDirectory')+'\영수증리뷰.lnk');$s.TargetPath='%APP%\ReceiptTap.exe';$s.WorkingDirectory='%APP%';$s.Save()" >nul 2>&1
 
 rem 관리자 권한이 아닌 일반 권한으로 실행
