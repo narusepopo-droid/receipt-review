@@ -284,6 +284,11 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         )
     )
     benefits_given = benefits_result.scalar() or 0
+    # PIN 을 안 쓰는 매장(기본)은 '완료 화면 확인 = 지급' 이라 리뷰 완료 수가 곧 지급 수 (혜택 지급 기록 화면과 같게)
+    from app.models.options import pin_required as _pin_required
+    pin_on = await _pin_required(db, store.id)
+    if not pin_on:
+        benefits_given = completed
 
     # 단계별 통계
     step_stats = {}
@@ -313,6 +318,8 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
                 )
             )
         step_stats[f"step_{status_name}"] = result.scalar() or 0
+    if not pin_on:
+        step_stats["step_benefit"] = step_stats["step_complete"]
 
     # 최근 활동
     recent_result = await db.execute(
