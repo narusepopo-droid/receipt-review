@@ -46,6 +46,17 @@ async def store_new(request: Request, db: AsyncSession = Depends(get_db)):
     return render(request, "my/store_new.html", acc=acc)
 
 
+@router.get("/place-search")
+async def place_search(request: Request, query: str = "", db: AsyncSession = Depends(get_db)):
+    """매장 추가 화면 드롭다운: 네이버 플레이스에서 매장 찾기 (플마와 같은 방식)"""
+    acc = await require_account(request, db)
+    from app import place_search as ps
+    from app.routers.auth import _limited
+    if _limited(f"place-search:{acc.id}", 30, 60):
+        return JSONResponse({"results": [], "error": "잠시 후 다시 검색해 주세요"}, status_code=429)
+    return {"results": await ps.search(query)}
+
+
 @router.post("/stores")
 async def store_create(request: Request, name: str = Form(...), biz_no: str = Form(""), address: str = Form(""),
                        db: AsyncSession = Depends(get_db)):

@@ -441,3 +441,27 @@ async def test_plma_payment_syncs_to_program(client, monkeypatch):
     # PC 변경 → 프로그램 쪽 PC 기록도 지움
     await client.post(f"/ops/licenses/{lic.id}", data={"action": "device_reset"})
     assert calls[-1][1].get("device_id") == ""
+
+
+@pytest.mark.asyncio
+async def test_store_new_place_search_dropdown(client, monkeypatch):
+    """매장 추가: 네이버 플레이스 검색 드롭다운 (로그인 필요, 응답에서 이름·주소)"""
+    from app import place_search as ps
+    assert (await client.get("/my/place-search?query=수작나베", follow_redirects=False)).status_code in (302, 303, 401)
+    await signup(client, email="ps@test.com")
+    page = (await client.get("/my/stores/new")).text
+    assert "psDrop" in page and "/my/place-search" in page
+
+    html = ('<script>naver.x.__APOLLO_STATE__ = {"PlaceListBusinessesItem:1872106859": {"id": "1872106859",'
+            ' "name": "수작나베 석촌호수직영점", "category": "아시아음식,일식", "fullAddress": "서울 송파구 석촌호수로 234",'
+            ' "imageUrl": "//img/a.jpg"}, "Other:1": {}};\n naver.x.__PLACE_STATE__ = {};</script>')
+    state = ps._apollo(html)
+    r = ps._from_state(state, ("fullAddress",))
+    assert r == [{"place_id": "1872106859", "name": "수작나베 석촌호수직영점", "category": "아시아음식",
+                  "address": "서울 송파구 석촌호수로 234", "thumbnail": "https://img/a.jpg"}]
+
+    async def fake(q):
+        return r if q == "수작나베" else []
+    monkeypatch.setattr(ps, "search", fake)
+    j = (await client.get("/my/place-search?query=수작나베")).json()
+    assert j["results"][0]["name"] == "수작나베 석촌호수직영점"
