@@ -72,7 +72,7 @@ const templates = {
       </div>
       <ol class="sign-steps">${V.steps.split('\n').map(s => `<li>${s}</li>`).join('')}</ol>
     </div>
-    <div class="sign-footer">${V.tableNo || 'NAVER 영수증리뷰 서비스'}</div>
+    <div class="sign-footer">${V.tableNo || '영수증리뷰 자동완성 서비스'}</div>
   `
 };
 
