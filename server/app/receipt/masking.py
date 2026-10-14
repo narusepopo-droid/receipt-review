@@ -27,9 +27,10 @@ CARD_EXPOSED_PATTERN = r"\d{5,16}"
 
 
 def mask_phone_numbers(text: str) -> str:
+    # 앞뒤가 숫자인 긴 번호 속 일부(예: 가맹점번호 00117000089 안의 0117000089)는 전화번호가 아님
     result = text
     for pattern in PHONE_PATTERNS:
-        result = re.sub(pattern, "***-****-****", result)
+        result = re.sub(r"(?<!\d)" + pattern + r"(?!\d)", "***-****-****", result)
     return result
 
 

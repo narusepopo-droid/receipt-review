@@ -227,3 +227,12 @@ def test_parser_real_sujaknabe_receipt():
     assert p.vat == 3545 and p.card_issuer
     t2 = t.replace("승 인 번 호: 30014958", "승 인 번 호: ").replace("가맹점 번호: 00117000089", "가맹점 번호: ")
     assert parse_escpos(t2.encode("cp949")).approval_no is None     # 임의등록(승인번호 빈칸)은 다음 줄 숫자를 가져오지 않음
+
+
+def test_masking_keeps_merchant_number_but_hides_phone():
+    """가맹점번호(00117000089)를 옛 011 전화번호로 잘못 가리던 것 — 전화번호는 계속 가림"""
+    from app.receipt.masking import mask_receipt_text
+    assert "00117000089" in mask_receipt_text("가맹점 번호: 00117000089")
+    for ph in ("010-1234-5678", "01012345678", "011 700 0089", "고객 010-****-5678"):
+        assert "5678" not in mask_receipt_text(ph) or "****" in mask_receipt_text(ph)
+    assert "1234" not in mask_receipt_text("연락처 010-1234-5678")
