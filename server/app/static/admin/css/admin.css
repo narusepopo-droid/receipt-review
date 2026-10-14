@@ -88,7 +88,10 @@ body {
 }
 
 .nav-item {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    line-height: 1.2;
     padding: 14px 24px;
     color: var(--gray-400);
     text-decoration: none;
@@ -109,9 +112,13 @@ body {
     border-left-color: var(--primary);
 }
 
-.nav-item i {
-    width: 20px;
-    margin-right: 12px;
+/* 아이콘(feather 가 svg 로 바꿈)과 글자를 한 줄 가운데에 */
+.nav-item i,
+.nav-item svg {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    stroke-width: 2;
 }
 
 .main-content {
@@ -126,6 +133,8 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
     margin-bottom: 32px;
 }
 
@@ -240,6 +249,7 @@ body {
     align-items: center;
     justify-content: center;
     gap: 8px;
+    white-space: nowrap;
     padding: 12px 24px;
     font-size: 14px;
     font-weight: 600;
