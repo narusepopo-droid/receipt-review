@@ -1,40 +1,69 @@
 @echo off
-chcp 65001 >nul
+rem NOTE: this file is saved as CP949 (Korean ANSI). UTF-8 + chcp 65001 breaks cmd parsing.
 echo ================================
-echo   ì˜ìˆ˜ì¦ë¦¬ë·° (ReceiptTap) ì„¤ì¹˜
+echo   ¿µ¼öÁõ¸®ºä (ReceiptTap) ¼³Ä¡
 echo ================================
 echo.
 
 net session >nul 2>&1
-if %errorLevel% neq 0 (
-    echo [!] ë§ˆìš°ìŠ¤ ì˜¤ë¥¸ìª½ í´ë¦­ - "ê´€ë¦¬ìž ê¶Œí•œìœ¼ë¡œ ì‹¤í–‰" ìœ¼ë¡œ ë‹¤ì‹œ ì‹¤í–‰í•´ ì£¼ì„¸ìš”.
-    pause
-    exit /b 1
-)
+if %errorLevel% neq 0 goto need_admin
 
-rem ì¹´ì†” ë“±ìœ¼ë¡œ SPMCê°€ ì´ë¯¸ ì„¤ì¹˜ëœ PCëŠ” ê±´ë“œë¦¬ì§€ ì•ŠìŒ (ê¸°ì¡´ í”„ë¡œê·¸ëž¨ ë³´í˜¸)
-reg query "HKCR\hhdspmc.SerialMonitor" >nul 2>&1
-if %errorLevel% equ 0 (
-    echo [1/2] SPMC ì´ë¯¸ ì„¤ì¹˜ë¨ - ê±´ë„ˆëœ€
-    echo [2/2] SPMC ë“±ë¡ ì´ë¯¸ ë˜ì–´ ìžˆìŒ - ê±´ë„ˆëœ€
-    goto done
-)
+rem ¾ÐÃàÀ» ¾îµð¿¡ Ç®¾úµç(´Ù¿î·Îµå Æú´õ µî) ÇÁ·Î±×·¥Àº Ç×»ó C:\ReceiptTap ¿¡ ¼³Ä¡
+set "APP=C:\ReceiptTap"
+set "SRC=%~dp0"
+if "%SRC:~-1%"=="\" set "SRC=%SRC:~0,-1%"
 
-echo [1/2] SPMC ë“œë¼ì´ë²„ ì„¤ì¹˜ ì¤‘...
-if exist "%~dp0drivers\hhdspmc.inf" (
-    pnputil /add-driver "%~dp0drivers\hhdspmc.inf" /install
-)
+echo [1/4] ÇÁ·Î±×·¥ º¹»ç (%APP%)
+taskkill /im ReceiptTap.exe /f >nul 2>&1
+if /i "%SRC%"=="%APP%" goto copied
+robocopy "%SRC%" "%APP%" /e /r:2 /w:2 /njh /njs /nfl /ndl /np >nul
+if errorlevel 8 goto copy_fail
+:copied
+rem ÀÚµ¿ ¾÷µ¥ÀÌÆ®°¡ °ü¸®ÀÚ ±ÇÇÑ ¾øÀÌ ±³Ã¼ÇÒ ¼ö ÀÖ°Ô
+icacls "%APP%" /grant *S-1-5-32-545:(OI)(CI)M /q >nul
 
-echo [2/2] SPMC ë“±ë¡ ì¤‘...
-if exist "%~dp0hhdspmc.dll" (
-    "%SystemRoot%\SysWOW64\regsvr32.exe" /s "%~dp0hhdspmc.dll"
-)
+rem SPMC: Ä«¼Ö µîÀ¸·Î ÀÌ¹Ì Á¤»ó ¼³Ä¡µÈ PC´Â °Çµå¸®Áö ¾ÊÀ½ (±âÁ¸ ÇÁ·Î±×·¥ º¸È£)
+rem       ¿¹Àü¿¡ ´Ù¸¥ Æú´õ¿¡¼­ µî·ÏÇß´Âµ¥ ±× ÆÄÀÏÀÌ Áö¿öÁ³À¸¸é »õ À§Ä¡·Î ´Ù½Ã µî·Ï
+set "SPMC_OK="
+set "CLSID="
+for /f "tokens=2,*" %%a in ('reg query "HKCR\hhdspmc.SerialMonitor\CLSID" /ve 2^>nul ^| findstr REG_SZ') do set "CLSID=%%b"
+if not defined CLSID goto spmc_install
+for /f "tokens=2,*" %%a in ('reg query "HKLM\SOFTWARE\WOW6432Node\Classes\CLSID\%CLSID%\InprocServer32" /ve 2^>nul ^| findstr REG_SZ') do if exist "%%b" set "SPMC_OK=1"
+for /f "tokens=2,*" %%a in ('reg query "HKLM\SOFTWARE\Classes\CLSID\%CLSID%\InprocServer32" /ve 2^>nul ^| findstr REG_SZ') do if exist "%%b" set "SPMC_OK=1"
+if defined SPMC_OK goto spmc_skip
 
-:done
-rem í¬ìŠ¤ PCë¥¼ ì¼¤ ë•Œ ìžë™ ì‹¤í–‰ (ìžë™ ì—…ë°ì´íŠ¸ë„ ê°™ì€ í´ë”ë¥¼ êµì²´í•˜ë¯€ë¡œ ì´ ê²½ë¡œ ìœ ì§€)
-reg add "HKLM\Software\Microsoft\Windows\CurrentVersion\Run" /v ReceiptTap /t REG_SZ /d "\"%~dp0ReceiptTap.exe\"" /f >nul
-echo [ìžë™ ì‹¤í–‰] PCë¥¼ ì¼œë©´ ì˜ìˆ˜ì¦ë¦¬ë·°ê°€ ìžë™ìœ¼ë¡œ ì‹¤í–‰ë©ë‹ˆë‹¤. (ì´ í´ë”ë¥¼ ì˜®ê¸°ì§€ ë§ˆì„¸ìš”)
+:spmc_install
+echo [2/4] SPMC µå¶óÀÌ¹ö ¼³Ä¡ Áß...
+if exist "%APP%\drivers\hhdspmc.inf" pnputil /add-driver "%APP%\drivers\hhdspmc.inf" /install >nul
+echo [3/4] SPMC µî·Ï Áß...
+if exist "%APP%\hhdspmc.dll" "%SystemRoot%\SysWOW64\regsvr32.exe" /s "%APP%\hhdspmc.dll"
+goto autorun
+
+:spmc_skip
+echo [2/4] SPMC ÀÌ¹Ì ¼³Ä¡µÊ - °Ç³Ê¶Ü
+echo [3/4] SPMC µî·Ï ÀÌ¹Ì µÇ¾î ÀÖÀ½ - °Ç³Ê¶Ü
+
+:autorun
+echo [4/4] PC ÄÓ ¶§ ÀÚµ¿ ½ÇÇà + ¹ÙÅÁÈ­¸é ¹Ù·Î°¡±â
+reg add "HKLM\Software\Microsoft\Windows\CurrentVersion\Run" /v ReceiptTap /t REG_SZ /d "\"%APP%\ReceiptTap.exe\"" /f >nul
+powershell -NoProfile -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('CommonDesktopDirectory')+'\¿µ¼öÁõ¸®ºä.lnk');$s.TargetPath='%APP%\ReceiptTap.exe';$s.WorkingDirectory='%APP%';$s.Save()" >nul 2>&1
+
+rem °ü¸®ÀÚ ±ÇÇÑÀÌ ¾Æ´Ñ ÀÏ¹Ý ±ÇÇÑÀ¸·Î ½ÇÇà
+explorer.exe "%APP%\ReceiptTap.exe"
+
 echo.
-echo ì™„ë£Œ! ReceiptTap.exe ë¥¼ ì‹¤í–‰í•˜ì„¸ìš”.
-echo ì‹¤í–‰ í›„ í¬ìŠ¤ì—ì„œ ì˜ìˆ˜ì¦ì„ 1ìž¥ ì¶œë ¥í•˜ë©´ í”„ë¦°í„°ê°€ ìžë™ìœ¼ë¡œ ì—°ê²°ë©ë‹ˆë‹¤.
+echo ¼³Ä¡ ¿Ï·á! ¿µ¼öÁõ¸®ºä°¡ ½ÇÇàµË´Ï´Ù. (¼³Ä¡ À§Ä¡: %APP%)
+echo ¾ÐÃà Ç¬ Æú´õ´Â Áö¿öµµ µË´Ï´Ù.
+echo ·Î±×ÀÎ ÈÄ Æ÷½º¿¡¼­ ¿µ¼öÁõÀ» 1Àå Ãâ·ÂÇÏ¸é ÇÁ¸°ÅÍ°¡ ÀÚµ¿À¸·Î ¿¬°áµË´Ï´Ù.
 pause
+exit /b 0
+
+:need_admin
+echo [!] ¸¶¿ì½º ¿À¸¥ÂÊ Å¬¸¯ - "°ü¸®ÀÚ ±ÇÇÑÀ¸·Î ½ÇÇà" À¸·Î ´Ù½Ã ½ÇÇàÇØ ÁÖ¼¼¿ä.
+pause
+exit /b 1
+
+:copy_fail
+echo [!] º¹»ç ½ÇÆÐ. ¹é½ÅÀÌ ¸·¾Ò´ÂÁö È®ÀÎÇØ ÁÖ¼¼¿ä.
+pause
+exit /b 1
