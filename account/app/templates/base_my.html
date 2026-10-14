@@ -11,6 +11,8 @@
     <a href="{{ url('/my') }}" class="{{ 'on' if nav == 'home' }}">내 상품</a>
     <a href="{{ url('/my/orders') }}" class="{{ 'on' if nav == 'orders' }}">결제 내역</a>
     <a href="{{ url('/my/profile') }}" class="{{ 'on' if nav == 'profile' }}">내 정보</a>
+    <a href="{{ url('/my/review-admin') }}" title="영수증리뷰 점주 관리 화면 (다시 로그인 없이)">영수증리뷰 매장 관리 ↗</a>
+    <a href="{{ settings.SITE_URL }}">홈페이지</a>
   </nav>
   <div class="me">
     {% if acc.is_operator %}<a class="btn sm" href="{{ url('/ops') }}">운영자 화면</a>{% endif %}

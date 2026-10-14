@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="플레이스 마스터 계정", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY, session_cookie="acct_session",
-                   max_age=60 * 60 * 12, same_site="lax", https_only=settings.SESSION_HTTPS_ONLY)
+                   max_age=60 * 60 * 24 * 30, same_site="lax", https_only=settings.SESSION_HTTPS_ONLY)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 for r in (auth.router, my.router, master.router, ops.router, api.router):

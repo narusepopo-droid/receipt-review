@@ -83,7 +83,7 @@ async def test_signup_login_dashboard(client):
 @pytest.mark.asyncio
 async def test_signup_validation(client):
     r = await client.post("/signup", data={"email": "bad", "password": "1", "password2": "2"})
-    assert "이름을 입력" in r.text and "이메일을 정확히" in r.text and "상품을 하나 이상" in r.text
+    assert "이름을 입력" in r.text and "이메일을 정확히" in r.text and "상품을 하나 이상" not in r.text   # 상품은 선택
     await signup(client)
     await client.get("/logout")
     r = await signup(client)
@@ -472,10 +472,29 @@ async def test_public_me_for_site_header(client):
     """사이트 상단 메뉴: 로그인 상태만 (이름), 사이트 주소에만 쿠키 포함 응답 허용"""
     h = {"origin": "https://placemaster.co.kr"}
     r = await client.get("/api/v1/me", headers=h)
-    assert r.json() == {"logged_in": False, "name": ""}
+    assert r.json() == {"logged_in": False, "name": "", "operator": False}
     assert r.headers["access-control-allow-origin"] == "https://placemaster.co.kr"
     assert r.headers["access-control-allow-credentials"] == "true"
     await signup(client, email="me@test.com")
     j = (await client.get("/api/v1/me", headers=h)).json()
     assert j["logged_in"] is True and "email" not in j
     assert "access-control-allow-origin" not in (await client.get("/api/v1/me", headers={"origin": "https://evil.example"})).headers
+
+
+@pytest.mark.asyncio
+async def test_unified_flow_locks_and_review_admin(client):
+    """상품 안 고르고 가입 → 마이페이지에 두 상품 모두 자물쇠, 상단 메뉴에 매장 관리·홈페이지,
+    매장 관리 바로가기는 매장 없으면 안내 후 마이페이지로, 로그인 유지 30일"""
+    import re as _re
+    r = await client.post("/signup", data={"name": "홍길동", "phone": "01012345678", "email": "uni@test.com",
+                                           "password": "pw12345678", "password2": "pw12345678", "agree": "1"},
+                          follow_redirects=False)
+    assert r.status_code == 303
+    cookie = r.headers.get("set-cookie", "")
+    m = _re.search(r"Max-Age=(\d+)", cookie, _re.I)
+    assert m and int(m.group(1)) >= 60 * 60 * 24 * 29
+    page = (await client.get("/my")).text
+    assert page.count('class="lockbtn"') >= 2 and "요금제 변경 후 이용 가능하십니다" in page
+    assert "/my/review-admin" in page and "홈페이지" in page
+    r = await client.get("/my/review-admin", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].endswith("/my")

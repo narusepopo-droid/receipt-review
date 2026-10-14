@@ -361,6 +361,19 @@ async def manage_store(request: Request, license_id: int, db: AsyncSession = Dep
     return RedirectResponse(f"{settings.REVIEW_PUBLIC_URL.rstrip('/')}/admin/sso?t={token}", status_code=303)
 
 
+@router.get("/review-admin")
+async def review_admin(request: Request, db: AsyncSession = Depends(get_db)):
+    """영수증리뷰 점주 관리 화면 바로가기 (상단 메뉴·점주 화면 로그인에서 사용). 로그인 안 돼 있으면 로그인 후 다시 여기로"""
+    acc = await require_account(request, db)
+    product = (await db.execute(select(Product).where(Product.code == "receipt_review"))).scalar_one()
+    for l in (await db.execute(select(License).where(License.account_id == acc.id, License.product_id == product.id)
+                               .order_by(License.id))).scalars():
+        if licensing.usable(l) and l.store_id:
+            return await manage_store(request, l.id, db)
+    flash(request, "이용 중인 영수증리뷰 매장이 없어요. 매장을 추가하거나 승인을 기다려 주세요.", "info")
+    return RedirectResponse(url("/my"), status_code=303)
+
+
 @router.post("/password-reset")
 async def password_reset(request: Request, db: AsyncSession = Depends(get_db)):
     from app import firebase

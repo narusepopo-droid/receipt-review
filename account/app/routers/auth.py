@@ -124,8 +124,7 @@ async def signup(request: Request, db: AsyncSession = Depends(get_db)):
         errors.append("비밀번호는 8자 이상으로 정해 주세요")
     if form.get("password") != form.get("password2"):
         errors.append("비밀번호 확인이 일치하지 않습니다")
-    if not chosen:
-        errors.append("이용할 상품을 하나 이상 선택해 주세요")
+    # 상품은 고르지 않아도 가입 가능 (마이페이지 자물쇠에서 나중에 신청)
     if any(p.unit == Unit.STORE for p in chosen) and not form.get("store_name", "").strip():
         errors.append("영수증리뷰를 쓰실 매장 이름을 입력해 주세요")
     if not form.get("agree"):

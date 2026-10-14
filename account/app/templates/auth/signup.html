@@ -9,7 +9,7 @@
     <p class="sub">하나의 계정으로 두 상품을 모두 이용할 수 있어요</p>
     {% if errors %}<div class="flash err">! <span>{% for e in errors %}{{ e }}{% if not loop.last %}<br>{% endif %}{% endfor %}</span></div>{% endif %}
     <form method="post" action="{{ url('/signup') }}" id="sf">
-      <div class="field"><label class="f">이용할 상품</label>
+      <div class="field"><label class="f">이용하실 상품 <span class="faint">(선택 — 안 골라도 가입돼요. 나중에 마이페이지에서 신청할 수 있어요)</span></label>
         <div class="pick">
         {% for p in products %}
           {% if p.code == 'plma' and not plma_ready %}

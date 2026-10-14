@@ -91,6 +91,10 @@ async def get_current_store(request: Request, db: AsyncSession):
 
 @router.get("/login", response_class=HTMLResponse, name="admin_login")
 async def login_page(request: Request, error: Optional[str] = None):
+    # 통합 계정 로그인으로 (이미 로그인돼 있으면 다시 입력 없이 바로 매장 관리로). 예전 매장 아이디 화면은 ?form=1
+    from app.services import account_link
+    if not error and request.query_params.get("form") != "1" and account_link.enabled():
+        return RedirectResponse(url="/account/my/review-admin", status_code=302)
     return templates.TemplateResponse(
         request=request,
         name="admin/login.html",
@@ -213,6 +217,10 @@ async def choose_store_post(request: Request, store_id: int = Form(...)):
 @router.get("/logout", name="admin_logout")
 async def logout(request: Request):
     request.session.clear()
+    from app.services import account_link
+    if account_link.enabled():
+        # 계정 하나로 쓰므로 통합 계정도 함께 로그아웃 (안 그러면 로그인 화면이 바로 다시 들여보냄)
+        return RedirectResponse(url="/account/logout", status_code=302)
     return RedirectResponse(url="/admin/login", status_code=302)
 
 

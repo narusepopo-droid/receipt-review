@@ -4,9 +4,13 @@
 {% macro lic_row(l, p, title, sub) %}
   {% set lb = state_badge(l) %}{% set st = lic_state(l) %}{% set dl = days_left(l) %}
   {% set approval = p.signup_policy.value == 'approval' %}
-  <div class="lic" id="lic{{ l.id }}">
+  {% set locked = not usable(l) %}
+  <div class="lic{{ ' locked' if locked }}" id="lic{{ l.id }}">
     <div>
-      <div class="name">{{ title }} <span class="badge {{ lb[1] }}">{{ lb[0] }}</span>
+      <div class="name">{% if locked %}<button type="button" class="lockbtn" aria-label="잠김 안내"
+          data-msg="{{ '담당자 승인 후 이용 가능하십니다' if st == 'pending' and approval else ('고객센터로 문의해 주세요' if st in ('suspended','cancelled') else '요금제 변경 후 이용 가능하십니다') }}"
+          data-sub="{{ '승인되면 문자로 알려드려요 (보통 1영업일)' if st == 'pending' and approval else ('사용이 멈춘 이용권이에요' if st in ('suspended','cancelled') else '요금제를 고르고 결제하시면 바로 다시 쓸 수 있어요') }}"
+          {% if not (st == 'pending' and approval) and st not in ('suspended','cancelled') and p.monthly_price > 0 %}data-href="{{ url('/my/buy/' ~ l.id) }}" data-label="요금제 보기"{% endif %}>🔒</button>{% endif %}{{ title }} <span class="badge {{ lb[1] }}">{{ lb[0] }}</span>
         {% if l.autopay %}<span class="badge brand plain">월 자동결제{% if l.autopay_cancel_requested %} · 해지 예정{% endif %}</span>{% endif %}</div>
       <div class="meta">{{ sub }}{% if l.note == 'plma-import' %} · 플마 기존 이용권{% elif l.plan and st != 'pending' %} · {{ l.plan.name }}{% endif %}
         {% if st != 'pending' %} · PC {{ l.device_name or ('등록됨' if l.device_id else '아직 없음') }}{% endif %}</div>
@@ -56,9 +60,6 @@
   <a class="btn" href="{{ url('/my/stores/new') }}">＋ 매장 추가</a>
 </div>
 
-{% if plma_hint %}
-<div class="flash info">i <span>플레이스마스터 PRO도 함께 쓰시려면 <a href="{{ settings.PLMA_SIGNUP_URL }}" target="_blank" rel="noopener"><b>플마 가입 신청</b></a>을 해주세요. 같은 이메일·비밀번호로 신청하시면 이 계정에서 함께 관리돼요.</span></div>
-{% endif %}
 {% set ns = namespace(setup=[]) %}
 {% for p in products %}{% for l in by_product[p.id] %}{% if usable(l) and not l.device_id %}{% set ns.setup = ns.setup + [(p, l)] %}{% endif %}{% endfor %}{% endfor %}
 {% if ns.setup %}
@@ -81,12 +82,17 @@
       {% if lics %}<span class="badge gray plain">{{ lics|length }}{{ '개 매장' if p.unit == Unit.STORE else '개' }}</span>{% endif %}
     </div>
     {% if not lics %}
-      <div class="lic"><div><div class="name faint">아직 이용하지 않는 상품이에요</div>
-        <div class="meta">{{ '매장을 추가하면 매장별로 이용을 신청할 수 있어요' if p.unit == Unit.STORE else ('신청하시면 담당자 확인 후 이용할 수 있어요' if p.signup_policy.value == 'approval' else '요금제를 고르고 결제하면 바로 이용할 수 있어요') }}</div></div><div></div>
+      {% set act_label = '매장 추가하고 신청' if p.unit == Unit.STORE else ('이용 신청' if p.signup_policy.value == 'approval' else '요금제 보기') %}
+      <div class="lic locked">
+        <div><div class="name"><button type="button" class="lockbtn" aria-label="잠김 안내"
+            data-msg="요금제 변경 후 이용 가능하십니다"
+            data-sub="{{ '매장을 추가하면 매장별로 이용을 신청할 수 있어요' if p.unit == Unit.STORE else ('신청하시면 담당자 확인 후 바로 열어 드려요' if p.signup_policy.value == 'approval' else '요금제를 고르고 결제하면 바로 이용할 수 있어요') }}"
+            {% if p.unit == Unit.STORE %}data-href="{{ url('/my/stores/new') }}"{% else %}data-post="{{ url('/my/products/' ~ p.code ~ '/apply') }}"{% endif %}
+            data-label="{{ act_label }}">🔒</button>잠겨 있어요 <span class="badge gray">미이용</span></div>
+          <div class="meta">요금제 변경 후 이용 가능하십니다 — 자물쇠를 누르면 신청할 수 있어요</div></div><div></div>
         <div class="acts">
-          {% if p.unit == Unit.STORE %}<a class="btn sm brand" href="{{ url('/my/stores/new') }}">매장 추가하고 시작</a>
-          {% elif p.code == 'plma' and not plma_ready %}<a class="btn sm brand" href="{{ settings.PLMA_SIGNUP_URL }}" target="_blank" rel="noopener">플마 가입 신청 ↗</a>
-          {% else %}<form method="post" action="{{ url('/my/products/' ~ p.code ~ '/apply') }}"><button class="btn sm brand">{{ '이용 신청' if p.signup_policy.value == 'approval' else '요금제 보기' }}</button></form>{% endif %}
+          {% if p.unit == Unit.STORE %}<a class="btn sm brand" href="{{ url('/my/stores/new') }}">{{ act_label }}</a>
+          {% else %}<form method="post" action="{{ url('/my/products/' ~ p.code ~ '/apply') }}"><button class="btn sm brand">{{ act_label }}</button></form>{% endif %}
         </div></div>
     {% else %}
       {% for l in lics %}
@@ -100,9 +106,50 @@
   </section>
 {% endfor %}
 
+<dialog id="lockDlg" class="lockdlg">
+  <div class="lock-ico">🔒</div>
+  <h3 id="lockMsg"></h3>
+  <p class="small muted" id="lockSub"></p>
+  <form method="post" id="lockForm" style="display:none"></form>
+  <div class="row" style="justify-content:center;gap:8px;margin-top:14px">
+    <a class="btn brand" id="lockGo" style="display:none"></a>
+    <button class="btn brand" id="lockPost" type="submit" form="lockForm" style="display:none"></button>
+    <button class="btn ghost" type="button" onclick="document.getElementById('lockDlg').close()">닫기</button>
+  </div>
+</dialog>
+
 <div class="card mt2"><div class="card-body">
   <h3>도움이 필요하신가요?</h3>
   <p class="small muted">PC 변경·결제·환불은 {% if settings.SUPPORT_PHONE %}고객센터 <b>{{ settings.SUPPORT_PHONE }}</b>{% else %}담당자{% endif %}에게 문의해 주세요.
     이용 기간이 끝나도 다음 날까지는 계속 쓰실 수 있고, 끝나기 7일·3일·1일 전에 문자로 알려드려요.</p>
 </div></div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.lic.locked { background: repeating-linear-gradient(135deg, #fafbfc 0 10px, #f5f7fa 10px 20px); }
+.lic.locked .name { color: var(--muted, #64748b); }
+.lockbtn { border: 1px solid var(--line); background: #fff; border-radius: 8px; width: 30px; height: 30px; margin-right: 8px;
+  cursor: pointer; font-size: 15px; line-height: 1; vertical-align: middle; transition: transform .15s, box-shadow .15s; }
+.lockbtn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15,23,42,.1); }
+.lockdlg { border: none; border-radius: 18px; padding: 28px 26px 22px; max-width: 380px; width: calc(100% - 32px); text-align: center;
+  box-shadow: 0 24px 60px rgba(15,23,42,.25); }
+.lockdlg::backdrop { background: rgba(15,23,42,.45); }
+.lockdlg .lock-ico { font-size: 34px; margin-bottom: 6px; }
+.lockdlg h3 { margin: 0 0 6px; }
+</style>
+<script>
+(function () {
+  const dlg = document.getElementById('lockDlg');
+  document.querySelectorAll('.lockbtn').forEach(b => b.addEventListener('click', () => {
+    document.getElementById('lockMsg').textContent = b.dataset.msg;
+    document.getElementById('lockSub').textContent = b.dataset.sub || '';
+    const go = document.getElementById('lockGo'), post = document.getElementById('lockPost'), form = document.getElementById('lockForm');
+    go.style.display = post.style.display = 'none';
+    if (b.dataset.href) { go.href = b.dataset.href; go.textContent = b.dataset.label || '바로 가기'; go.style.display = ''; }
+    else if (b.dataset.post) { form.action = b.dataset.post; post.textContent = b.dataset.label || '신청하기'; post.style.display = ''; }
+    if (dlg.showModal) dlg.showModal(); else alert(b.dataset.msg);
+  }));
+})();
+</script>
 {% endblock %}
