@@ -171,3 +171,59 @@ def test_parser_reads_spaced_approval_label():
     assert p.approval_no == "30014958" and p.amount == 39000
     empty = "승 인 번 호: \n승 인 일 시: 2026-10-14 16:51:05\n".encode("cp949")
     assert parse_escpos(empty).approval_no is None
+
+
+@pytest.mark.parametrize("label", [
+    "승인번호", "승 인 번 호", "승인 번호", "승  인  번  호", "승인NO", "승인 No.", "승인No:", "승인#",
+    "카드승인번호", "APPROVAL NO", "Approval No.", "AUTH NO", "승인코드",
+])
+def test_parser_approval_label_variants(label):
+    """포스마다 다른 '승인번호' 표기·띄어쓰기를 모두 읽음"""
+    from app.receipt.escpos_parser import parse_escpos
+    for sep in (": ", ":", " : ", "   ", "："):
+        raw = f"합 계 금 액   12,000\n{label}{sep}30014958\n".encode("cp949", "replace")
+        assert parse_escpos(raw).approval_no == "30014958", (label, sep)
+
+
+@pytest.mark.parametrize("line,expected", [
+    ("승인일시: 2026-10-14 14:04:10", "2026-10-14 14:04:10"),
+    ("승 인 일 시 : 2026/10/14 14:04", "2026-10-14 14:04:00"),
+    ("거래일시 26.10.14 09:05:33", "2026-10-14 09:05:33"),
+    ("2026년 10월 14일(화) 14:04", "2026-10-14 14:04:00"),
+    ("판매일자 2026-10-1 4:05:09", "2026-10-01 04:05:09"),
+])
+def test_parser_datetime_variants(line, expected):
+    from app.receipt.escpos_parser import parse_escpos
+    assert parse_escpos(f"상호 테스트\n{line}\n".encode("cp949")).paid_at == expected
+
+
+@pytest.mark.parametrize("line,amount", [
+    ("승 인 금 액:      39,000", 39000), ("결제금액 15,000원", 15000), ("받을금액   8,500", 8500),
+    ("합 계 금 액                         5,000", 5000), ("총 금액: 22,000", 22000), ("TOTAL 7,000", 7000),
+])
+def test_parser_amount_variants(line, amount):
+    from app.receipt.escpos_parser import parse_escpos
+    assert parse_escpos(f"{line}\n".encode("cp949")).amount == amount
+
+
+def test_parser_real_sujaknabe_receipt():
+    """실제 매장(수작나베) 영수증 전체: 승인번호·금액·일시·사업자번호"""
+    from app.receipt.escpos_parser import parse_escpos
+    t = """[ 영 수 증]-재발행
+수작나베(석촌호수직영점) / 846-87-03229 / 신재준
+02-423-3767
+2026-10-14 14:04:10
+합 계  금 액                         39,000
+         부       가      세         3,545
+카 드 종 류:                     KB국민카드
+판 매 금 액:                         35,455
+승 인 금 액:                         39,000
+승 인 번 호: 30014958
+승 인 일 시: 2026-10-14 14:04:10
+가맹점 번호: 00117000089
+"""
+    p = parse_escpos(t.encode("cp949"))
+    assert (p.approval_no, p.amount, p.paid_at, p.biz_no) == ("30014958", 39000, "2026-10-14 14:04:10", "846-87-03229")
+    assert p.vat == 3545 and p.card_issuer
+    t2 = t.replace("승 인 번 호: 30014958", "승 인 번 호: ").replace("가맹점 번호: 00117000089", "가맹점 번호: ")
+    assert parse_escpos(t2.encode("cp949")).approval_no is None     # 임의등록(승인번호 빈칸)은 다음 줄 숫자를 가져오지 않음

@@ -349,55 +349,100 @@ class ESCPOSParser:
         self.current_line = ""
 
     def _extract_fields(self, result: ParsedReceipt):
+        """영수증 글자에서 필드 뽑기.
+        포스마다 '승인번호' / '승 인 번 호' / '승인 NO.' / '승인No:' 처럼 띄어쓰기·표기가 제각각이라
+        줄마다 공백을 모두 없앤 글자(compact)로 이름표를 찾고, 그 줄의 값(숫자)을 읽음."""
         text = result.raw_text
+        lines = [l for l in text.split("\n")]
+        compact = [re.sub(r"\s+", "", l) for l in lines]
 
-        biz_match = re.search(r"(\d{3})-?(\d{2})-?(\d{5})", text)
+        def value_after(label_re: str, value_re: str, next_line_ok: bool = False):
+            """이름표 뒤 같은 줄의 값. 같은 줄이 비어 있고 next_line_ok 면 바로 다음 줄이 값만 있을 때 그 값"""
+            for i, c in enumerate(compact):
+                m = re.search(label_re, c, re.IGNORECASE)
+                if not m:
+                    continue
+                rest = c[m.end():].lstrip(":：.#-=)]>")
+                v = re.match(value_re, rest)
+                if v:
+                    return v.group(1)
+                if next_line_ok and not rest and i + 1 < len(compact):
+                    v = re.fullmatch(value_re, compact[i + 1])
+                    if v:
+                        return v.group(1)
+            return None
+
+        biz_match = re.search(r"(\d{3})-(\d{2})-(\d{5})", "\n".join(compact)) or \
+            re.search(r"(?:사업자|등록번호|사업자번호)\D{0,6}(\d{3})-?(\d{2})-?(\d{5})", "\n".join(compact))
         if biz_match:
             result.biz_no = f"{biz_match.group(1)}-{biz_match.group(2)}-{biz_match.group(3)}"
 
-        # "승인번호" / "승 인 번 호" (글자 사이 띄어쓴 포스) — 같은 줄의 숫자만
-        approval_match = re.search(r"승\s*인\s*번\s*호[ 	]*[:：]?[ 	]*(\d{6,12})", text)
-        if approval_match:
-            result.approval_no = approval_match.group(1)
+        # 승인번호: 승인번호 / 승인NO / 승인No. / 승인# / 카드승인번호 / APPROVALNO / AUTHNO / 승인코드
+        approval = value_after(
+            r"(?:승인(?:번호|NO\.?|넘버|코드|#)|APPROVAL(?:NO\.?|NUMBER|CODE)?|AUTH(?:NO\.?|CODE)?)",
+            r"(\d{6,12})(?!\d)", next_line_ok=True)
+        if approval:
+            result.approval_no = approval
 
-        datetime_match = re.search(
-            r"(\d{4}[-/.]\d{2}[-/.]\d{2}\s+\d{2}:\d{2}:\d{2})",
-            text
-        )
-        if datetime_match:
-            result.paid_at = datetime_match.group(1)
+        # 거래 일시: 승인일시·거래일시·결제일시·판매일시 줄 우선, 없으면 영수증의 첫 날짜+시각
+        # 날짜·시각은 원래 줄에서 (공백을 없애면 '1 14:05' 와 '11 4:05' 가 구분 안 됨)
+        dt_re = (r"((?:20)?\d{2})\s*[-/.년]\s*(\d{1,2})\s*[-/.월]\s*(\d{1,2})\s*일?\s*(?:\([^)]{1,3}\))?\s*"
+                 r"(\d{1,2})\s*:\s*(\d{2})(?:\s*:\s*(\d{2}))?")
 
-        amount_patterns = [
-            r"(?:받\s*을|결\s*제|승\s*인)\s*금\s*액[:\s]*(-?[0-9][0-9,]*)\s*원?",
-            r"합\s*계(?:\s*금\s*액)?[:\s]*(-?[0-9][0-9,]*)\s*원?",
-            r"총\s*(?:금\s*액|합\s*계)[:\s]*(-?[0-9][0-9,]*)\s*원?",
-        ]
-        for pattern in amount_patterns:
-            match = re.search(pattern, text)
-            if match:
+        def norm_dt(m):
+            y = m.group(1)
+            y = int(y) + 2000 if len(y) == 2 else int(y)
+            return f"{y:04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d} " \
+                   f"{int(m.group(4)):02d}:{m.group(5)}:{m.group(6) or '00'}"
+
+        paid = None
+        for c, l in zip(compact, lines):
+            if re.search(r"(승인|거래|결제|판매|매출)(일시|일자|시간|날짜)", c):
+                m = re.search(dt_re, l)
+                if m:
+                    paid = norm_dt(m)
+                    break
+        if not paid:
+            for l in lines:
+                m = re.search(dt_re, l)
+                if m:
+                    paid = norm_dt(m)
+                    break
+        if paid:
+            result.paid_at = paid
+
+        # 금액: 승인금액 > 결제금액 > 받을금액 > 합계 > 총액 (포스마다 표기가 달라 순서대로)
+        money = r"(-?\d[\d,]*)원?"
+        for label in (r"승인금액", r"(?:결제|청구|카드)금액", r"받을금액", r"합계(?:금액)?", r"총(?:금액|합계|액|결제액|판매액)",
+                      r"TOTAL"):
+            v = value_after(label, money)
+            if v and re.sub(r"[-,]", "", v):
                 try:
-                    result.amount = int(match.group(1).replace(",", ""))
+                    result.amount = int(v.replace(",", ""))
+                    break
                 except ValueError:
                     continue
-                break
 
         card_patterns = [
-            r"(신한|삼성|현대|롯데|국민|하나|우리|농협|기업|BC|비씨|NH)카드?",
-            r"카드사[:\s]*([\w]+)",
+            r"(신한|삼성|현대|롯데|국민|KB국민|하나|우리|농협|NH농협|기업|IBK기업|BC|비씨|씨티|카카오뱅크|토스)카드",
+            r"(?:카드사|카드종류|발급사|매입사)[:：]?([가-힣A-Za-z]+)",
         ]
         for pattern in card_patterns:
-            match = re.search(pattern, text)
+            match = re.search(pattern, "\n".join(compact))
             if match:
                 result.card_issuer = match.group(1)
                 break
 
-        vat_match = re.search(r"부가세[:\s]*([0-9,]+)", text)
-        if vat_match:
-            result.vat = int(vat_match.group(1).replace(",", ""))
+        vat = value_after(r"부가세|부가가치세|VAT", r"(\d[\d,]*)원?")
+        if vat:
+            try:
+                result.vat = int(vat.replace(",", ""))
+            except ValueError:
+                pass
 
-        table_match = re.search(r"테이블[:\s#]*(\d+)", text)
-        if table_match:
-            result.table_no = table_match.group(1)
+        table = value_after(r"(?:테이블|TABLE|T/?NO)", r"(\d+)")
+        if table:
+            result.table_no = table
 
 
 def parse_escpos(data: bytes) -> ParsedReceipt:
