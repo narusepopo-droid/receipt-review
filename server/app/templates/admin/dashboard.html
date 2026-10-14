@@ -20,19 +20,20 @@
     <div class="stat-card primary">
         <div class="stat-label">오늘 참여</div>
         <div class="stat-value">{{ stats.today_sessions | default(0) }}명</div>
-        <div class="stat-change up">
-            <i data-feather="trending-up" style="width: 14px; height: 14px;"></i>
-            어제 대비 +{{ stats.sessions_change | default(12) }}%
+        {% set chg = stats.sessions_change | default(0) %}
+        <div class="stat-change {{ 'up' if chg >= 0 else 'down' }}">
+            <i data-feather="{{ 'trending-up' if chg >= 0 else 'trending-down' }}" style="width: 14px; height: 14px;"></i>
+            어제 대비 {{ '+' if chg >= 0 }}{{ chg }}명
         </div>
     </div>
 
     <div class="stat-card">
         <div class="stat-label">사용 가능 영수증</div>
-        <div class="stat-value">{{ stats.available_receipts | default(15) }}장</div>
-        {% if stats.available_receipts and stats.available_receipts < 5 %}
-        <div class="stat-change down">
+        <div class="stat-value">{{ stats.available_receipts | default(0) }}장</div>
+        {% if (stats.available_receipts | default(0)) < 5 %}
+        <div class="stat-change down" title="영수증리뷰는 프린터로 출력된 영수증만 씁니다">
             <i data-feather="alert-circle" style="width: 14px; height: 14px;"></i>
-            부족 주의
+            {{ '영수증 없음' if not stats.available_receipts else '부족 주의' }} · 포스에서 고객용 영수증을 '항상 출력'으로 해 주세요
         </div>
         {% endif %}
     </div>
