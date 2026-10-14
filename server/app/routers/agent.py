@@ -1,4 +1,5 @@
 """포스 에이전트 API - 활성화, 영수증 업로드, 하트비트"""
+import logging
 import os
 import secrets
 import hashlib
@@ -23,6 +24,8 @@ from app.receipt.renderer import render_receipt
 from app.services.disposal import dispose_by_approval_no
 from app.services.release import get_release, sha256_of, parse_version, MIN_AUTO_UPDATE_VERSION
 from app.routers.auth import verify_token, generate_token, token_needs_refresh
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agent/v1", tags=["agent"])
 settings = get_settings()
@@ -222,6 +225,10 @@ async def upload_receipt(
 
     if not classification.should_store:
         await db.commit()
+        # 왜 안 받았는지 운영 로그에 남김 (번호·이름 같은 개인정보는 빼고 분류·금액·승인번호 유무만)
+        logger.warning("receipt skipped store=%s type=%s reason=%s approval=%s amount=%s paid_at=%s bytes=%s",
+                    store.id, classification.type.value, classification.reason, bool(parsed.approval_no),
+                    parsed.amount, parsed.paid_at, len(raw_bytes))
         return ReceiptUploadResponse(
             success=True,
             classification=classification.type.value,
