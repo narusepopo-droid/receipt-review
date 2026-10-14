@@ -611,41 +611,74 @@ textarea.form-input {
     margin-bottom: 16px;
 }
 
-/* Responsive */
+/* Responsive — 메뉴는 항상 글자로 (좁은 화면은 폭만 줄이고, 휴대폰은 위쪽 가로 메뉴) */
 @media (max-width: 1024px) {
     .sidebar {
-        width: 80px;
+        width: 200px;
     }
 
-    .sidebar-header,
-    .store-name,
-    .nav-item span {
-        display: none;
+    .sidebar-header {
+        padding: 18px 16px;
     }
 
     .nav-item {
-        padding: 16px;
-        text-align: center;
-    }
-
-    .nav-item i {
-        margin: 0;
-        font-size: 20px;
+        padding: 11px 16px;
+        gap: 10px;
+        font-size: 14px;
     }
 
     .main-content {
-        margin-left: 80px;
+        margin-left: 200px;
+        padding: 24px;
     }
 }
 
 @media (max-width: 768px) {
-    .sidebar {
-        display: none;
+    .admin-layout {
+        flex-direction: column;
     }
+
+    .sidebar {
+        position: sticky;
+        top: 0;
+        width: 100%;
+        height: auto;
+        overflow: visible;
+    }
+
+    .sidebar-header {
+        padding: 12px 16px 6px;
+        border-bottom: none;
+    }
+
+    .sidebar-nav {
+        display: flex;
+        overflow-x: auto;
+        gap: 4px;
+        padding: 4px 10px 10px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .sidebar-nav::-webkit-scrollbar { display: none; }
+
+    .nav-item {
+        flex: none;
+        padding: 8px 12px;
+        border-radius: 999px;
+        white-space: nowrap;
+        border-left: none;
+        font-size: 13.5px;
+    }
+
+    .nav-item i, .nav-item svg { display: none; }
 
     .main-content {
         margin-left: 0;
-        padding: 20px;
+        padding: 20px 16px;
+        min-height: 0;
+        width: 100%;
+        min-width: 0;
     }
 
     .stats-grid {
