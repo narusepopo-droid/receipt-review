@@ -1,4 +1,6 @@
 using System;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Windows.Forms;
@@ -44,6 +46,7 @@ namespace ReceiptTap.App
                 try
                 {
                     EnsureAutoStart();
+                    EnsureSpmcInstalled();
                     Run();
                 }
                 finally
@@ -103,6 +106,82 @@ namespace ReceiptTap.App
             {
                 LogError(ex);
             }
+        }
+
+        /// <summary>
+        /// 영수증 읽는 부품(HHD SPMC: 시리얼 프린터 감시 드라이버)이 PC에 없으면 한 번 설치.
+        /// 파일은 프로그램 폴더(zip)에 들어 있음 — 윈도우 등록만 관리자 확인(예) 1번 필요.
+        /// 카솔 등으로 이미 설치된 PC는 건너뜀. '아니요'를 누르면 하루 뒤에 다시 물어봄 (USB·랜선 프린터는 이것 없이도 동작).
+        /// </summary>
+        static void EnsureSpmcInstalled()
+        {
+            try
+            {
+                if (SpmcRegistered()) return;
+                string dir = AppDomain.CurrentDomain.BaseDirectory;
+                string dll = Path.Combine(dir, "hhdspmc.dll");
+                string inf = Path.Combine(dir, "drivers", "hhdspmc.inf");
+                if (!File.Exists(dll)) return;
+
+                string mark = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    "ReceiptTap", "spmc_asked.txt");
+                if (File.Exists(mark) && (DateTime.Now - File.GetLastWriteTime(mark)).TotalHours < 24) return;
+                Directory.CreateDirectory(Path.GetDirectoryName(mark));
+                File.WriteAllText(mark, DateTime.Now.ToString("s"));
+
+                MessageBox.Show("영수증을 읽는 부품(프린터 감시 드라이버)을 처음 한 번만 설치합니다.\n\n"
+                    + "다음에 뜨는 윈도우 확인 창에서 [예]를 눌러 주세요.\n(이미 깔려 있는 카솔 매장 등은 이 창이 뜨지 않습니다)",
+                    "영수증리뷰 - 처음 설정", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                string regsvr = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "SysWOW64", "regsvr32.exe");
+                if (!File.Exists(regsvr)) regsvr = "regsvr32.exe";
+                string cmd = "/c " + (File.Exists(inf) ? "pnputil /add-driver \"" + inf + "\" /install & " : "")
+                           + "\"" + regsvr + "\" /s \"" + dll + "\"";
+                var psi = new ProcessStartInfo("cmd.exe", cmd)
+                {
+                    Verb = "runas",                       // 관리자 확인 창
+                    UseShellExecute = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                };
+                using (var p = Process.Start(psi))
+                    p?.WaitForExit(60000);
+
+                if (SpmcRegistered())
+                {
+                    try { File.Delete(mark); } catch { }
+                }
+            }
+            catch (Win32Exception)
+            {
+                // 확인 창에서 '아니요' — 하루 뒤 다시 물어봄
+            }
+            catch (Exception ex)
+            {
+                LogError(ex);
+            }
+        }
+
+        static bool SpmcRegistered()
+        {
+            try
+            {
+                using (var k = Registry.ClassesRoot.OpenSubKey(@"hhdspmc.SerialMonitor\CLSID"))
+                {
+                    string clsid = k?.GetValue("") as string;
+                    if (string.IsNullOrEmpty(clsid)) return false;
+                    foreach (var path in new[] { @"WOW6432Node\CLSID\" + clsid + @"\InprocServer32", @"CLSID\" + clsid + @"\InprocServer32" })
+                    {
+                        using (var s = Registry.ClassesRoot.OpenSubKey(path))
+                        {
+                            string f = s?.GetValue("") as string;
+                            if (!string.IsNullOrEmpty(f) && File.Exists(Environment.ExpandEnvironmentVariables(f.Trim('"'))))
+                                return true;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return false;
         }
 
         static void LogError(Exception ex)
