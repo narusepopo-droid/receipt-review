@@ -2,247 +2,386 @@
 
 {% block title %}테이블 안내판{% endblock %}
 
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@300;400;500;700;900&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', path='admin/sign/sign.css') }}?v=2">
+<style>
+.sg-wrap { display: grid; grid-template-columns: 380px 1fr; gap: 24px; align-items: start; }
+.sg-panel .card-body { padding: 20px; }
+.sg-sec { margin-bottom: 22px; }
+.sg-sec-title { font-size: 12px; font-weight: 700; color: var(--gray-600); margin-bottom: 10px; letter-spacing: .3px; }
+.sg-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.sg-opt { border: 1.5px solid var(--gray-200); background: #fff; border-radius: 10px; padding: 10px 8px; font-size: 13px; cursor: pointer; text-align: center; line-height: 1.35; color: var(--gray-800); }
+.sg-opt small { display: block; color: var(--gray-500); font-size: 11px; }
+.sg-opt.active { border-color: var(--primary); background: rgba(3,199,90,.08); font-weight: 700; }
+.sg-colors { display: flex; gap: 8px; flex-wrap: wrap; }
+.sg-color { width: 32px; height: 32px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1.5px var(--gray-200); cursor: pointer; }
+.sg-color.active { box-shadow: 0 0 0 2.5px #111827; }
+.sg-chips { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.sg-chip { text-align: left; border: 1px dashed var(--gray-300); background: var(--gray-100); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; cursor: pointer; color: var(--gray-700); }
+.sg-chip b { color: #111827; }
+.sg-chip:hover { border-color: var(--primary); }
+.sg-row { display: flex; gap: 8px; align-items: center; }
+.sg-row .form-input { flex: 1; min-width: 0; }
+.sg-logo { display: flex; gap: 10px; align-items: center; }
+.sg-logo img { height: 40px; max-width: 120px; object-fit: contain; border: 1px solid var(--gray-200); border-radius: 6px; background: #fff; }
+.sg-preview { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border-radius: 16px; padding: 32px; display: flex; flex-direction: column; align-items: center; gap: 14px; min-height: 640px; position: sticky; top: 16px; }
+.sg-preview-note { color: rgba(255,255,255,.7); font-size: 13px; text-align: center; }
+.sg-actions { display: flex; flex-direction: column; gap: 8px; }
+.sg-actions .btn { width: 100%; justify-content: center; }
+.sg-status { font-size: 12.5px; color: var(--gray-600); min-height: 18px; text-align: center; }
+.sg-help { background: var(--gray-100); border-radius: 10px; padding: 12px 14px; font-size: 12.5px; color: var(--gray-700); line-height: 1.6; }
+#sg-print { display: none; }
+@media (max-width: 1100px) {
+    .sg-wrap { grid-template-columns: 1fr; }
+    .sg-preview { position: static; padding: 20px 8px; min-height: 0; overflow-x: auto; }
+}
+@media print {
+    @page { margin: 0; }
+    body * { visibility: hidden !important; }
+    #sg-print, #sg-print * { visibility: visible !important; }
+    #sg-print { display: block !important; position: absolute; left: 0; top: 0; }
+    #sg-print .sign { box-shadow: none !important; page-break-after: always; break-after: page; margin: 0; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <div>
         <h1 class="page-title">테이블 안내판</h1>
-        <p class="page-subtitle">테이블별 QR 안내판을 생성하고 인쇄합니다</p>
+        <p class="page-subtitle">디자인을 고르고 문구를 바꾼 뒤 인쇄하거나 이미지로 받으세요. 저장하면 다음에도 그대로 열립니다.</p>
     </div>
 </div>
 
-<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px;">
-    <!-- Settings -->
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">안내판 설정</h3>
-        </div>
+<div class="sg-wrap">
+    <div class="card sg-panel">
         <div class="card-body">
-            <div class="form-group">
-                <label class="form-label">테이블 수</label>
-                <input type="number" id="table-count" class="form-input"
-                       value="{{ table_count | default(10) }}" min="1" max="100">
-                <p class="form-hint">생성할 테이블 안내판 수</p>
+            <div class="sg-sec">
+                <div class="sg-sec-title">디자인</div>
+                <div class="sg-grid" id="sg-tpl">
+                    <button type="button" class="sg-opt" data-v="glass">✨ 글래스</button>
+                    <button type="button" class="sg-opt" data-v="neon">🔥 네온팝</button>
+                    <button type="button" class="sg-opt" data-v="minimal">◻️ 미니멀</button>
+                    <button type="button" class="sg-opt" data-v="luxury">👑 럭셔리</button>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label class="form-label">시작 번호</label>
-                <input type="number" id="start-number" class="form-input"
-                       value="{{ start_number | default(1) }}" min="1">
+            <div class="sg-sec">
+                <div class="sg-sec-title">크기</div>
+                <div class="sg-grid" id="sg-size">
+                    <button type="button" class="sg-opt" data-v="a6"><b>A6</b><small>105×148mm · 테이블용</small></button>
+                    <button type="button" class="sg-opt" data-v="a5"><b>A5</b><small>148×210mm</small></button>
+                    <button type="button" class="sg-opt" data-v="tablet"><b>태블릿</b><small>테이블오더 대기화면</small></button>
+                    <button type="button" class="sg-opt" data-v="square"><b>정사각</b><small>100×100mm</small></button>
+                </div>
+                <div class="sg-row" style="margin-top:8px;">
+                    <input type="number" id="sg-cw" class="form-input" placeholder="가로 mm" min="50" max="500">
+                    <span>×</span>
+                    <input type="number" id="sg-ch" class="form-input" placeholder="세로 mm" min="50" max="500">
+                    <button type="button" class="btn btn-secondary btn-sm" id="sg-custom">직접 크기</button>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label class="form-label">용지 크기</label>
-                <select id="paper-size" class="form-input">
-                    <option value="A6">A6 (세로, 추천)</option>
-                    <option value="A5">A5 (세로)</option>
-                    <option value="A4">A4 (세로)</option>
-                </select>
+            <div class="sg-sec">
+                <div class="sg-sec-title">색상</div>
+                <div class="sg-colors" id="sg-color">
+                    {% for c in ['#03C75A','#FF6B35','#5856D6','#FF2D55','#FF9500','#007AFF','#C9A962','#1a1a1a'] %}
+                    <button type="button" class="sg-color" data-v="{{ c }}" style="background: {{ c }};" aria-label="{{ c }}"></button>
+                    {% endfor %}
+                </div>
             </div>
 
-            <div class="form-group">
-                <label class="form-label">혜택 문구</label>
-                <input type="text" id="benefit-text" class="form-input"
-                       value="{{ benefit_text | default('리뷰 작성 시 음료 1잔 서비스') }}">
+            <div class="sg-sec">
+                <div class="sg-sec-title">문구</div>
+                <div class="form-group">
+                    <label class="form-label">강조 문구 <span style="font-weight:400;color:var(--gray-500);">(첫 줄 크게 · 둘째 줄 작게)</span></label>
+                    <textarea id="sg-headline" class="form-input" rows="2" maxlength="90"></textarea>
+                    <p class="form-hint">일반 네이버 영수증 QR과 다르다는 걸 한눈에 알리는 문구예요. 아래 추천 문구를 눌러 바로 넣을 수 있어요.</p>
+                    <div class="sg-chips" id="sg-presets"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">매장명</label>
+                    <input type="text" id="sg-store" class="form-input" maxlength="40">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">혜택 문구</label>
+                    <input type="text" id="sg-benefit" class="form-input" maxlength="60">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">이용 안내 <span style="font-weight:400;color:var(--gray-500);">(한 줄에 한 단계)</span></label>
+                    <textarea id="sg-steps" class="form-input" rows="5" maxlength="400"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">매장 로고 (선택)</label>
+                    <div class="sg-logo">
+                        <img id="sg-logo-img" alt="" style="display:none;">
+                        <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+                            로고 올리기 <input type="file" id="sg-logo" accept="image/png,image/jpeg,image/webp" hidden>
+                        </label>
+                        <button type="button" class="btn btn-secondary btn-sm" id="sg-logo-del" style="display:none;">지우기</button>
+                    </div>
+                </div>
             </div>
 
-            <div style="margin-top: 24px; display: flex; gap: 12px;">
-                <button class="btn btn-primary" onclick="generatePreview()" style="flex: 1;">
-                    <i data-feather="eye" style="width: 18px; height: 18px;"></i>
-                    미리보기
-                </button>
+            <div class="sg-sec">
+                <div class="sg-sec-title">QR 방식</div>
+                <div class="sg-grid" id="sg-qrmode">
+                    <button type="button" class="sg-opt" data-v="store"><b>매장 공용 QR</b><small>모든 테이블 같은 QR · 1장만 인쇄</small></button>
+                    <button type="button" class="sg-opt" data-v="table"><b>테이블별 QR</b><small>지급 기록에 테이블 번호 표시</small></button>
+                </div>
+                <div id="sg-table-opts" style="margin-top:10px;">
+                    <div class="sg-row">
+                        <input type="number" id="sg-ts" class="form-input" min="1" max="999" placeholder="시작">
+                        <span>번 ~</span>
+                        <input type="number" id="sg-te" class="form-input" min="1" max="999" placeholder="끝">
+                        <span>번</span>
+                    </div>
+                    <div class="sg-row" style="margin-top:8px;">
+                        <span style="font-size:13px;color:var(--gray-600);white-space:nowrap;">표시 글자</span>
+                        <input type="text" id="sg-tp" class="form-input" maxlength="10" placeholder="테이블">
+                    </div>
+                    <p class="form-hint">예: '테이블' → 안내판에 '테이블 3' 으로 표시 (한 번에 100장까지)</p>
+                </div>
             </div>
 
-            <div style="margin-top: 12px; display: flex; gap: 12px;">
-                <button class="btn btn-secondary" onclick="downloadPNG()" style="flex: 1;">
-                    <i data-feather="image" style="width: 18px; height: 18px;"></i>
-                    PNG 다운로드
-                </button>
-                <button class="btn btn-secondary" onclick="downloadPDF()" style="flex: 1;">
-                    <i data-feather="file-text" style="width: 18px; height: 18px;"></i>
-                    PDF 다운로드
-                </button>
+            <div class="sg-actions">
+                <button type="button" class="btn btn-primary" id="sg-save"><i data-feather="save" style="width:16px;height:16px;"></i> 디자인 저장</button>
+                <button type="button" class="btn btn-secondary" id="sg-print-btn"><i data-feather="printer" style="width:16px;height:16px;"></i> 인쇄 · PDF로 저장</button>
+                <button type="button" class="btn btn-secondary" id="sg-png"><i data-feather="image" style="width:16px;height:16px;"></i> 이미지(PNG) 받기</button>
+                <div class="sg-status" id="sg-status"></div>
+            </div>
+            <div class="sg-help" style="margin-top:14px;">
+                · 인쇄 창에서 <b>'PDF로 저장'</b>을 고르면 파일로 받을 수 있어요. 용지 크기는 안내판 크기(A6 등)로, 배율은 100%로 맞춰 주세요.<br>
+                · 태블릿 크기는 PNG로 받아 테이블오더 업체에 보내면 대기화면에 띄울 수 있어요.
             </div>
         </div>
     </div>
 
-    <!-- Preview -->
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">미리보기</h3>
-            <div style="display: flex; gap: 8px;">
-                <button class="btn btn-sm btn-outline" onclick="prevTable()" id="prev-btn" disabled>
-                    <i data-feather="chevron-left" style="width: 14px; height: 14px;"></i>
-                </button>
-                <span id="current-table" style="min-width: 80px; text-align: center; line-height: 32px;">
-                    테이블 1
-                </span>
-                <button class="btn btn-sm btn-outline" onclick="nextTable()" id="next-btn">
-                    <i data-feather="chevron-right" style="width: 14px; height: 14px;"></i>
-                </button>
-            </div>
-        </div>
-        <div class="card-body" style="background: var(--gray-200); padding: 32px; display: flex; justify-content: center;">
-            <div id="preview-container" style="background: white; border-radius: 8px; box-shadow: var(--shadow-lg); overflow: hidden;">
-                <!-- Preview will be generated here -->
-                <div id="table-card" style="width: 297px; padding: 24px; text-align: center;">
-                    <div style="margin-bottom: 16px;">
-                        <div style="font-size: 24px; font-weight: 700; color: #1a1a1a;">
-                            {{ store.name | default('맛있는 식당') }}
-                        </div>
-                    </div>
-
-                    <div style="background: #03C75A; color: white; padding: 12px 16px; border-radius: 8px; font-size: 15px; font-weight: 600; margin-bottom: 20px;">
-                        🎁 리뷰 작성 시 음료 1잔 서비스
-                    </div>
-
-                    <div style="margin-bottom: 20px;">
-                        <div id="qr-code" style="width: 160px; height: 160px; background: #f5f5f5; margin: 0 auto; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
-                            <svg viewBox="0 0 100 100" width="140" height="140">
-                                <rect fill="#000" x="10" y="10" width="25" height="25"/>
-                                <rect fill="#000" x="65" y="10" width="25" height="25"/>
-                                <rect fill="#000" x="10" y="65" width="25" height="25"/>
-                                <rect fill="#000" x="40" y="40" width="20" height="20"/>
-                                <rect fill="#fff" x="15" y="15" width="15" height="15"/>
-                                <rect fill="#fff" x="70" y="15" width="15" height="15"/>
-                                <rect fill="#fff" x="15" y="70" width="15" height="15"/>
-                                <rect fill="#000" x="18" y="18" width="9" height="9"/>
-                                <rect fill="#000" x="73" y="18" width="9" height="9"/>
-                                <rect fill="#000" x="18" y="73" width="9" height="9"/>
-                            </svg>
-                        </div>
-                    </div>
-
-                    <div style="font-size: 12px; color: #666; line-height: 1.8; text-align: left; margin-bottom: 16px; padding: 12px; background: #f8f9fa; border-radius: 8px;">
-                        <div style="margin-bottom: 8px; font-weight: 600; color: #333;">리뷰 작성 방법</div>
-                        <div>1️⃣ 음식·매장 사진 2장 먼저 찍기</div>
-                        <div>2️⃣ QR 찍고 휴대폰 번호 입력</div>
-                        <div>3️⃣ [영수증 저장] 버튼 탭</div>
-                        <div>4️⃣ 영수증 선택 → 사진 첨부 → 붙여넣기</div>
-                        <div>5️⃣ 직원에게 완료 화면 보여주기</div>
-                    </div>
-
-                    <div style="font-size: 20px; font-weight: 700; color: #03C75A;" id="table-number">
-                        테이블 1
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="sg-preview">
+        <div class="sg-preview-note" id="sg-note">미리보기</div>
+        <div class="sign" id="sg-sign"></div>
     </div>
 </div>
 
-<!-- Instructions -->
-<div class="card" style="margin-top: 24px;">
-    <div class="card-header">
-        <h3 class="card-title">인쇄 안내</h3>
-    </div>
-    <div class="card-body">
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;">
-            <div style="text-align: center; padding: 20px;">
-                <div style="width: 60px; height: 60px; background: var(--primary-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
-                    <i data-feather="download" style="width: 28px; height: 28px; color: var(--primary);"></i>
-                </div>
-                <div style="font-weight: 600; margin-bottom: 8px;">1. 다운로드</div>
-                <div style="font-size: 14px; color: var(--gray-600);">
-                    PNG 또는 PDF로 안내판을 다운로드합니다
-                </div>
-            </div>
-            <div style="text-align: center; padding: 20px;">
-                <div style="width: 60px; height: 60px; background: var(--primary-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
-                    <i data-feather="printer" style="width: 28px; height: 28px; color: var(--primary);"></i>
-                </div>
-                <div style="font-weight: 600; margin-bottom: 8px;">2. 인쇄</div>
-                <div style="font-size: 14px; color: var(--gray-600);">
-                    A6 또는 A5 용지에 컬러로 인쇄합니다
-                </div>
-            </div>
-            <div style="text-align: center; padding: 20px;">
-                <div style="width: 60px; height: 60px; background: var(--primary-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
-                    <i data-feather="check-circle" style="width: 28px; height: 28px; color: var(--primary);"></i>
-                </div>
-                <div style="font-weight: 600; margin-bottom: 8px;">3. 테이블 배치</div>
-                <div style="font-size: 14px; color: var(--gray-600);">
-                    각 테이블에 해당 번호의 안내판을 배치합니다
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+<div id="sg-print"></div>
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="{{ url_for('static', path='admin/sign/sign-templates.js') }}?v=2"></script>
 <script>
-let currentTable = 1;
-let tableCount = parseInt(document.getElementById('table-count').value);
+(function () {
+const QR_URL = "{{ url_for('admin_sign_qr') }}";
+const SAVE_URL = "{{ url_for('admin_save_sign_design') }}";
+let D = {{ design | tojson }};
+const PRESETS = [
+    "영수증 찾지 마세요, QR 한 번이면 끝!\n영수증도 리뷰 글도 알아서 준비돼요",
+    "리뷰, 이제 30초면 충분해요\n영수증·리뷰 글 자동 준비 — 붙여넣기만 하세요",
+    "지갑 속 영수증, 안 꺼내셔도 돼요\nQR 찍고 번호만 넣으면 영수증이 폰으로 쏙",
+    "쓰기 어려운 리뷰, 글까지 대신 써드려요\n영수증과 리뷰 문구를 자동으로 준비해요",
+    "찍고, 붙이고, 끝!\n영수증·리뷰 글은 저희가 준비할게요",
+    "영수증 없어도 영수증 리뷰 OK!\n번호만 입력하면 모두 자동으로 준비돼요",
+];
+const MM = 3.78;   // 1mm = 3.78px (96dpi) — 인쇄 시 실제 크기
+const $ = id => document.getElementById(id);
+let dirty = false;
 
-function updatePreview() {
-    const startNum = parseInt(document.getElementById('start-number').value);
-    const tableNum = startNum + currentTable - 1;
-    document.getElementById('table-number').textContent = '테이블 ' + tableNum;
-    document.getElementById('current-table').textContent = '테이블 ' + tableNum;
-
-    // Update button states
-    document.getElementById('prev-btn').disabled = currentTable <= 1;
-    document.getElementById('next-btn').disabled = currentTable >= tableCount;
-
-    // Update benefit text
-    document.getElementById('table-card').querySelector('[style*="background: #03C75A"]').textContent =
-        '🎁 ' + document.getElementById('benefit-text').value;
+function mix(c1, c2, w) {
+    const p = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16));
+    const a = p(c1), b = p(c2);
+    return '#' + a.map((v, i) => Math.round(v * (1 - w) + b[i] * w).toString(16).padStart(2, '0')).join('');
 }
-
-function prevTable() {
-    if (currentTable > 1) {
-        currentTable--;
-        updatePreview();
-    }
+function qrSrc(t) { return QR_URL + '?t=' + t; }
+function labelFor(t) { return D.qrMode === 'table' ? ((D.tablePrefix || '').trim() + ' ' + t).trim() : ''; }
+function tables() {
+    if (D.qrMode !== 'table') return [0];
+    const a = [];
+    for (let t = D.tableStart; t <= D.tableEnd; t++) a.push(t);
+    return a;
 }
-
-function nextTable() {
-    tableCount = parseInt(document.getElementById('table-count').value);
-    if (currentTable < tableCount) {
-        currentTable++;
-        updatePreview();
-    }
+function paint(el, t) {
+    el.className = `sign tpl-${D.template} size-${D.size === 'custom' ? 'a6' : D.size}`;
+    el.style.setProperty('--sign-accent', D.color);
+    // 이미지 저장 도구가 color-mix 를 못 읽어서 섞은 색을 미리 계산
+    el.style.setProperty('--sign-accent-d20', mix(D.color, '#000000', .2));
+    el.style.setProperty('--sign-accent-d15', mix(D.color, '#000000', .15));
+    el.style.setProperty('--sign-accent-l30', mix(D.color, '#ffffff', .3));
+    if (D.size === 'custom' && D.customW && D.customH) {
+        el.style.width = (D.customW * MM) + 'px';
+        el.style.minHeight = (D.customH * MM) + 'px';
+    } else { el.style.width = ''; el.style.minHeight = ''; }
+    el.innerHTML = window.signHTML(D, qrSrc(t), labelFor(t));
 }
-
-function generatePreview() {
-    tableCount = parseInt(document.getElementById('table-count').value);
-    currentTable = 1;
-    updatePreview();
-    alert('미리보기가 생성되었습니다. ' + tableCount + '개의 테이블 안내판을 확인하세요.');
+function render() {
+    const ts = tables();
+    paint($('sg-sign'), ts[0]);
+    $('sg-note').textContent = D.qrMode === 'table'
+        ? `미리보기: ${labelFor(ts[0])} (전체 ${ts.length}장)`
+        : '미리보기: 매장 공용 QR (모든 테이블에 같은 안내판)';
 }
-
-function downloadPNG() {
-    const tableCount = parseInt(document.getElementById('table-count').value);
-    const startNum = parseInt(document.getElementById('start-number').value);
-
-    // In production, this would call the server to generate PNG files
-    alert('테이블 ' + startNum + '~' + (startNum + tableCount - 1) + ' 안내판 PNG를 다운로드합니다.');
-
-    // Redirect to download endpoint
-    window.location.href = '{{ url_for("admin_download_tables") }}?format=png&count=' + tableCount + '&start=' + startNum;
+function activate(groupId, v) {
+    document.querySelectorAll('#' + groupId + ' [data-v]').forEach(b => b.classList.toggle('active', b.dataset.v === v));
 }
-
-function downloadPDF() {
-    const tableCount = parseInt(document.getElementById('table-count').value);
-    const startNum = parseInt(document.getElementById('start-number').value);
-
-    alert('테이블 ' + startNum + '~' + (startNum + tableCount - 1) + ' 안내판 PDF를 다운로드합니다.');
-
-    window.location.href = '{{ url_for("admin_download_tables") }}?format=pdf&count=' + tableCount + '&start=' + startNum;
+function syncForm() {
+    activate('sg-tpl', D.template); activate('sg-size', D.size); activate('sg-color', D.color); activate('sg-qrmode', D.qrMode);
+    $('sg-headline').value = D.headline || ''; $('sg-store').value = D.storeName || ''; $('sg-benefit').value = D.benefit || '';
+    $('sg-steps').value = D.steps || ''; $('sg-ts').value = D.tableStart; $('sg-te').value = D.tableEnd; $('sg-tp').value = D.tablePrefix || '';
+    $('sg-cw').value = D.customW || ''; $('sg-ch').value = D.customH || '';
+    $('sg-table-opts').style.display = D.qrMode === 'table' ? '' : 'none';
+    $('sg-logo-img').style.display = D.logo ? '' : 'none'; $('sg-logo-del').style.display = D.logo ? '' : 'none';
+    if (D.logo) $('sg-logo-img').src = D.logo;
 }
+function change(fn) { fn(); dirty = true; $('sg-status').textContent = '바뀐 내용이 있어요 — 저장을 눌러 주세요'; syncForm(); render(); }
 
-// Initialize
-document.getElementById('table-count').addEventListener('change', function() {
-    tableCount = parseInt(this.value);
-    if (currentTable > tableCount) {
-        currentTable = tableCount;
-    }
-    updatePreview();
+[['sg-tpl', 'template'], ['sg-size', 'size'], ['sg-color', 'color'], ['sg-qrmode', 'qrMode']].forEach(([g, k]) => {
+    document.querySelectorAll('#' + g + ' [data-v]').forEach(b => b.addEventListener('click', () => change(() => { D[k] = b.dataset.v; })));
+});
+[['sg-headline', 'headline'], ['sg-store', 'storeName'], ['sg-benefit', 'benefit'], ['sg-steps', 'steps'], ['sg-tp', 'tablePrefix']].forEach(([id, k]) => {
+    $(id).addEventListener('input', e => { D[k] = e.target.value; dirty = true; $('sg-status').textContent = '바뀐 내용이 있어요 — 저장을 눌러 주세요'; render(); });
+});
+function clampTables() {
+    let s = parseInt($('sg-ts').value) || 1, e = parseInt($('sg-te').value) || s;
+    s = Math.min(Math.max(s, 1), 999); e = Math.min(Math.max(e, s), Math.min(999, s + 99));
+    D.tableStart = s; D.tableEnd = e;
+}
+['sg-ts', 'sg-te'].forEach(id => $(id).addEventListener('change', () => change(clampTables)));
+$('sg-custom').addEventListener('click', () => {
+    const w = parseInt($('sg-cw').value), h = parseInt($('sg-ch').value);
+    if (!(w >= 50 && w <= 500 && h >= 50 && h <= 500)) { alert('가로·세로를 50~500mm 사이로 넣어 주세요'); return; }
+    change(() => { D.size = 'custom'; D.customW = w; D.customH = h; });
+});
+PRESETS.forEach(p => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'sg-chip';
+    const [a, c] = p.split('\n');
+    b.innerHTML = '<b></b><br><span></span>';
+    b.querySelector('b').textContent = a; b.querySelector('span').textContent = c;
+    b.addEventListener('click', () => change(() => { D.headline = p; }));
+    $('sg-presets').appendChild(b);
+});
+$('sg-logo').addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const img = new Image();
+    img.onload = () => {   // 저장 용량을 줄이려고 가로 600px 로 줄여 저장
+        const s = Math.min(1, 600 / img.width);
+        const cv = document.createElement('canvas');
+        cv.width = Math.round(img.width * s); cv.height = Math.round(img.height * s);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        change(() => { D.logo = cv.toDataURL('image/png'); });
+        URL.revokeObjectURL(img.src);
+    };
+    img.src = URL.createObjectURL(f);
+    e.target.value = '';
+});
+$('sg-logo-del').addEventListener('click', () => change(() => { D.logo = null; }));
+
+$('sg-save').addEventListener('click', async () => {
+    $('sg-status').textContent = '저장 중…';
+    try {
+        const r = await fetch(SAVE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(D) });
+        const j = await r.json();
+        if (!j.success) throw new Error(j.error || '저장 실패');
+        D = j.design; dirty = false; syncForm(); render();
+        $('sg-status').textContent = '저장했어요 ✓';
+    } catch (err) { $('sg-status').textContent = '저장하지 못했어요: ' + err.message; }
 });
 
-document.getElementById('start-number').addEventListener('change', updatePreview);
-document.getElementById('benefit-text').addEventListener('input', updatePreview);
+// 이미지 저장 때 글꼴: 안내판에 실제로 쓰인 글자·굵기에 필요한 글꼴 조각만 받아 넣음 (전부 넣으면 수십 MB)
+const GFONT = document.querySelector('link[href*="fonts.googleapis.com/css2"]').href;
+const fontCache = new Map();
+let gfontText = null;
+function inRange(cp, range) {
+    return range.split(',').some(r => {
+        const [a, b] = r.trim().replace('U+', '').split('-');
+        const lo = parseInt(a.replace(/\?/g, '0'), 16), hi = b ? parseInt(b, 16) : parseInt(a.replace(/\?/g, 'F'), 16);
+        return cp >= lo && cp <= hi;
+    });
+}
+async function toDataURL(url) {
+    if (fontCache.has(url)) return fontCache.get(url);
+    const blob = await (await fetch(url)).blob();
+    const d = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
+    fontCache.set(url, d);
+    return d;
+}
+async function fontCSS(root) {
+    try {
+        if (gfontText === null) gfontText = await (await fetch(GFONT)).text();
+        const need = new Map();   // "family|weight" -> 글자 집합
+        root.querySelectorAll('*').forEach(el => {
+            const t = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('');
+            const st = getComputedStyle(el);
+            const fam = st.fontFamily.split(',')[0].replace(/["']/g, '').trim();
+            const key = fam + '|' + st.fontWeight;
+            if (!need.has(key)) need.set(key, new Set());
+            for (const ch of t + '0123456789') need.get(key).add(ch.codePointAt(0));
+        });
+        const out = [];
+        for (const block of gfontText.match(/@font-face\s*{[^}]*}/g) || []) {
+            const fam = (block.match(/font-family:\s*'([^']+)'/) || [])[1];
+            const w = (block.match(/font-weight:\s*(\d+)/) || [])[1];
+            const range = (block.match(/unicode-range:\s*([^;]+);/) || [])[1];
+            const url = (block.match(/url\(([^)]+)\)/) || [])[1];
+            const cps = need.get(fam + '|' + w);
+            if (!url || !cps) continue;
+            if (range && ![...cps].some(cp => inRange(cp, range))) continue;
+            out.push(block.replace(url, await toDataURL(url)));
+        }
+        return out.join(' ');
+    } catch (e) { return ''; }
+}
 
-updatePreview();
+function waitImages(root) {
+    return Promise.all([...root.querySelectorAll('img')].map(i => i.complete && i.naturalWidth ? 0 :
+        new Promise(r => { i.onload = i.onerror = r; })));
+}
+async function buildAll() {
+    const box = $('sg-print'); box.innerHTML = '';
+    for (const t of tables()) { const el = document.createElement('div'); paint(el, t); el.dataset.t = t; box.appendChild(el); }
+    await waitImages(box);
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    return box;
+}
+$('sg-print-btn').addEventListener('click', async () => {
+    $('sg-status').textContent = '인쇄 준비 중…';
+    await buildAll();
+    $('sg-status').textContent = '';
+    window.print();
+});
+$('sg-png').addEventListener('click', async () => {
+    if (!window.htmlToImage) { alert('이미지 도구를 불러오지 못했어요. 새로고침 후 다시 시도해 주세요.'); return; }
+    const box = await buildAll();
+    box.style.display = 'block'; box.style.position = 'fixed'; box.style.left = '-10000px'; box.style.top = '0';
+    const signs = [...box.children];
+    const name = (D.storeName || '안내판').replace(/[\\/:*?"<>|]/g, '');
+    try {
+        const shots = [];
+        for (let i = 0; i < signs.length; i++) {
+            $('sg-status').textContent = `이미지 만드는 중… ${i + 1}/${signs.length}`;
+            const css = await fontCSS(signs[i]);
+            shots.push(await htmlToImage.toBlob(signs[i], { pixelRatio: 4, fontEmbedCSS: css, skipFonts: !css }));
+        }
+        let blob, file;
+        if (shots.length === 1) { blob = shots[0]; file = `${name}_안내판.png`; }
+        else {
+            const zip = new JSZip();
+            shots.forEach((b, i) => zip.file(`${name}_${labelFor(signs[i].dataset.t) || i + 1}.png`, b));
+            blob = await zip.generateAsync({ type: 'blob' }); file = `${name}_안내판_${shots.length}장.zip`;
+        }
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = file; document.body.appendChild(a); a.click(); a.remove();
+        $('sg-status').textContent = '받기 완료 ✓';
+    } catch (err) { $('sg-status').textContent = '이미지를 만들지 못했어요: ' + (err && err.message || err); }
+    finally { box.removeAttribute('style'); box.innerHTML = ''; }
+});
+window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+syncForm(); render();
+})();
 </script>
 {% endblock %}

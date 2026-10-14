@@ -62,3 +62,11 @@ async def pin_required(db, store_id: int) -> bool:
     from sqlalchemy import select
     o = (await db.execute(select(BenefitOption).where(BenefitOption.store_id == store_id))).scalar_one_or_none()
     return bool(o and o.pin_required)
+
+
+class SignDesign(Base):
+    """점주가 꾸민 테이블 안내판 디자인 (템플릿·색·크기·문구·로고·QR 방식) — JSON 한 덩어리"""
+    __tablename__ = "sign_designs"
+
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"), primary_key=True)
+    data: Mapped[str] = mapped_column(Text, default="{}")

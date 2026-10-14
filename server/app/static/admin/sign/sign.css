@@ -1,0 +1,560 @@
+/* 테이블 안내판 템플릿 4종 (원본: table-sign-editor.html) — 점주 관리자 '테이블 안내판' 에서 사용 */
+/* ========== 안내판 공통 ========== */
+.sign {
+  font-family: 'Noto Sans KR', sans-serif;   /* 원본 편집기와 같은 글꼴 (이미지 저장 때 이 글꼴만 넣으면 됨) */
+  background: white;
+  box-shadow: 0 25px 80px rgba(0,0,0,0.4);
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+  color: #1a1a1a;
+}
+
+/* 사이즈별 - mm 기준 (1mm = 3.78px @96dpi, 미리보기는 50% 스케일) */
+.sign.size-a6 { width: 397px; min-height: 559px; } /* 105x148mm */
+.sign.size-a5 { width: 559px; min-height: 793px; } /* 148x210mm */
+.sign.size-tablet { width: 454px; min-height: 302px; } /* 240x160mm (가로24cm x 세로16cm) */
+.sign.size-square { width: 378px; min-height: 378px; } /* 100x100mm */
+
+/* NAVER 브랜딩 */
+.naver-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.naver-badge .naver-logo {
+  background: #03C75A;
+  color: white;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.naver-badge span {
+  color: #666;
+}
+
+/* ===== 템플릿 1: 글래스모피즘 ===== */
+.sign.tpl-glass {
+  border-radius: 24px;
+  background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+  padding: 32px;
+}
+
+.sign.tpl-glass::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, var(--sign-accent, #03C75A) 0%, transparent 70%);
+  opacity: 0.08;
+}
+
+.sign.tpl-glass .sign-header {
+  text-align: center;
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.sign.tpl-glass .sign-logo {
+  max-width: 100px;
+  max-height: 50px;
+  margin-bottom: 8px;
+}
+
+.sign.tpl-glass .sign-store {
+  font-size: 22px;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--sign-accent, #03C75A) 0%, var(--sign-accent-d20, #029c47) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.sign.tpl-glass .sign-benefit-wrap {
+  background: linear-gradient(135deg, var(--sign-accent, #03C75A) 0%, var(--sign-accent-d15, #03a94d) 100%);
+  border-radius: 20px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.sign.tpl-glass .sign-benefit-wrap::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 50%);
+}
+
+.sign.tpl-glass .sign-benefit {
+  color: white;
+  font-size: 20px;
+  font-weight: 800;
+  text-align: center;
+  position: relative;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.sign.tpl-glass .sign-qr-section {
+  background: rgba(0,0,0,0.03);
+  border-radius: 20px;
+  padding: 24px;
+  text-align: center;
+  margin-bottom: 20px;
+  border: 1px solid rgba(0,0,0,0.05);
+}
+
+.sign.tpl-glass .sign-qr {
+  width: 120px;
+  height: 120px;
+  background: white;
+  margin: 0 auto 12px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+.sign.tpl-glass .sign-qr-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--sign-accent, #03C75A);
+  margin-bottom: 8px;
+}
+
+.sign.tpl-glass .naver-badge {
+  justify-content: center;
+}
+
+.sign.tpl-glass .sign-steps {
+  background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%);
+  border-radius: 16px;
+  padding: 20px 24px;
+  font-size: 13px;
+  line-height: 2;
+  border: 1px solid rgba(0,0,0,0.05);
+}
+
+.sign.tpl-glass .sign-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.sign.tpl-glass .sign-steps .step-num {
+  width: 22px;
+  height: 22px;
+  background: var(--sign-accent, #03C75A);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.sign.tpl-glass .table-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(0,0,0,0.06);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+}
+
+/* ===== 템플릿 2: 네온 팝 ===== */
+.sign.tpl-neon {
+  border-radius: 28px;
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+  padding: 28px;
+  color: white;
+  position: relative;
+}
+
+.sign.tpl-neon::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 25px;
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+  z-index: 0;
+}
+
+.sign.tpl-neon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 28px;
+  padding: 3px;
+  background: linear-gradient(135deg, var(--sign-accent, #FF6B35) 0%, #FF2D92 50%, var(--sign-accent, #FF6B35) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: borderGlow 3s linear infinite;
+}
+
+@keyframes borderGlow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.sign.tpl-neon > * { position: relative; z-index: 1; }
+
+.sign.tpl-neon .sign-header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.sign.tpl-neon .sign-logo {
+  max-width: 80px;
+  max-height: 40px;
+  margin-bottom: 8px;
+  filter: brightness(0) invert(1);
+}
+
+.sign.tpl-neon .sign-title {
+  font-family: 'Black Han Sans', sans-serif;
+  font-size: 36px;
+  background: linear-gradient(135deg, var(--sign-accent, #FF6B35) 0%, #FF2D92 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 40px rgba(255, 107, 53, 0.5);
+  margin-bottom: 4px;
+}
+
+.sign.tpl-neon .sign-store {
+  font-size: 14px;
+  color: rgba(255,255,255,0.7);
+  font-weight: 500;
+}
+
+.sign.tpl-neon .sign-benefit-wrap {
+  background: linear-gradient(135deg, var(--sign-accent, #FF6B35) 0%, #FF2D92 100%);
+  border-radius: 16px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 32px rgba(255, 107, 53, 0.3);
+}
+
+.sign.tpl-neon .sign-benefit {
+  font-size: 20px;
+  font-weight: 800;
+  text-align: center;
+  color: white;
+}
+
+.sign.tpl-neon .sign-qr-section {
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 20px;
+  text-align: center;
+  margin-bottom: 16px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.sign.tpl-neon .sign-qr {
+  width: 100px;
+  height: 100px;
+  background: white;
+  margin: 0 auto 12px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sign.tpl-neon .sign-qr-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 6px;
+}
+
+.sign.tpl-neon .naver-badge {
+  justify-content: center;
+}
+
+.sign.tpl-neon .naver-badge span {
+  color: rgba(255,255,255,0.6);
+}
+
+.sign.tpl-neon .sign-steps {
+  font-size: 12px;
+  line-height: 1.8;
+  color: rgba(255,255,255,0.8);
+  padding: 0 8px;
+}
+
+.sign.tpl-neon .sign-steps li {
+  margin-bottom: 4px;
+  padding-left: 20px;
+  position: relative;
+}
+
+.sign.tpl-neon .sign-steps li::before {
+  content: '▸';
+  position: absolute;
+  left: 0;
+  color: var(--sign-accent, #FF6B35);
+}
+
+.sign.tpl-neon .table-badge {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(255,255,255,0.1);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.8);
+  z-index: 2;
+}
+
+/* ===== 템플릿 3: 클린 미니멀 ===== */
+.sign.tpl-minimal {
+  border-radius: 0;
+  padding: 36px;
+  border: 4px solid var(--sign-accent, #1a1a1a);
+}
+
+.sign.tpl-minimal .sign-header {
+  text-align: center;
+  padding-bottom: 24px;
+  border-bottom: 2px solid var(--sign-accent, #1a1a1a);
+  margin-bottom: 28px;
+}
+
+.sign.tpl-minimal .sign-logo {
+  max-width: 80px;
+  max-height: 40px;
+  margin-bottom: 12px;
+}
+
+.sign.tpl-minimal .sign-store {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--sign-accent, #1a1a1a);
+}
+
+.sign.tpl-minimal .sign-benefit {
+  font-size: 26px;
+  font-weight: 900;
+  text-align: center;
+  margin-bottom: 32px;
+  color: var(--sign-accent, #1a1a1a);
+  line-height: 1.3;
+}
+
+.sign.tpl-minimal .sign-qr-section {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.sign.tpl-minimal .sign-qr {
+  width: 110px;
+  height: 110px;
+  border: 3px solid var(--sign-accent, #1a1a1a);
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sign.tpl-minimal .sign-qr-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.sign.tpl-minimal .naver-badge {
+  justify-content: center;
+}
+
+.sign.tpl-minimal .sign-steps {
+  font-size: 12px;
+  line-height: 2;
+  padding-top: 24px;
+  border-top: 1px solid #ddd;
+  color: #444;
+}
+
+.sign.tpl-minimal .sign-steps li {
+  margin-bottom: 2px;
+}
+
+.sign.tpl-minimal .table-badge {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #999;
+  letter-spacing: 1px;
+}
+
+/* ===== 템플릿 4: 프리미엄 럭셔리 ===== */
+.sign.tpl-luxury {
+  border-radius: 4px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 100%);
+  color: white;
+}
+
+.sign.tpl-luxury .sign-header {
+  background: linear-gradient(135deg, var(--sign-accent, #C9A962) 0%, var(--sign-accent-l30, #d9c391) 50%, var(--sign-accent, #C9A962) 100%);
+  padding: 28px 32px;
+  text-align: center;
+}
+
+.sign.tpl-luxury .sign-logo {
+  max-width: 100px;
+  max-height: 50px;
+  margin-bottom: 8px;
+}
+
+.sign.tpl-luxury .sign-store {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  color: #1a1a1a;
+}
+
+.sign.tpl-luxury .sign-body {
+  padding: 32px;
+  text-align: center;
+}
+
+.sign.tpl-luxury .sign-benefit {
+  font-size: 22px;
+  font-weight: 300;
+  margin-bottom: 28px;
+  color: white;
+  line-height: 1.4;
+}
+
+.sign.tpl-luxury .sign-benefit strong {
+  font-weight: 700;
+  color: var(--sign-accent, #C9A962);
+}
+
+.sign.tpl-luxury .sign-qr-section {
+  display: inline-block;
+  padding: 20px;
+  border: 1px solid rgba(255,255,255,0.2);
+  margin-bottom: 24px;
+}
+
+.sign.tpl-luxury .sign-qr {
+  width: 100px;
+  height: 100px;
+  background: white;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sign.tpl-luxury .sign-qr-label {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: rgba(255,255,255,0.6);
+  margin-bottom: 8px;
+}
+
+.sign.tpl-luxury .naver-badge {
+  justify-content: center;
+}
+
+.sign.tpl-luxury .naver-badge span {
+  color: rgba(255,255,255,0.5);
+}
+
+.sign.tpl-luxury .sign-steps {
+  font-size: 12px;
+  line-height: 1.9;
+  color: rgba(255,255,255,0.7);
+  text-align: left;
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+.sign.tpl-luxury .sign-steps li {
+  margin-bottom: 4px;
+  padding-left: 16px;
+  position: relative;
+}
+
+.sign.tpl-luxury .sign-steps li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  color: var(--sign-accent, #C9A962);
+}
+
+.sign.tpl-luxury .sign-footer {
+  background: rgba(0,0,0,0.3);
+  padding: 16px;
+  text-align: center;
+  font-size: 10px;
+  color: rgba(255,255,255,0.4);
+  letter-spacing: 1px;
+}
+
+/* ===== 완전자동 안내 (모든 템플릿 공통) ===== */
+.sign .sign-auto {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  margin: 0 20px 14px;
+  line-height: 1.3;
+  word-break: keep-all;
+}
+.sign .sign-auto-main {
+  display: inline-block;
+  font-family: 'Black Han Sans', 'Noto Sans KR', sans-serif;
+  font-size: 19px;
+  letter-spacing: -0.3px;
+  word-break: keep-all;
+  color: var(--sign-accent, #03C75A);
+}
+.sign .sign-auto-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.75;
+}
+.sign.tpl-neon .sign-auto-main,
+.sign.tpl-luxury .sign-auto-main { color: #fff; text-shadow: 0 0 12px var(--sign-accent, #03C75A); }
+.sign.tpl-neon .sign-auto-sub,
+.sign.tpl-luxury .sign-auto-sub { color: rgba(255,255,255,0.85); }
+.sign.tpl-luxury .sign-auto { margin: 0 0 14px; }
+.sign .table-badge { white-space: nowrap; }

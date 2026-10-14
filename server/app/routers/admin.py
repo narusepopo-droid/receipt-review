@@ -814,7 +814,7 @@ async def benefits_page(request: Request, days: int = 7, page: int = 1, db: Asyn
     records = [{
         "completed_at": kst(s.completed_at),
         "phone_masked": f"010-****-{c.phone_last4}" if c.phone_last4 else "010-****-****",
-        "table_no": s.table_no or "",
+        "table_no": "" if (s.table_no or "0") == "0" else s.table_no,   # 0 = 매장 공용 QR
         "benefit_given_at": kst(s.benefit_given_at),
     } for s, c in rows]
 
@@ -834,26 +834,135 @@ async def benefits_page(request: Request, days: int = 7, page: int = 1, db: Asyn
 
 # ============ Tables ============
 
+SIGN_BASE_URL = "https://review.placemaster.co.kr"
+SIGN_DEFAULT_STEPS = ("음식/매장 사진 2장 먼저 촬영\n"
+                      "QR 찍고 휴대폰 번호 입력\n"
+                      "영수증·리뷰 글 자동 준비 → 네이버로 이동\n"
+                      "앨범에서 영수증+사진 첨부\n"
+                      "글 붙여넣기 → 등록 완료!")
+# 손님이 '일반 네이버 영수증 QR'로 착각하지 않게 맨 위 강조 문구 (점주가 시안 중 고르거나 직접 수정)
+SIGN_DEFAULT_HEADLINE = "영수증 찾지 마세요, QR 한 번이면 끝!\n영수증도 리뷰 글도 알아서 준비돼요"
+SIGN_TEMPLATES = ("glass", "neon", "minimal", "luxury")
+SIGN_SIZES = ("a6", "a5", "tablet", "square", "custom")
+
+
+def _sign_defaults(store, settings) -> dict:
+    return {
+        "template": "glass", "size": "a6", "customW": None, "customH": None, "color": "#03C75A",
+        "storeName": store.name,
+        "benefit": (settings.benefit_text if settings and settings.benefit_text else "리뷰 작성 시 음료 1잔 서비스"),
+        "headline": SIGN_DEFAULT_HEADLINE,
+        "steps": SIGN_DEFAULT_STEPS, "logo": None,
+        "qrMode": "store", "tableStart": 1, "tableEnd": 10, "tablePrefix": "테이블",
+    }
+
+
+def _clean_design(raw: dict, base: dict) -> dict:
+    """점주가 보낸 디자인 값 검사 (모르는 키·이상한 값은 기본값)"""
+    import re
+    d = dict(base)
+    def txt(k, n):
+        v = raw.get(k)
+        if isinstance(v, str):
+            d[k] = v[:n]
+    txt("storeName", 40); txt("benefit", 60); txt("steps", 400); txt("tablePrefix", 10); txt("headline", 90)
+    if raw.get("template") in SIGN_TEMPLATES:
+        d["template"] = raw["template"]
+    if raw.get("size") in SIGN_SIZES:
+        d["size"] = raw["size"]
+    if isinstance(raw.get("color"), str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", raw["color"]):
+        d["color"] = raw["color"]
+    for k, lo, hi in (("customW", 50, 500), ("customH", 50, 500), ("tableStart", 1, 999), ("tableEnd", 1, 999)):
+        try:
+            d[k] = max(lo, min(hi, int(raw[k]))) if raw.get(k) not in (None, "") else base[k]
+        except (TypeError, ValueError):
+            pass
+    if d["tableEnd"] < d["tableStart"]:
+        d["tableEnd"] = d["tableStart"]
+    d["tableEnd"] = min(d["tableEnd"], d["tableStart"] + 99)        # 한 번에 100장까지
+    if raw.get("qrMode") in ("store", "table"):
+        d["qrMode"] = raw["qrMode"]
+    logo = raw.get("logo")
+    if logo is None or (isinstance(logo, str) and len(logo) <= 700_000
+                        and re.match(r"^data:image/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+$", logo)):
+        d["logo"] = logo
+    return d
+
+
+async def _load_design(db, store, settings) -> dict:
+    import json
+    from app.models.options import SignDesign
+    base = _sign_defaults(store, settings)
+    row = await db.get(SignDesign, store.id)
+    if not row:
+        return base
+    try:
+        return _clean_design(json.loads(row.data or "{}"), base)
+    except ValueError:
+        return base
+
+
 @router.get("/tables", response_class=HTMLResponse, name="admin_tables")
 async def tables_page(request: Request, db: AsyncSession = Depends(get_db)):
+    """테이블 안내판 편집기 — 템플릿 4종·크기·색·문구·로고, 매장 공용 QR 또는 테이블별 QR"""
     store_data = await get_current_store(request, db)
     if not store_data:
         return RedirectResponse(url="/admin/login", status_code=302)
 
     store = store_data["store"]
-    settings = store_data["settings"]
-
+    design = await _load_design(db, store, store_data["settings"])
     return templates.TemplateResponse(
         request=request,
         name="admin/tables.html",
         context={
             "store": {"id": store.id, "name": store.name, "store_code": store.store_code},
             "active_menu": "tables",
-            "table_count": 10,
-            "start_number": 1,
-            "benefit_text": settings.benefit_text if settings else "리뷰 작성 시 음료 1잔 서비스"
+            "design": design,
+            "qr_base": f"{SIGN_BASE_URL}/t/{store.store_code}/",
         }
     )
+
+
+@router.post("/tables/design", name="admin_save_sign_design")
+async def save_sign_design(request: Request, db: AsyncSession = Depends(get_db)):
+    import json
+    from app.models.options import SignDesign
+    store_data = await get_current_store(request, db)
+    if not store_data:
+        return JSONResponse({"success": False, "error": "다시 로그인해 주세요"}, status_code=401)
+    store = store_data["store"]
+    try:
+        raw = await request.json()
+    except ValueError:
+        return JSONResponse({"success": False, "error": "잘못된 요청"}, status_code=400)
+    if not isinstance(raw, dict):
+        return JSONResponse({"success": False, "error": "잘못된 요청"}, status_code=400)
+    design = _clean_design(raw, _sign_defaults(store, store_data["settings"]))
+    row = await db.get(SignDesign, store.id)
+    if not row:
+        row = SignDesign(store_id=store.id)
+        db.add(row)
+    row.data = json.dumps(design, ensure_ascii=False)
+    await db.commit()
+    return {"success": True, "design": design}
+
+
+@router.get("/tables/qr.png", name="admin_sign_qr")
+async def sign_qr(request: Request, t: str = "0", db: AsyncSession = Depends(get_db)):
+    """이 매장 QR 이미지. t=0 은 매장 공용 QR, 숫자는 테이블 번호"""
+    store_data = await get_current_store(request, db)
+    if not store_data:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    if not (t.isdigit() and 0 <= int(t) <= 999):
+        raise HTTPException(status_code=400, detail="테이블 번호는 숫자로")
+    import qrcode
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=20, border=2)
+    qr.add_data(f"{SIGN_BASE_URL}/t/{store_data['store'].store_code}/{int(t)}")
+    qr.make(fit=True)
+    buf = io.BytesIO()
+    qr.make_image(fill_color="black", back_color="white").save(buf, format="PNG")   # 늘리지 않아 인쇄해도 선명
+    return Response(content=buf.getvalue(), media_type="image/png",
+                    headers={"Cache-Control": "private, max-age=3600"})
 
 
 @router.get("/tables/download", name="admin_download_tables")
