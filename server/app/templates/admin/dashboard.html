@@ -33,7 +33,17 @@
 .mr-empty { text-align: center; color: var(--gray-600); padding: 30px 0; line-height: 1.7; }
 .mr-empty small { color: var(--gray-500, #8b95a1); }
 @media (max-width: 1024px) { .dash-two { grid-template-columns: 1fr; } }
-@media (max-width: 600px) { .dash-range .nav { flex: 1; } .dash-range .lbl { min-width: 0; flex: 1; } }
+.dash-range .lbl span:first-child { white-space: nowrap; }
+.stat-card.primary .stat-change { color: rgba(255,255,255,.92) !important; }
+@media (max-width: 600px) {
+  .dash-range { gap: 8px; }
+  .dash-range .seg { flex: 1 1 100%; }
+  .dash-range .seg a { flex: 1; text-align: center; }
+  .dash-range .nav { flex: 1; }
+  .dash-range .pick { flex: 1; }
+  .dash-range .lbl { min-width: 0; padding: 0 6px; font-size: 14px; }
+  .dash-range .lbl .cal { display: none; }
+}
 </style>
 
 <div class="page-header">
