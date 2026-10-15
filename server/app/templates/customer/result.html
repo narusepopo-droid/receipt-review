@@ -77,9 +77,10 @@
 </button>
 
 <!-- 네이버에서 등록을 마치고 돌아온 손님 -->
+<!-- 처음엔 숨김: [시작]을 눌렀거나 이미 네이버에 다녀온 손님만 -->
 <a href="/t/{{ store.store_code }}/{{ table_no }}/complete" id="doneButton"
-   class="btn btn--secondary btn--large btn--full" style="margin-top: 12px; text-decoration: none; text-align: center;">
-    리뷰 등록 다 했어요
+   class="btn btn--secondary btn--large btn--full" style="margin-top: 12px; text-decoration: none; text-align: center;{{ '' if started else ' display: none;' }}">
+    네이버에 리뷰 등록 다 했어요 →
 </a>
 {% endif %}
 {% endblock %}

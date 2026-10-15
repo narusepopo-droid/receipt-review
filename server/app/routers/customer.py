@@ -178,7 +178,8 @@ async def result_page(
         request=request,
         name="customer/result.html",
         context={"store": store_data, "table_no": table_no, "review_text": review_text,
-                 "receipt_image_url": image_url, "no_receipt": no_receipt, "session_id": str(session.id)}
+                 "receipt_image_url": image_url, "no_receipt": no_receipt, "session_id": str(session.id),
+                 "started": bool(session.downloaded_at or session.redirected_at)}
     )
 
 
@@ -641,9 +642,10 @@ async def get_receipt_image(
     token: str,
     session_id: UUID = Query(...),
     receipt_id: UUID = Query(...),
+    dl: int = 0,
     db: AsyncSession = Depends(get_db)
 ):
-    """영수증 이미지 반환 (서명 토큰 검증)"""
+    """영수증 이미지 반환 (서명 토큰 검증). dl=1 이면 '내려받기'로 (앱 안 브라우저 저장용), 아니면 화면 표시용"""
     if not verify_image_token(token, session_id, receipt_id):
         raise HTTPException(status_code=403, detail="유효하지 않은 토큰입니다")
 
@@ -659,7 +661,8 @@ async def get_receipt_image(
     return FileResponse(
         receipt.image_path,
         media_type="image/png",
-        filename=f"receipt_{receipt_id}.png"
+        filename=f"receipt_{receipt_id}.png",
+        content_disposition_type="attachment" if dl else "inline",
     )
 
 

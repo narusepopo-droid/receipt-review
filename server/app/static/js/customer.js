@@ -206,6 +206,24 @@
             }
         },
 
+        // 서버 주소로 바로 내려받기 — 네이버앱·카톡 등 앱 안 브라우저는 페이지에서 만든 파일(blob)은 저장 못 하고
+        // 서버 주소 다운로드만 휴대폰 '다운로드'로 넘겨줌 (일반 크롬·삼성인터넷도 이 방식이 더 확실)
+        saveUrl(url, filename = 'receipt.png') {
+            try {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.rel = 'noopener';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                return 'downloaded';
+            } catch (e) {
+                console.error('Download failed:', e);
+                return false;
+            }
+        },
+
         async saveBlob(blob, filename = 'receipt.png') {
             const file = new File([blob], filename, { type: blob.type || 'image/png' });
 
@@ -560,6 +578,9 @@
         handleMainAction(e) {
             e.preventDefault();
             const mainBtn = document.getElementById('mainAction');
+            // 네이버로 가기 전에는 숨겨 둔 '리뷰 등록 다 했어요' — 시작을 누른 뒤에만 보임 (돌아왔을 때 누름)
+            const doneBtn = document.getElementById('doneButton');
+            if (doneBtn) doneBtn.style.display = '';
 
             // 두 번째 탭 (iOS: 저장 후 네이버로 이동)
             if (this.readyToGo) {
@@ -608,17 +629,30 @@
                 return;
             }
 
-            // Android / 기타: 다운로드 후 1초 뒤 네이버로
+            // Android / 기타: 서버 주소로 내려받기
+            const imgSrc = document.getElementById('receiptImage')?.getAttribute('src');
+            const inApp = BrowserDetect.isInApp || /; wv\)/.test(BrowserDetect.ua);
+            const name = `receipt_${Date.now()}.png`;
+            let saved = false;
+            if (imgSrc) saved = ImageSaver.saveUrl(imgSrc + (imgSrc.includes('?') ? '&' : '?') + 'dl=1', name);
+            else if (this.receiptBlob) saved = true, ImageSaver.saveBlob(this.receiptBlob, name);
+            if (saved) this.recordEvent('downloaded');
+
+            if (inApp) {
+                // 앱 안 브라우저: 저장됐는지 손님이 확인할 수 있게 두 번 누르기 (안 되면 길게 눌러 저장)
+                this.readyToGo = true;
+                mainBtn.disabled = false;
+                mainBtn.innerHTML = '<span>저장됐으면</span><strong>네이버로 이동</strong>';
+                mainBtn.classList.add('btn--pulse');
+                copyPromise.then((ok) => {
+                    Toast.show((ok ? '문구 복사 완료! ' : '') + '영수증이 저장 안 됐으면 위 영수증 사진을 길게 눌러 "이미지 저장"을 눌러 주세요', 'success', 5000);
+                });
+                return;
+            }
+
             mainBtn.disabled = true;
             mainBtn.innerHTML = '<span class="loading__spinner"></span> 저장 중...';
-            if (this.receiptBlob) {
-                ImageSaver.saveBlob(this.receiptBlob, `receipt_${Date.now()}.png`).then((r) => {
-                    if (r) this.recordEvent('downloaded');
-                    else Toast.show('영수증 이미지를 길게 눌러 저장해 주세요', 'info', 3000);
-                });
-            } else {
-                Toast.show('영수증 이미지를 길게 눌러 저장해 주세요', 'info', 3000);
-            }
+            if (!saved) Toast.show('영수증 이미지를 길게 눌러 저장해 주세요', 'info', 3000);
             copyPromise.then((ok) => {
                 Toast.show(ok ? '문구가 복사되었어요' : '이동 중...', ok ? 'success' : 'info', 1500);
             });
@@ -648,11 +682,12 @@
                     this.lastSavedText = data.generated_text;
                     Toast.show('새로운 문구가 생성되었습니다', 'success');
                 } else {
-                    const data = await response.json();
-                    throw new Error(data.detail || '문구 생성에 실패했습니다');
+                    let detail = '';
+                    try { detail = (await response.json()).detail; } catch (_) {}
+                    throw new Error(detail || '잠시 후 다시 눌러 주세요');
                 }
             } catch (e) {
-                Toast.show(e.message, 'error');
+                Toast.show(/token|JSON|fetch|network/i.test(e.message) ? '잠시 후 다시 눌러 주세요' : e.message, 'error');
             } finally {
                 regenerateBtn.disabled = false;
             }
