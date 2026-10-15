@@ -3,21 +3,24 @@
 {% block title %}테이블 안내판{% endblock %}
 
 {% block head %}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@300;400;500;700;900&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', path='admin/sign/sign.css') }}?v=3">
+<link rel="stylesheet" href="{{ url_for('static', path='admin/sign/sign.css') }}?v=10">
 <style>
-.sg-wrap { display: grid; grid-template-columns: 380px 1fr; gap: 24px; align-items: start; }
+.sg-wrap { display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 24px; align-items: start; }
 .sg-panel .card-body { padding: 20px; }
 .sg-sec { margin-bottom: 22px; }
-.sg-sec-title { font-size: 12px; font-weight: 700; color: var(--gray-600); margin-bottom: 10px; letter-spacing: .3px; }
+.sg-sec-title { font-size: 12px; font-weight: 700; color: var(--gray-600); margin-bottom: 10px; letter-spacing: .3px; display: flex; justify-content: space-between; align-items: center; }
 .sg-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .sg-opt { border: 1.5px solid var(--gray-200); background: #fff; border-radius: 10px; padding: 10px 8px; font-size: 13px; cursor: pointer; text-align: center; line-height: 1.35; color: var(--gray-800); }
 .sg-opt small { display: block; color: var(--gray-500); font-size: 11px; }
 .sg-opt.active { border-color: var(--primary); background: rgba(3,199,90,.08); font-weight: 700; }
-.sg-colors { display: flex; gap: 8px; flex-wrap: wrap; }
-.sg-color { width: 32px; height: 32px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1.5px var(--gray-200); cursor: pointer; }
+.sg-seg { display: flex; background: var(--gray-100); border-radius: 10px; padding: 3px; gap: 2px; }
+.sg-seg button { flex: 1; border: 0; background: none; padding: 8px 4px; border-radius: 8px; font-size: 13px; font-weight: 700; color: var(--gray-600); cursor: pointer; }
+.sg-seg button.active { background: #fff; color: #191f28; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.sg-seg button:disabled { opacity: .35; cursor: default; }
+.sg-colors { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sg-color { width: 30px; height: 30px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1.5px var(--gray-200); cursor: pointer; }
 .sg-color.active { box-shadow: 0 0 0 2.5px #111827; }
+.sg-colors input[type=color] { width: 34px; height: 34px; border: 0; background: none; padding: 0; cursor: pointer; }
 .sg-chips { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .sg-chip { text-align: left; border: 1px dashed var(--gray-300); background: var(--gray-100); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; cursor: pointer; color: var(--gray-700); }
 .sg-chip b { color: #111827; }
@@ -26,8 +29,23 @@
 .sg-row .form-input { flex: 1; min-width: 0; }
 .sg-logo { display: flex; gap: 10px; align-items: center; }
 .sg-logo img { height: 40px; max-width: 120px; object-fit: contain; border: 1px solid var(--gray-200); border-radius: 6px; background: #fff; }
-.sg-preview { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border-radius: 16px; padding: 32px; display: flex; flex-direction: column; align-items: center; gap: 14px; min-height: 640px; position: sticky; top: 16px; }
-.sg-preview-note { color: rgba(255,255,255,.7); font-size: 13px; text-align: center; }
+.sg-fontsel { width: 100%; }
+/* 디자인 한눈에 보기 */
+.sg-gal { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.sg-gal.land { grid-template-columns: repeat(2, 1fr); }
+.sg-th { border: 2px solid transparent; border-radius: 10px; padding: 4px; cursor: pointer; background: var(--gray-100); text-align: center; }
+.sg-th.active { border-color: var(--primary); background: rgba(3,199,90,.08); }
+.sg-th .box { position: relative; overflow: hidden; border-radius: 6px; margin: 0 auto; }
+.sg-th .box .sign { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
+.sg-th span { display: block; font-size: 11.5px; font-weight: 700; color: var(--gray-700); margin-top: 4px; }
+/* 미리보기 */
+.sg-preview { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border-radius: 16px; padding: 28px; display: flex; flex-direction: column; align-items: center; gap: 14px; position: sticky; top: 16px; }
+.sg-preview-note { color: rgba(255,255,255,.75); font-size: 13px; text-align: center; }
+.sg-stage { position: relative; width: 100%; display: flex; justify-content: center; }
+.sg-scaler { position: relative; }
+.sg-scaler .sign { position: absolute; left: 0; top: 0; transform-origin: 0 0; box-shadow: 0 25px 80px rgba(0,0,0,.45); }
+.sg-tablet-note { display: none; background: #fff8e1; border: 1px solid #ffe08a; color: #6b4e00; border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.6; }
+.sg-tablet-note b { color: #3d2c00; }
 .sg-actions { display: flex; flex-direction: column; gap: 8px; }
 .sg-actions .btn { width: 100%; justify-content: center; }
 .sg-status { font-size: 12.5px; color: var(--gray-600); min-height: 18px; text-align: center; }
@@ -35,24 +53,24 @@
 #sg-print { display: none; }
 @media (max-width: 1100px) {
     .sg-wrap { grid-template-columns: 1fr; }
-    .sg-preview { position: static; padding: 20px 8px; min-height: 0; overflow-x: auto; }
+    .sg-preview { position: static; padding: 18px 10px; }
 }
 @media print {
-    @page { margin: 0; }
     body * { visibility: hidden !important; }
     #sg-print, #sg-print * { visibility: visible !important; }
     #sg-print { display: block !important; position: absolute; left: 0; top: 0; }
-    #sg-print .sign { box-shadow: none !important; page-break-after: always; break-after: page; margin: 0; }
+    #sg-print .sign { page-break-after: always; break-after: page; margin: 0; }
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }
 </style>
+<style id="sg-page"></style>
 {% endblock %}
 
 {% block content %}
 <div class="page-header">
     <div>
         <h1 class="page-title">테이블 안내판</h1>
-        <p class="page-subtitle">디자인을 고르고 문구를 바꾼 뒤 인쇄하거나 이미지로 받으세요. 저장하면 다음에도 그대로 열립니다.</p>
+        <p class="page-subtitle">디자인 12종 · 테이블 안내판(인쇄) · 테이블오더 태블릿 대기화면(가로). 문구·글꼴·색을 바꾸고 인쇄하거나 고화질 이미지로 받으세요.</p>
     </div>
 </div>
 
@@ -60,23 +78,8 @@
     <div class="card sg-panel">
         <div class="card-body">
             <div class="sg-sec">
-                <div class="sg-sec-title">디자인</div>
-                <div class="sg-grid" id="sg-tpl">
-                    <button type="button" class="sg-opt" data-v="glass">✨ 글래스</button>
-                    <button type="button" class="sg-opt" data-v="neon">🔥 네온팝</button>
-                    <button type="button" class="sg-opt" data-v="minimal">◻️ 미니멀</button>
-                    <button type="button" class="sg-opt" data-v="luxury">👑 럭셔리</button>
-                </div>
-            </div>
-
-            <div class="sg-sec">
                 <div class="sg-sec-title">크기</div>
-                <div class="sg-grid" id="sg-size">
-                    <button type="button" class="sg-opt" data-v="a6"><b>A6</b><small>105×148mm · 테이블용</small></button>
-                    <button type="button" class="sg-opt" data-v="a5"><b>A5</b><small>148×210mm</small></button>
-                    <button type="button" class="sg-opt" data-v="tablet"><b>태블릿</b><small>테이블오더 대기화면</small></button>
-                    <button type="button" class="sg-opt" data-v="square"><b>정사각</b><small>100×100mm</small></button>
-                </div>
+                <div class="sg-grid" id="sg-size"></div>
                 <div class="sg-row" style="margin-top:8px;">
                     <input type="number" id="sg-cw" class="form-input" placeholder="가로 mm" min="50" max="500">
                     <span>×</span>
@@ -86,11 +89,44 @@
             </div>
 
             <div class="sg-sec">
+                <div class="sg-sec-title"><span>디자인 12종 <span style="font-weight:400">(지금 문구로 미리보기)</span></span></div>
+                <div class="sg-gal" id="sg-gal"></div>
+            </div>
+
+            <div class="sg-sec">
                 <div class="sg-sec-title">색상</div>
                 <div class="sg-colors" id="sg-color">
                     {% for c in ['#03C75A','#FF6B35','#5856D6','#FF2D55','#FF9500','#007AFF','#C9A962','#1a1a1a'] %}
                     <button type="button" class="sg-color" data-v="{{ c }}" style="background: {{ c }};" aria-label="{{ c }}"></button>
                     {% endfor %}
+                    <input type="color" id="sg-color-pick" title="직접 고르기">
+                </div>
+            </div>
+
+            <div class="sg-sec">
+                <div class="sg-sec-title">글꼴</div>
+                <div class="form-group">
+                    <label class="form-label">제목 글꼴 <span style="font-weight:400;color:var(--gray-500);">(매장명·강조 문구·혜택)</span></label>
+                    <select id="sg-tfont" class="form-input sg-fontsel"></select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">제목 굵기</label>
+                    <div class="sg-seg" id="sg-tweight">
+                        <button type="button" data-v="auto">기본</button><button type="button" data-v="regular">보통</button>
+                        <button type="button" data-v="bold">굵게</button><button type="button" data-v="black">아주 굵게</button>
+                    </div>
+                    <p class="form-hint" id="sg-weight-hint"></p>
+                </div>
+                <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">본문 글꼴 <span style="font-weight:400;color:var(--gray-500);">(안내 글)</span></label>
+                    <select id="sg-bfont" class="form-input sg-fontsel"></select>
+                </div>
+            </div>
+
+            <div class="sg-sec">
+                <div class="sg-sec-title">이용 안내 방식</div>
+                <div class="sg-seg" id="sg-guide">
+                    <button type="button" data-v="pic">그림 (자동 저장·붙여넣기)</button><button type="button" data-v="text">글 (단계)</button><button type="button" data-v="both">둘 다</button>
                 </div>
             </div>
 
@@ -111,7 +147,7 @@
                     <input type="text" id="sg-benefit" class="form-input" maxlength="60">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">이용 안내 <span style="font-weight:400;color:var(--gray-500);">(한 줄에 한 단계)</span></label>
+                    <label class="form-label">이용 안내 <span style="font-weight:400;color:var(--gray-500);">(한 줄에 한 단계 · '글' 방식에서 보여요)</span></label>
                     <textarea id="sg-steps" class="form-input" rows="5" maxlength="400"></textarea>
                 </div>
                 <div class="form-group">
@@ -149,20 +185,23 @@
 
             <div class="sg-actions">
                 <button type="button" class="btn btn-primary" id="sg-save"><i data-feather="save" style="width:16px;height:16px;"></i> 디자인 저장</button>
+                <button type="button" class="btn btn-secondary" id="sg-png"><i data-feather="image" style="width:16px;height:16px;"></i> 고화질 이미지(PNG) 받기</button>
                 <button type="button" class="btn btn-secondary" id="sg-print-btn"><i data-feather="printer" style="width:16px;height:16px;"></i> 인쇄 · PDF로 저장</button>
-                <button type="button" class="btn btn-secondary" id="sg-png"><i data-feather="image" style="width:16px;height:16px;"></i> 이미지(PNG) 받기</button>
                 <div class="sg-status" id="sg-status"></div>
             </div>
             <div class="sg-help" style="margin-top:14px;">
-                · 인쇄 창에서 <b>'PDF로 저장'</b>을 고르면 파일로 받을 수 있어요. 용지 크기는 안내판 크기(A6 등)로, 배율은 100%로 맞춰 주세요.<br>
-                · 태블릿 크기는 PNG로 받아 테이블오더 업체에 보내면 대기화면에 띄울 수 있어요.
+                · <b>인쇄용</b>(A6·A5·정사각)은 300dpi 고화질로 저장돼요. 인쇄 창에서 'PDF로 저장'을 고르면 파일로 받을 수 있어요(배율 100%).<br>
+                · <b>태블릿</b>은 가로 1920×1200(또는 1920×1080) 이미지로 받아 <b>테이블오더 담당자에게 "태블릿 대기화면으로 넣어 주세요"</b>라고 전달하면 됩니다.
             </div>
         </div>
     </div>
 
     <div class="sg-preview">
         <div class="sg-preview-note" id="sg-note">미리보기</div>
-        <div class="sign" id="sg-sign"></div>
+        <div class="sg-tablet-note" id="sg-tablet-note">
+            📱 <b>테이블오더 태블릿 대기화면용</b>이에요. [고화질 이미지(PNG) 받기]로 받은 파일을 <b>테이블오더 담당자에게 보내면서 "태블릿 대기화면으로 넣어 주세요"</b>라고 전달하면 됩니다.
+        </div>
+        <div class="sg-stage" id="sg-stage"><div class="sg-scaler" id="sg-scaler"><div class="sign" id="sg-sign"></div></div></div>
     </div>
 </div>
 
@@ -172,7 +211,7 @@
 {% block scripts %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="{{ url_for('static', path='admin/sign/sign-templates.js') }}?v=3"></script>
+<script src="{{ url_for('static', path='admin/sign/sign-templates.js') }}?v=10"></script>
 <script>
 (function () {
 const QR_URL = "{{ url_for('admin_sign_qr') }}";
@@ -186,9 +225,10 @@ const PRESETS = [
     "영수증리뷰 자동완성\n지갑 속 영수증, 안 꺼내셔도 돼요",
     "영수증리뷰 자동완성\n찍고, 붙이고, 끝! 영수증 요청 필요 없어요",
 ];
-const MM = 3.78;   // 1mm = 3.78px (96dpi) — 인쇄 시 실제 크기
 const $ = id => document.getElementById(id);
 let dirty = false;
+// 글꼴 (@font-face) 등록 — 실제로 쓰일 때만 내려받음
+const fs = document.createElement('style'); fs.textContent = signFontFace(); document.head.appendChild(fs);
 
 function mix(c1, c2, w) {
     const p = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16));
@@ -203,31 +243,77 @@ function tables() {
     for (let t = D.tableStart; t <= D.tableEnd; t++) a.push(t);
     return a;
 }
-function paint(el, t) {
-    el.className = `sign tpl-${D.template} size-${D.size === 'custom' ? 'a6' : D.size}`;
-    el.style.setProperty('--sign-accent', D.color);
-    // 이미지 저장 도구가 color-mix 를 못 읽어서 섞은 색을 미리 계산
-    el.style.setProperty('--sign-accent-d20', mix(D.color, '#000000', .2));
-    el.style.setProperty('--sign-accent-d15', mix(D.color, '#000000', .15));
-    el.style.setProperty('--sign-accent-l30', mix(D.color, '#ffffff', .3));
-    if (D.size === 'custom' && D.customW && D.customH) {
-        el.style.width = (D.customW * MM) + 'px';
-        el.style.minHeight = (D.customH * MM) + 'px';
-    } else { el.style.width = ''; el.style.minHeight = ''; }
-    el.innerHTML = window.signHTML(D, qrSrc(t), labelFor(t));
+function paint(el, t, d) {
+    d = d || D;
+    signApply(el, d, mix);
+    el.innerHTML = window.signHTML(d, qrSrc(t), labelFor(t));
+    return signSize(d);
 }
+async function fontsReady(d) {
+    d = d || D;
+    try {
+        await Promise.all(signFontsUsed(d).map(([k, w]) => document.fonts.load(`${w} 20px '${SIGN_FONTS[k].family}'`, '가A1')));
+        await document.fonts.ready;
+    } catch (e) {}
+}
+let fitTimer = null;
 function render() {
-    const ts = tables();
-    paint($('sg-sign'), ts[0]);
-    $('sg-note').textContent = D.qrMode === 'table'
-        ? `미리보기: ${labelFor(ts[0])} (전체 ${ts.length}장)`
-        : '미리보기: 매장 공용 QR (모든 테이블에 같은 안내판)';
+    const ts = tables(), el = $('sg-sign');
+    const z = paint(el, ts[0]);
+    // 미리보기 칸 폭에 맞게 줄여서 보여주기 (실제 크기는 그대로)
+    const avail = Math.min($('sg-stage').clientWidth || 600, z.land ? 980 : 520);
+    const k = Math.min(1, avail / z.w);
+    el.style.transform = `scale(${k})`;
+    $('sg-scaler').style.width = (z.w * k) + 'px'; $('sg-scaler').style.height = (z.h * k) + 'px';
+    const isTab = !!(SIGN_SIZES[D.size] && SIGN_SIZES[D.size].px);
+    $('sg-tablet-note').style.display = isTab ? 'block' : 'none';
+    $('sg-print-btn').style.display = isTab ? 'none' : '';
+    $('sg-note').textContent = (D.qrMode === 'table' ? `미리보기: ${labelFor(ts[0])} (전체 ${ts.length}장)` : '미리보기: 매장 공용 QR')
+        + ` · 저장 크기 ${Math.round(z.w * z.out)}×${Math.round(z.h * z.out)}px`;
+    clearTimeout(fitTimer);
+    fitTimer = setTimeout(() => fontsReady().then(() => { signFit(el); renderGallery(); }), 30);
+}
+// 디자인 12종 한눈에 보기 (지금 문구·색·크기로)
+function renderGallery() {
+    const g = $('sg-gal'); const z0 = signSize(D);
+    g.classList.toggle('land', z0.land);
+    const cur = signTemplateKey(D);
+    const W = z0.land ? 168 : 108;
+    if (g.children.length !== Object.keys(SIGN_TEMPLATES).length || g.dataset.k !== D.size + (D.customW || '') + (D.customH || '')) {
+        g.innerHTML = ''; g.dataset.k = D.size + (D.customW || '') + (D.customH || '');
+        for (const t in SIGN_TEMPLATES) {
+            const b = document.createElement('div'); b.className = 'sg-th'; b.dataset.v = t;
+            b.innerHTML = '<div class="box"><div class="sign"></div></div><span></span>';
+            b.querySelector('span').textContent = SIGN_TEMPLATES[t].name;
+            b.addEventListener('click', () => change(() => { D.template = t; D.titleFont = 'auto'; D.titleWeight = 'auto'; }));
+            g.appendChild(b);
+        }
+    }
+    [...g.children].forEach(b => {
+        const d = Object.assign({}, D, { template: b.dataset.v, titleFont: D.titleFont, titleWeight: D.titleWeight });
+        const el = b.querySelector('.sign'), z = paint(el, tables()[0], d), k = W / z.w;
+        el.style.transform = `scale(${k})`;
+        const box = b.querySelector('.box'); box.style.width = W + 'px'; box.style.height = (z.h * k) + 'px';
+        b.classList.toggle('active', b.dataset.v === cur);
+        fontsReady(d).then(() => signFit(el));
+    });
 }
 function activate(groupId, v) {
     document.querySelectorAll('#' + groupId + ' [data-v]').forEach(b => b.classList.toggle('active', b.dataset.v === v));
 }
+function fontOptions(sel, withAuto) {
+    sel.innerHTML = (withAuto ? '<option value="auto">디자인 기본 글꼴</option>' : '') +
+        Object.entries(SIGN_FONTS).map(([k, f]) => `<option value="${k}">${f.name}</option>`).join('');
+}
 function syncForm() {
-    activate('sg-tpl', D.template); activate('sg-size', D.size); activate('sg-color', D.color); activate('sg-qrmode', D.qrMode);
+    activate('sg-size', D.size); activate('sg-color', D.color); activate('sg-qrmode', D.qrMode);
+    activate('sg-tweight', D.titleWeight || 'auto'); activate('sg-guide', D.guide || 'pic');
+    $('sg-color-pick').value = D.color;
+    $('sg-tfont').value = SIGN_FONTS[D.titleFont] ? D.titleFont : 'auto';
+    $('sg-bfont').value = SIGN_FONTS[D.bodyFont] ? D.bodyFont : 'pretendard';
+    const fk = SIGN_FONTS[D.titleFont] ? D.titleFont : SIGN_TEMPLATES[signTemplateKey(D)].font;
+    const n = signWeightsOf(fk);
+    $('sg-weight-hint').textContent = n > 1 ? `${SIGN_FONTS[fk].name}: 굵기 ${n}단계` : `${SIGN_FONTS[fk].name}은(는) 굵기가 한 가지예요. '아주 굵게'를 고르면 테두리를 더해 더 굵게 보여요.`;
     $('sg-headline').value = D.headline || ''; $('sg-store').value = D.storeName || ''; $('sg-benefit').value = D.benefit || '';
     $('sg-steps').value = D.steps || ''; $('sg-ts').value = D.tableStart; $('sg-te').value = D.tableEnd; $('sg-tp').value = D.tablePrefix || '';
     $('sg-cw').value = D.customW || ''; $('sg-ch').value = D.customH || '';
@@ -235,13 +321,20 @@ function syncForm() {
     $('sg-logo-img').style.display = D.logo ? '' : 'none'; $('sg-logo-del').style.display = D.logo ? '' : 'none';
     if (D.logo) $('sg-logo-img').src = D.logo;
 }
-function change(fn) { fn(); dirty = true; $('sg-status').textContent = '바뀐 내용이 있어요 — 저장을 눌러 주세요'; syncForm(); render(); }
+function touched() { dirty = true; $('sg-status').textContent = '바뀐 내용이 있어요 — 저장을 눌러 주세요'; }
+function change(fn) { fn(); touched(); syncForm(); render(); }
 
-[['sg-tpl', 'template'], ['sg-size', 'size'], ['sg-color', 'color'], ['sg-qrmode', 'qrMode']].forEach(([g, k]) => {
+// 크기 버튼
+$('sg-size').innerHTML = Object.entries(SIGN_SIZES).map(([k, s]) => `<button type="button" class="sg-opt" data-v="${k}"><b>${s.name}</b><small>${s.sub}</small></button>`).join('');
+fontOptions($('sg-tfont'), true); fontOptions($('sg-bfont'), false);
+[['sg-size', 'size'], ['sg-color', 'color'], ['sg-qrmode', 'qrMode'], ['sg-tweight', 'titleWeight'], ['sg-guide', 'guide']].forEach(([g, k]) => {
     document.querySelectorAll('#' + g + ' [data-v]').forEach(b => b.addEventListener('click', () => change(() => { D[k] = b.dataset.v; })));
 });
+$('sg-color-pick').addEventListener('input', e => change(() => { D.color = e.target.value; }));
+$('sg-tfont').addEventListener('change', e => change(() => { D.titleFont = e.target.value; }));
+$('sg-bfont').addEventListener('change', e => change(() => { D.bodyFont = e.target.value; }));
 [['sg-headline', 'headline'], ['sg-store', 'storeName'], ['sg-benefit', 'benefit'], ['sg-steps', 'steps'], ['sg-tp', 'tablePrefix']].forEach(([id, k]) => {
-    $(id).addEventListener('input', e => { D[k] = e.target.value; dirty = true; $('sg-status').textContent = '바뀐 내용이 있어요 — 저장을 눌러 주세요'; render(); });
+    $(id).addEventListener('input', e => { D[k] = e.target.value; touched(); render(); });
 });
 function clampTables() {
     let s = parseInt($('sg-ts').value) || 1, e = parseInt($('sg-te').value) || s;
@@ -291,17 +384,8 @@ $('sg-save').addEventListener('click', async () => {
     } catch (err) { $('sg-status').textContent = '저장하지 못했어요: ' + err.message; }
 });
 
-// 이미지 저장 때 글꼴: 안내판에 실제로 쓰인 글자·굵기에 필요한 글꼴 조각만 받아 넣음 (전부 넣으면 수십 MB)
-const GFONT = document.querySelector('link[href*="fonts.googleapis.com/css2"]').href;
+// 이미지 저장: 안내판에 쓰인 글꼴 파일을 그대로 넣어 화면과 똑같이
 const fontCache = new Map();
-let gfontText = null;
-function inRange(cp, range) {
-    return range.split(',').some(r => {
-        const [a, b] = r.trim().replace('U+', '').split('-');
-        const lo = parseInt(a.replace(/\?/g, '0'), 16), hi = b ? parseInt(b, 16) : parseInt(a.replace(/\?/g, 'F'), 16);
-        return cp >= lo && cp <= hi;
-    });
-}
 async function toDataURL(url) {
     if (fontCache.has(url)) return fontCache.get(url);
     const blob = await (await fetch(url)).blob();
@@ -309,77 +393,67 @@ async function toDataURL(url) {
     fontCache.set(url, d);
     return d;
 }
-async function fontCSS(root) {
-    try {
-        if (gfontText === null) gfontText = await (await fetch(GFONT)).text();
-        const need = new Map();   // "family|weight" -> 글자 집합
-        root.querySelectorAll('*').forEach(el => {
-            const t = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('');
-            const st = getComputedStyle(el);
-            const fam = st.fontFamily.split(',')[0].replace(/["']/g, '').trim();
-            const key = fam + '|' + st.fontWeight;
-            if (!need.has(key)) need.set(key, new Set());
-            for (const ch of t + '0123456789') need.get(key).add(ch.codePointAt(0));
-        });
-        const out = [];
-        for (const block of gfontText.match(/@font-face\s*{[^}]*}/g) || []) {
-            const fam = (block.match(/font-family:\s*'([^']+)'/) || [])[1];
-            const w = (block.match(/font-weight:\s*(\d+)/) || [])[1];
-            const range = (block.match(/unicode-range:\s*([^;]+);/) || [])[1];
-            const url = (block.match(/url\(([^)]+)\)/) || [])[1];
-            const cps = need.get(fam + '|' + w);
-            if (!url || !cps) continue;
-            if (range && ![...cps].some(cp => inRange(cp, range))) continue;
-            out.push(block.replace(url, await toDataURL(url)));
-        }
-        return out.join(' ');
-    } catch (e) { return ''; }
+async function fontCSS() {
+    const seen = new Set(), out = [];
+    for (const [k, w] of signFontsUsed(D)) {
+        const url = signFontFile(k, w), f = SIGN_FONTS[k];
+        if (!url || seen.has(k + w)) continue; seen.add(k + w);
+        try { out.push(`@font-face{font-family:'${f.family}';src:url(${await toDataURL(url)});font-weight:${f.variable ? '100 900' : w}}`); } catch (e) {}
+    }
+    return out.join('\n');
 }
-
 function waitImages(root) {
     return Promise.all([...root.querySelectorAll('img')].map(i => i.complete && i.naturalWidth ? 0 :
         new Promise(r => { i.onload = i.onerror = r; })));
 }
 async function buildAll() {
     const box = $('sg-print'); box.innerHTML = '';
+    box.style.display = 'block'; box.style.position = 'fixed'; box.style.left = '-20000px'; box.style.top = '0';
     for (const t of tables()) { const el = document.createElement('div'); paint(el, t); el.dataset.t = t; box.appendChild(el); }
-    await waitImages(box);
-    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    await waitImages(box); await fontsReady();
+    [...box.children].forEach(signFit);
     return box;
 }
+function resetBox(box) { box.removeAttribute('style'); box.innerHTML = ''; }
 $('sg-print-btn').addEventListener('click', async () => {
     $('sg-status').textContent = '인쇄 준비 중…';
-    await buildAll();
+    const z = signSize(D), w = D.size === 'custom' ? D.customW : (SIGN_SIZES[D.size].mm || [])[0], h = D.size === 'custom' ? D.customH : (SIGN_SIZES[D.size].mm || [])[1];
+    $('sg-page').textContent = `@page { size: ${w}mm ${h}mm; margin: 0; }`;
+    const box = await buildAll();
+    box.removeAttribute('style');
     $('sg-status').textContent = '';
     window.print();
+    setTimeout(() => resetBox(box), 500);
 });
 $('sg-png').addEventListener('click', async () => {
     if (!window.htmlToImage) { alert('이미지 도구를 불러오지 못했어요. 새로고침 후 다시 시도해 주세요.'); return; }
+    $('sg-status').textContent = '고화질 이미지 준비 중…';
     const box = await buildAll();
-    box.style.display = 'block'; box.style.position = 'fixed'; box.style.left = '-10000px'; box.style.top = '0';
-    const signs = [...box.children];
+    const signs = [...box.children], z = signSize(D);
     const name = (D.storeName || '안내판').replace(/[\\/:*?"<>|]/g, '');
+    const kind = SIGN_SIZES[D.size] && SIGN_SIZES[D.size].px ? '태블릿대기화면' : '안내판';
     try {
+        const css = await fontCSS();
         const shots = [];
         for (let i = 0; i < signs.length; i++) {
             $('sg-status').textContent = `이미지 만드는 중… ${i + 1}/${signs.length}`;
-            const css = await fontCSS(signs[i]);
-            shots.push(await htmlToImage.toBlob(signs[i], { pixelRatio: 4, fontEmbedCSS: css, skipFonts: !css }));
+            shots.push(await htmlToImage.toBlob(signs[i], { pixelRatio: z.out, fontEmbedCSS: css, skipFonts: !css, width: z.w, height: z.h }));
         }
         let blob, file;
-        if (shots.length === 1) { blob = shots[0]; file = `${name}_안내판.png`; }
+        if (shots.length === 1) { blob = shots[0]; file = `${name}_${kind}_${Math.round(z.w * z.out)}x${Math.round(z.h * z.out)}.png`; }
         else {
             const zip = new JSZip();
             shots.forEach((b, i) => zip.file(`${name}_${labelFor(signs[i].dataset.t) || i + 1}.png`, b));
-            blob = await zip.generateAsync({ type: 'blob' }); file = `${name}_안내판_${shots.length}장.zip`;
+            blob = await zip.generateAsync({ type: 'blob' }); file = `${name}_${kind}_${shots.length}장.zip`;
         }
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob); a.download = file; document.body.appendChild(a); a.click(); a.remove();
-        $('sg-status').textContent = '받기 완료 ✓';
+        $('sg-status').textContent = kind === '태블릿대기화면' ? '받기 완료 ✓ — 테이블오더 담당자에게 "태블릿 대기화면으로 넣어 주세요"라고 보내 주세요' : '받기 완료 ✓';
     } catch (err) { $('sg-status').textContent = '이미지를 만들지 못했어요: ' + (err && err.message || err); }
-    finally { box.removeAttribute('style'); box.innerHTML = ''; }
+    finally { resetBox(box); }
 });
 window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('resize', () => { clearTimeout(window.__sgr); window.__sgr = setTimeout(render, 150); });
 
 syncForm(); render();
 })();

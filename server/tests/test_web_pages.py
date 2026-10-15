@@ -528,7 +528,7 @@ async def test_sign_editor_design_and_qr(web):
            "tableStart": 5, "tableEnd": 400, "logo": "javascript:alert(1)", "size": "a5", "extra": 1}
     r = await web.post("/admin/tables/design", json=bad)
     d = r.json()["design"]
-    assert d["template"] == "glass" and d["color"] == "#03C75A" and d["size"] == "a5"
+    assert d["template"] == "clean" and d["color"] == "#03C75A" and d["size"] == "a5"
     assert d["tableStart"] == 5 and d["tableEnd"] == 104 and d["logo"] is None and "extra" not in d
     assert d["headline"].startswith("<script>")          # 글자 그대로 저장, 화면에서 이스케이프(sign-templates.js)
     page = (await web.get("/admin/tables")).text

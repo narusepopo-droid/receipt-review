@@ -850,13 +850,15 @@ SIGN_DEFAULT_STEPS = ("음식/매장 사진 2장 먼저 촬영\n"
                       "글 붙여넣기 → 등록 완료!")
 # 손님이 '일반 네이버 영수증 QR'로 착각하지 않게 맨 위 강조 문구 (점주가 시안 중 고르거나 직접 수정)
 SIGN_DEFAULT_HEADLINE = "영수증리뷰 자동완성\n영수증 요청 없이 QR 한 번이면 끝!!"   # 핵심 키워드 '영수증리뷰 자동완성' (요청자 결정)
-SIGN_TEMPLATES = ("glass", "neon", "minimal", "luxury")
-SIGN_SIZES = ("a6", "a5", "tablet", "square", "custom")
+SIGN_TEMPLATES = ("clean", "bold", "midnight", "gradient", "luxury", "pop", "kraft", "receipt", "coupon", "split",
+                  "minimal", "glass", "neon")
+SIGN_SIZES = ("a6", "a5", "tablet", "tablet169", "square", "custom")
 
 
 def _sign_defaults(store, settings) -> dict:
     return {
-        "template": "glass", "size": "a6", "customW": None, "customH": None, "color": "#03C75A",
+        "template": "clean", "size": "a6", "customW": None, "customH": None, "color": "#03C75A",
+        "titleFont": "auto", "titleWeight": "auto", "bodyFont": "pretendard", "guide": "pic",
         "storeName": store.name,
         "benefit": (settings.benefit_text if settings and settings.benefit_text else "리뷰 작성 시 음료 1잔 서비스"),
         "headline": SIGN_DEFAULT_HEADLINE,
@@ -888,6 +890,13 @@ def _clean_design(raw: dict, base: dict) -> dict:
     if d["tableEnd"] < d["tableStart"]:
         d["tableEnd"] = d["tableStart"]
     d["tableEnd"] = min(d["tableEnd"], d["tableStart"] + 99)        # 한 번에 100장까지
+    for k in ("titleFont", "bodyFont"):
+        if isinstance(raw.get(k), str) and re.fullmatch(r"[a-z0-9]{1,20}", raw[k]):
+            d[k] = raw[k]
+    if raw.get("titleWeight") in ("auto", "regular", "bold", "black"):
+        d["titleWeight"] = raw["titleWeight"]
+    if raw.get("guide") in ("pic", "text", "both"):
+        d["guide"] = raw["guide"]
     if raw.get("qrMode") in ("store", "table"):
         d["qrMode"] = raw["qrMode"]
     logo = raw.get("logo")
