@@ -58,7 +58,7 @@
                 </a>
                 <a href="{{ url_for('admin_tables') }}" class="nav-item {% if active_menu == 'tables' %}active{% endif %}">
                     <i data-feather="grid"></i>
-                    <span>테이블 QR리뷰 출력</span>
+                    <span>테이블용 QR이미지 출력</span>
                 </a>
                 {% if (request.session.get('owner_store_ids') or [])|length > 1 %}
                 <a href="{{ url_for('admin_choose_store') }}" class="nav-item">
