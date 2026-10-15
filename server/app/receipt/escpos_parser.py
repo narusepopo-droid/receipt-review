@@ -444,6 +444,71 @@ class ESCPOSParser:
         if table:
             result.table_no = table
 
+        result.items = extract_items(lines)
+
+
+# ───────────── 품목(메뉴) 읽기 ─────────────
+# '상품명 단가 수량 금액' 머리줄 아래 ~ 합계 줄 전까지. 포스마다 열 순서·띄어쓰기가 달라 줄 끝 숫자 묶음으로 판단
+_ITEM_HEAD = re.compile(r"(상품명|품명|품목|메뉴명?|MENU|ITEM)", re.IGNORECASE)
+_ITEM_END = re.compile(r"(합계|총액|총금액|소계|과세|면세|부가세|받을금액|결제금액|TOTAL|SUBTOTAL)", re.IGNORECASE)
+_NUM = r"-?\d[\d,]*"
+_OPTION_MARK = "▶▷►>ㄴ└+*-·•"
+
+
+def _to_int(v: str) -> Optional[int]:
+    try:
+        return int(v.replace(",", ""))
+    except ValueError:
+        return None
+
+
+def extract_items(lines: list[str]) -> list[dict]:
+    """[{"name", "qty", "unit", "price"(줄 금액), "option"(세트 구성·추가 선택 줄)}]"""
+    start = None
+    for i, l in enumerate(lines):
+        c = re.sub(r"\s+", "", l)
+        if _ITEM_HEAD.search(c) and re.search(r"(수량|금액|단가|QTY|AMT|PRICE)", c, re.IGNORECASE):
+            start = i + 1
+            break
+    if start is None:
+        return []
+    items, pending = [], None
+    for l in lines[start:start + 80]:
+        s = l.strip()
+        c = re.sub(r"\s+", "", s)
+        if not c or re.fullmatch(r"[-=─━_.*]+", c):
+            if items:          # 품목 뒤 구분선 → 끝
+                break
+            continue
+        if _ITEM_END.search(c):
+            break
+        # 이름 + 숫자 2~3개 (단가 수량 금액 / 수량 금액 / 단가 수량 금액 순서 다른 포스)
+        m = re.match(rf"^(.*?\S)\s+({_NUM})\s+({_NUM})(?:\s+({_NUM}))?\s*$", s)
+        if not m and pending is None and not re.search(r"\d\s*$", s):
+            pending = s           # 이름만 있는 줄 (숫자는 다음 줄)
+            continue
+        if not m and pending is not None:
+            m = re.match(rf"^()({_NUM})\s+({_NUM})(?:\s+({_NUM}))?\s*$", s)
+        if not m:
+            pending = None
+            continue
+        name = (pending if (pending is not None and not m.group(1)) else m.group(1)).strip()
+        pending = None
+        nums = [_to_int(g) for g in m.groups()[1:] if g is not None]
+        if len(nums) == 3:
+            unit, qty, price = nums
+        else:
+            qty, price = nums
+            unit = None
+        if qty is None or price is None or not (0 < abs(qty) < 1000):
+            continue
+        option = name[:1] in _OPTION_MARK
+        name = name.lstrip(_OPTION_MARK + " ").strip()
+        if not name or re.fullmatch(r"[\d,\s]+", name):
+            continue
+        items.append({"name": name[:40], "qty": qty, "unit": unit, "price": price, "option": option})
+    return items
+
 
 def parse_escpos(data: bytes) -> ParsedReceipt:
     parser = ESCPOSParser()

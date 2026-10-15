@@ -270,7 +270,8 @@ async def upload_receipt(
         paid_at=paid_at or captured_at,
         amount=parsed.amount,
         card_issuer=parsed.card_issuer,
-        items=[{"name": item.get("name"), "qty": item.get("qty"), "price": item.get("price")}
+        items=[{"name": item.get("name"), "qty": item.get("qty"), "price": item.get("price"),
+                "unit": item.get("unit"), "option": bool(item.get("option"))}
                for item in parsed.items] if parsed.items else None,
         raw_text=masked.raw_text,
         raw_bytes_path=raw_path,

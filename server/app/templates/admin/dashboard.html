@@ -3,49 +3,105 @@
 {% block title %}대시보드{% endblock %}
 
 {% block content %}
+<style>
+.dash-range { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: -8px 0 20px; }
+.dash-range .seg { display: inline-flex; background: var(--gray-100); border-radius: 10px; padding: 3px; }
+.dash-range .seg a { padding: 7px 14px; border-radius: 8px; font-size: 14px; font-weight: 700; color: var(--gray-600); text-decoration: none; }
+.dash-range .seg a.on { background: #fff; color: var(--gray-900, #191f28); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.dash-range .nav { display: inline-flex; align-items: center; background: #fff; border: 1px solid var(--gray-200, #e5e8eb); border-radius: 10px; }
+.dash-range .arr { width: 40px; height: 40px; display: grid; place-items: center; font-size: 22px; font-weight: 700; color: var(--gray-700, #4e5968); text-decoration: none; }
+.dash-range .arr:hover { background: var(--gray-100); }
+.dash-range .arr.off { color: var(--gray-300, #d1d6db); cursor: default; }
+.dash-range .pick { margin: 0; }
+.dash-range .lbl { position: relative; display: block; padding: 0 14px; min-width: 160px; text-align: center; font-weight: 800; font-size: 15px; cursor: pointer; line-height: 40px; border-left: 1px solid var(--gray-200, #e5e8eb); border-right: 1px solid var(--gray-200, #e5e8eb); }
+.dash-range .lbl .cal { font-size: 13px; margin-left: 6px; opacity: .55; }
+.dash-range .lbl input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.dash-range .lbl input::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
+.dash-two { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+.menu-rank { display: flex; flex-direction: column; gap: 12px; }
+.mr-row { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 12px; }
+.mr-no { width: 26px; height: 26px; border-radius: 8px; background: var(--gray-100); display: grid; place-items: center; font-size: 13px; font-weight: 800; color: var(--gray-600); }
+.mr-row.top .mr-no { background: var(--primary, #03C75A); color: #fff; }
+.mr-name { font-weight: 700; font-size: 14px; margin-bottom: 5px; word-break: break-all; }
+.mr-bar { height: 8px; background: var(--gray-100); border-radius: 99px; overflow: hidden; }
+.mr-bar i { display: block; height: 100%; background: var(--primary, #03C75A); border-radius: 99px; opacity: .85; }
+.mr-qty { text-align: right; font-weight: 800; font-size: 15px; white-space: nowrap; }
+.mr-qty small { display: block; font-size: 12px; font-weight: 500; color: var(--gray-600); }
+.mr-opts { margin-top: 18px; border-top: 1px solid var(--gray-100); padding-top: 12px; }
+.mr-opts summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--gray-600); }
+.mr-note { margin-top: 16px; font-size: 12px; color: var(--gray-500, #8b95a1); }
+.mr-empty { text-align: center; color: var(--gray-600); padding: 30px 0; line-height: 1.7; }
+.mr-empty small { color: var(--gray-500, #8b95a1); }
+@media (max-width: 1024px) { .dash-two { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .dash-range .nav { flex: 1; } .dash-range .lbl { min-width: 0; flex: 1; } }
+</style>
+
 <div class="page-header">
     <div>
         <h1 class="page-title">대시보드</h1>
-        <p class="page-subtitle">오늘의 리뷰 현황을 확인하세요</p>
+        <p class="page-subtitle">{{ range.label }}{{ ' (진행 중)' if range.is_current else '' }} 현황입니다</p>
     </div>
-    <div>
-        <span style="font-size: 14px; color: var(--gray-600);">
-            {{ today.strftime('%Y년 %m월 %d일') if today else '2026년 10월 7일' }}
-        </span>
+</div>
+
+<!-- 날짜 고르기: 일·주·월, 이전·다음, 날짜 지정 -->
+<div class="dash-range">
+    <div class="seg">
+        {% for k, t in [('day', '일별'), ('week', '주별'), ('month', '월별')] %}
+        <a href="?p={{ k }}&d={{ range.date }}" class="{{ 'on' if range.p == k }}">{{ t }}</a>
+        {% endfor %}
     </div>
+    <div class="nav">
+        <a class="arr" href="?p={{ range.p }}&d={{ range.prev }}" title="이전" aria-label="이전">‹</a>
+        <form method="get" class="pick">
+            <input type="hidden" name="p" value="{{ range.p }}">
+            <label class="lbl" title="눌러서 날짜 고르기">
+                <span>{{ range.label }}</span><span class="cal">📅</span>
+                {% if range.p == 'month' %}
+                <input type="month" name="d" value="{{ range.month }}" max="{{ range.today[:7] }}" onchange="this.form.submit()">
+                {% else %}
+                <input type="date" name="d" value="{{ range.date }}" max="{{ range.today }}" onchange="this.form.submit()">
+                {% endif %}
+            </label>
+        </form>
+        {% if range.next %}<a class="arr" href="?p={{ range.p }}&d={{ range.next }}" title="다음" aria-label="다음">›</a>
+        {% else %}<span class="arr off">›</span>{% endif %}
+    </div>
+    {% if not range.is_current %}<a class="btn btn-sm btn-outline" href="?p={{ range.p }}">{{ '오늘' if range.p == 'day' else '이번 주' if range.p == 'week' else '이번 달' }}</a>{% endif %}
 </div>
 
 <!-- Stats Grid -->
 <div class="stats-grid">
     <div class="stat-card primary">
-        <div class="stat-label">오늘 참여</div>
-        <div class="stat-value">{{ stats.today_sessions | default(0) }}명</div>
-        {% set chg = stats.sessions_change | default(0) %}
+        <div class="stat-label">손님 참여</div>
+        <div class="stat-value">{{ stats.sessions }}명</div>
+        {% set chg = stats.sessions_change %}
         <div class="stat-change {{ 'up' if chg >= 0 else 'down' }}">
             <i data-feather="{{ 'trending-up' if chg >= 0 else 'trending-down' }}" style="width: 14px; height: 14px;"></i>
-            어제 대비 {{ '+' if chg >= 0 }}{{ chg }}명
+            {{ range.span_prev }} 대비 {{ '+' if chg >= 0 }}{{ chg }}명
         </div>
     </div>
 
     <div class="stat-card">
-        <div class="stat-label">사용 가능 영수증</div>
-        <div class="stat-value">{{ stats.available_receipts | default(0) }}장</div>
-        {% if (stats.available_receipts | default(0)) < 5 %}
+        <div class="stat-label">리뷰 완료</div>
+        <div class="stat-value">{{ stats.completed }}건</div>
+        <div class="stat-change" style="color: var(--gray-600);">혜택 지급 {{ stats.benefits_given }}건</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">영수증 매출</div>
+        <div class="stat-value">{{ "{:,}".format(stats.sales_total) }}원</div>
+        <div class="stat-change" style="color: var(--gray-600);">출력된 영수증 {{ stats.receipts }}장 기준</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-label">지금 사용 가능 영수증</div>
+        <div class="stat-value">{{ stats.available_receipts }}장</div>
+        {% if stats.available_receipts < 5 %}
         <div class="stat-change down" title="영수증리뷰는 프린터로 출력된 영수증만 씁니다">
             <i data-feather="alert-circle" style="width: 14px; height: 14px;"></i>
             {{ '영수증 없음' if not stats.available_receipts else '부족 주의' }} · 포스에서 고객용 영수증을 '항상 출력'으로 해 주세요
         </div>
         {% endif %}
-    </div>
-
-    <div class="stat-card">
-        <div class="stat-label">리뷰 완료</div>
-        <div class="stat-value">{{ stats.completed | default(0) }}건</div>
-    </div>
-
-    <div class="stat-card">
-        <div class="stat-label">혜택 지급</div>
-        <div class="stat-value">{{ stats.benefits_given | default(0) }}건</div>
     </div>
 </div>
 {% if verified_7d is not none %}
@@ -58,34 +114,45 @@
 </div>
 {% endif %}
 
-<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
-    <!-- Funnel Chart -->
+<div class="dash-two">
+    <!-- 메뉴별 판매량 -->
     <div class="card">
         <div class="card-header">
-            <h3 class="card-title">단계별 전환율</h3>
+            <h3 class="card-title">메뉴별 판매량</h3>
+            <span style="font-size: 13px; color: var(--gray-600);">{{ range.label }} · 많이 팔린 순</span>
         </div>
         <div class="card-body">
-            <div class="funnel-chart">
-                {% set funnel = [
-                    ('번호 입력', stats.step_phone | default(100), 100),
-                    ('키워드 선택', stats.step_keyword | default(95), 95),
-                    ('영수증 배정', stats.step_assign | default(90), 90),
-                    ('이미지 저장', stats.step_download | default(85), 85),
-                    ('네이버 이동', stats.step_redirect | default(80), 80),
-                    ('리뷰 완료', stats.step_complete | default(70), 70),
-                    ('혜택 지급', stats.step_benefit | default(65), 65)
-                ] %}
-                {% for name, value, width in funnel %}
-                <div class="funnel-step">
-                    <div class="funnel-bar-container">
-                        <div class="funnel-bar" style="width: {{ width }}%; opacity: {{ 0.4 + (loop.revindex / 10) }};">
-                            {{ name }}
-                        </div>
+            {% if menus %}
+            <div class="menu-rank">
+                {% for m in menus %}
+                <div class="mr-row{{ ' top' if m.rank <= 3 }}">
+                    <span class="mr-no">{{ m.rank }}</span>
+                    <div class="mr-main">
+                        <div class="mr-name">{{ m.name }}</div>
+                        <div class="mr-bar"><i style="width: {{ m.pct }}%"></i></div>
                     </div>
-                    <div class="funnel-value">{{ value }}명</div>
+                    <div class="mr-qty">{{ m.qty }}개<small>{{ "{:,}".format(m.amount) }}원</small></div>
                 </div>
                 {% endfor %}
             </div>
+            {% if options %}
+            <details class="mr-opts">
+                <summary>세트 구성 · 추가 선택 ({{ options | length }}가지)</summary>
+                <div class="menu-rank" style="margin-top: 10px;">
+                    {% for m in options %}
+                    <div class="mr-row">
+                        <span class="mr-no">{{ m.rank }}</span>
+                        <div class="mr-main"><div class="mr-name">{{ m.name }}</div><div class="mr-bar"><i style="width: {{ m.pct }}%"></i></div></div>
+                        <div class="mr-qty">{{ m.qty }}개{% if m.amount %}<small>{{ "{:,}".format(m.amount) }}원</small>{% endif %}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </details>
+            {% endif %}
+            <p class="mr-note">포스에서 출력된 영수증의 품목으로 셉니다. 영수증을 출력하지 않은 결제는 빠져요.</p>
+            {% else %}
+            <div class="mr-empty">이 기간에 메뉴가 읽힌 영수증이 없어요.<br><small>10월 15일 이후 들어온 영수증부터 메뉴가 쌓입니다.</small></div>
+            {% endif %}
         </div>
     </div>
 
@@ -102,7 +169,7 @@
                         {{ '연결됨' if agent_online else '연결 안 됨' }}
                     </div>
                     <div style="font-size: 13px; color: var(--gray-600);">
-                        마지막 수신: {{ last_heartbeat | default('방금 전') }}
+                        마지막 수신: {{ last_heartbeat }}
                     </div>
                 </div>
             </div>
@@ -110,19 +177,19 @@
             <div style="padding: 16px; background: var(--gray-100); border-radius: 8px;">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
                     <span style="color: var(--gray-600); font-size: 13px;">버전</span>
-                    <span style="font-weight: 600; font-size: 13px;">{{ agent_version | default('1.0.0') }}</span>
+                    <span style="font-weight: 600; font-size: 13px;">{{ agent_version }}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
                     <span style="color: var(--gray-600); font-size: 13px;">캡처 방식</span>
-                    <span style="font-weight: 600; font-size: 13px;">{{ capture_mode | default('시리얼(COM)') }}</span>
+                    <span style="font-weight: 600; font-size: 13px;">{{ capture_mode }}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
                     <span style="color: var(--gray-600); font-size: 13px;">대기 큐</span>
-                    <span style="font-weight: 600; font-size: 13px;">{{ queue_length | default(0) }}건</span>
+                    <span style="font-weight: 600; font-size: 13px;">{{ queue_length }}건</span>
                 </div>
                 <div style="display: flex; justify-content: space-between;">
                     <span style="color: var(--gray-600); font-size: 13px;">오늘 수신</span>
-                    <span style="font-weight: 600; font-size: 13px;">{{ today_receipts | default(0) }}건</span>
+                    <span style="font-weight: 600; font-size: 13px;">{{ today_receipts }}건</span>
                 </div>
             </div>
         </div>
@@ -133,7 +200,7 @@
 <div class="card" style="margin-top: 24px;">
     <div class="card-header">
         <h3 class="card-title">최근 활동</h3>
-        <a href="#" class="btn btn-sm btn-outline">전체 보기</a>
+        <span style="font-size: 13px; color: var(--gray-600);">{{ range.label }}</span>
     </div>
     <div class="card-body" style="padding: 0;">
         <div class="table-wrapper">
@@ -147,7 +214,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for activity in recent_activities | default([]) %}
+                    {% for activity in recent_activities %}
                     <tr>
                         <td>{{ activity.time }}</td>
                         <td>{{ activity.phone_masked }}</td>
@@ -161,7 +228,7 @@
                     {% else %}
                     <tr>
                         <td colspan="4" style="text-align: center; color: var(--gray-500); padding: 32px;">
-                            오늘 활동이 없습니다
+                            이 기간에 활동이 없습니다
                         </td>
                     </tr>
                     {% endfor %}
@@ -174,9 +241,7 @@
 
 {% block scripts %}
 <script>
-    // Auto-refresh every 30 seconds
-    setTimeout(() => {
-        location.reload();
-    }, 30000);
+    // 지금 기간을 보고 있을 때만 30초마다 새로고침 (지난 날짜를 보고 있으면 그대로)
+    {% if range.is_current %}setTimeout(() => location.reload(), 30000);{% endif %}
 </script>
 {% endblock %}

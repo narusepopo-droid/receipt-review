@@ -251,23 +251,27 @@ namespace ReceiptTap.App
             logBtn.Click += (s, e) => OpenLogs();
             Controls.Add(logBtn);
 
+            // 관리자 페이지: 왼쪽 아래 크게 (로그 보기 왼쪽) — 다시 로그인 없이 점주 화면
+            const string adminText = "관리자 페이지 열기  ›\n매장 통계 · 메뉴 판매량 · 설정 (로그인 없이 바로)";
             var adminBtn = new Button
             {
-                Text = "관리자 페이지 열기",
-                Location = new Point(574, 548),
-                Size = new Size(152, 34),
+                Text = adminText,
+                Location = new Point(16, 528),
+                Size = new Size(420, 58),
                 BackColor = Color.FromArgb(3, 199, 90),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                Font = BoldFont
+                Font = new Font("맑은 고딕", 11f, FontStyle.Bold),
+                Cursor = Cursors.Hand
             };
             adminBtn.FlatAppearance.BorderSize = 0;
+            adminBtn.FlatAppearance.MouseOverBackColor = Color.FromArgb(2, 165, 75);
             adminBtn.Click += async (s, e) =>
             {
                 adminBtn.Enabled = false;
-                adminBtn.Text = "여는 중...";
+                adminBtn.Text = "관리자 페이지 여는 중...";
                 await CaptureService.OpenAdminPageAsync(_config);
-                adminBtn.Text = "관리자 페이지 열기";
+                adminBtn.Text = adminText;
                 adminBtn.Enabled = true;
             };
             Controls.Add(adminBtn);

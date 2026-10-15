@@ -247,185 +247,87 @@ async def logout(request: Request):
 # ============ Dashboard ============
 
 @router.get("/dashboard", response_class=HTMLResponse, name="admin_dashboard")
-async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
+async def dashboard(request: Request, p: str = "day", d: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    """대시보드 — 맨 위 날짜에서 일·주·월 선택, 화살표로 이전·다음, 날짜 지정.
+    숫자·메뉴별 판매량·최근 활동이 모두 고른 기간 기준 (영업일 = 05:00 ~ 다음 날 05:00, 한국시간)"""
     store_data = await get_current_store(request, db)
     if not store_data:
         return RedirectResponse(url="/admin/login", status_code=302)
 
     store = store_data["store"]
     settings = store_data["settings"]
+    rng = dashboard_range(p, d, settings.business_day_cutoff if settings else "05:00")
+    # DB 비교는 UTC 로 (SQLite 시험 DB 는 글자로 비교)
+    start, end, prev_start, prev_end = (rng[k].astimezone(timezone.utc) for k in ("start", "end", "prev_start", "prev_end"))
+    S, R = ReviewSession, Receipt
 
-    # 오늘 날짜 (영업일 기준)
-    # 한국 시간 기준 (UTC 로 계산하면 '오늘'이 오후 2시에 바뀌던 문제)
-    now = datetime.now(timezone(timedelta(hours=9)))
-    cutoff = settings.business_day_cutoff if settings else "05:00"
-    h, m = map(int, cutoff.split(":"))
-    today_start = now.replace(hour=h, minute=m, second=0, microsecond=0)
-    if now < today_start:
-        today_start -= timedelta(days=1)
+    async def count(*where):
+        return (await db.execute(select(func.count()).select_from(S).where(S.store_id == store.id, *where))).scalar() or 0
 
-    # 어제 시작
-    yesterday_start = today_start - timedelta(days=1)
-
-    # 오늘 세션 수
-    today_sessions_result = await db.execute(
-        select(func.count(ReviewSession.id)).where(
-            ReviewSession.store_id == store.id,
-            ReviewSession.started_at >= today_start
-        )
-    )
-    today_sessions = today_sessions_result.scalar() or 0
-
-    # 어제 세션 수 (비교용)
-    yesterday_sessions_result = await db.execute(
-        select(func.count(ReviewSession.id)).where(
-            ReviewSession.store_id == store.id,
-            ReviewSession.started_at >= yesterday_start,
-            ReviewSession.started_at < today_start
-        )
-    )
-    yesterday_sessions = yesterday_sessions_result.scalar() or 0
-    sessions_change = today_sessions - yesterday_sessions
-
-    # 사용 가능한 영수증 수
-    available_result = await db.execute(
-        select(func.count(Receipt.id)).where(
-            Receipt.store_id == store.id,
-            Receipt.status == ReceiptStatus.AVAILABLE
-        )
-    )
-    available_receipts = available_result.scalar() or 0
-
-    # 오늘 완료된 리뷰 수
-    completed_result = await db.execute(
-        select(func.count(ReviewSession.id)).where(
-            ReviewSession.store_id == store.id,
-            ReviewSession.completed_at >= today_start
-        )
-    )
-    completed = completed_result.scalar() or 0
-
-    # 혜택 지급 수
-    benefits_result = await db.execute(
-        select(func.count(ReviewSession.id)).where(
-            ReviewSession.store_id == store.id,
-            ReviewSession.benefit_given_at >= today_start
-        )
-    )
-    benefits_given = benefits_result.scalar() or 0
+    sessions = await count(S.started_at >= start, S.started_at < end)
+    sessions_prev = await count(S.started_at >= prev_start, S.started_at < prev_end)
+    completed = await count(S.completed_at >= start, S.completed_at < end)
+    benefits_given = await count(S.benefit_given_at >= start, S.benefit_given_at < end)
     # PIN 을 안 쓰는 매장(기본)은 '완료 화면 확인 = 지급' 이라 리뷰 완료 수가 곧 지급 수 (혜택 지급 기록 화면과 같게)
     from app.models.options import pin_required as _pin_required
-    pin_on = await _pin_required(db, store.id)
-    if not pin_on:
+    if not await _pin_required(db, store.id):
         benefits_given = completed
 
-    # 단계별 통계
-    step_stats = {}
-    for status_name, status_val in [
-        ("phone", SessionStatus.STARTED),
-        ("keyword", SessionStatus.STARTED),
-        ("assign", SessionStatus.ASSIGNED),
-        ("download", SessionStatus.DOWNLOADED),
-        ("redirect", SessionStatus.REDIRECTED),
-        ("complete", SessionStatus.COMPLETED),
-        ("benefit", SessionStatus.BENEFIT_GIVEN)
-    ]:
-        if status_name in ["phone", "keyword"]:
-            # started 이상 = phone/keyword 단계 도달
-            result = await db.execute(
-                select(func.count(ReviewSession.id)).where(
-                    ReviewSession.store_id == store.id,
-                    ReviewSession.started_at >= today_start
-                )
-            )
-        else:
-            result = await db.execute(
-                select(func.count(ReviewSession.id)).where(
-                    ReviewSession.store_id == store.id,
-                    ReviewSession.started_at >= today_start,
-                    ReviewSession.status >= status_val
-                )
-            )
-        step_stats[f"step_{status_name}"] = result.scalar() or 0
-    if not pin_on:
-        step_stats["step_benefit"] = step_stats["step_complete"]
+    available_receipts = (await db.execute(select(func.count(R.id)).where(
+        R.store_id == store.id, R.status == ReceiptStatus.AVAILABLE))).scalar() or 0
 
-    # 최근 활동
-    recent_result = await db.execute(
-        select(ReviewSession, Receipt, Customer)
-        .outerjoin(Receipt, ReviewSession.receipt_id == Receipt.id)
-        .outerjoin(Customer, ReviewSession.customer_id == Customer.id)
-        .where(ReviewSession.store_id == store.id)
-        .order_by(ReviewSession.started_at.desc())
-        .limit(10)
-    )
+    # 기간 안에 결제된 영수증 (취소된 결제는 뺌) → 영수증 수·매출·메뉴별 판매량
+    rows = (await db.execute(select(R.amount, R.items).where(
+        R.store_id == store.id, R.paid_at >= start, R.paid_at < end,
+        (R.dispose_reason.is_(None)) | (R.dispose_reason != "cancelled")))).all()
+    receipts_count = len(rows)
+    sales_total = sum(a or 0 for a, _ in rows)
+    menus, options = menu_ranking([it for _, it in rows])
 
+    # 최근 활동 (고른 기간)
     recent_activities = []
-    for session, receipt, customer in recent_result.fetchall():
-        phone_masked = "010-****-****"
-        if customer and customer.phone_last4:
-            phone_masked = f"010-****-{customer.phone_last4}"
-
-        status_class = "secondary"
-        status_text = "시작"
+    q = (select(S, R, Customer).outerjoin(R, S.receipt_id == R.id).outerjoin(Customer, S.customer_id == Customer.id)
+         .where(S.store_id == store.id, S.started_at >= start, S.started_at < end)
+         .order_by(S.started_at.desc()).limit(10))
+    for session, receipt, customer in (await db.execute(q)).all():
         if session.status == SessionStatus.BENEFIT_GIVEN:
-            status_class = "success"
-            status_text = "혜택지급"
+            cls, txt = "success", "혜택지급"
         elif session.status == SessionStatus.COMPLETED:
-            status_class = "info"
-            status_text = "리뷰완료"
-        elif session.status >= SessionStatus.ASSIGNED:
-            status_class = "warning"
-            status_text = "진행중"
-
+            cls, txt = "info", "리뷰완료"
+        elif session.status != SessionStatus.STARTED:
+            cls, txt = "warning", "진행중"
+        else:
+            cls, txt = "secondary", "시작"
+        t = session.started_at
+        if t is not None:
+            t = (t if t.tzinfo else t.replace(tzinfo=timezone.utc)).astimezone(KST_TZ)
         recent_activities.append({
-            "time": session.started_at.strftime("%H:%M") if session.started_at else "",
-            "phone_masked": phone_masked,
-            "amount": receipt.amount if receipt else 0,
-            "status_class": status_class,
-            "status_text": status_text
-        })
+            "time": t.strftime("%m/%d %H:%M" if p != "day" else "%H:%M") if t else "",
+            "phone_masked": f"010-****-{customer.phone_last4}" if customer and customer.phone_last4 else "010-****-****",
+            "amount": receipt.amount if receipt and receipt.amount else 0,
+            "status_class": cls, "status_text": txt})
 
-    # 에이전트 상태
+    # 에이전트 상태 (지금 기준)
     from app.models import Agent
-    agent_result = await db.execute(
-        select(Agent).where(Agent.store_id == store.id).order_by(Agent.last_heartbeat_at.desc())
-    )
-    agent = agent_result.scalars().first()
-
-    agent_online = False
-    last_heartbeat = "연결 안됨"
-    agent_version = "-"
-    capture_mode = "-"
-    queue_length = 0
-
+    agent = (await db.execute(select(Agent).where(Agent.store_id == store.id)
+                              .order_by(Agent.last_heartbeat_at.desc()))).scalars().first()
+    agent_online, last_heartbeat, agent_version, capture_mode, queue_length = False, "연결 안됨", "-", "-", 0
     if agent:
         hb = agent.last_heartbeat_at
         if hb is not None and hb.tzinfo is None:
             hb = hb.replace(tzinfo=timezone.utc)
-        time_diff = datetime.now(timezone.utc) - hb if hb else timedelta(hours=999)
-        agent_online = time_diff < timedelta(minutes=5)
-
-        if agent.last_heartbeat_at:
-            if time_diff < timedelta(minutes=1):
-                last_heartbeat = "방금 전"
-            elif time_diff < timedelta(hours=1):
-                last_heartbeat = f"{int(time_diff.total_seconds() // 60)}분 전"
-            else:
-                last_heartbeat = f"{int(time_diff.total_seconds() // 3600)}시간 전"
-
+        diff = datetime.now(timezone.utc) - hb if hb else timedelta(hours=999)
+        agent_online = diff < timedelta(minutes=5)
+        if hb:
+            last_heartbeat = "방금 전" if diff < timedelta(minutes=1) else \
+                f"{int(diff.total_seconds() // 60)}분 전" if diff < timedelta(hours=1) else \
+                f"{int(diff.total_seconds() // 3600)}시간 전"
         agent_version = agent.version or "-"
-        capture_mode = agent.capture_mode or "-"
+        capture_mode = {"serial": "시리얼(COM)", "spooler": "인쇄 대기열"}.get(agent.capture_mode, agent.capture_mode or "-")
         queue_length = agent.queue_length or 0
-
-    # 오늘 수신된 영수증 수
-    today_receipts_result = await db.execute(
-        select(func.count(Receipt.id)).where(
-            Receipt.store_id == store.id,
-            Receipt.created_at >= today_start
-        )
-    )
-    today_receipts = today_receipts_result.scalar() or 0
+    now_start = dashboard_range("day", None, settings.business_day_cutoff if settings else "05:00")["start"].astimezone(timezone.utc)
+    today_receipts = (await db.execute(select(func.count(R.id)).where(
+        R.store_id == store.id, R.created_at >= now_start))).scalar() or 0
 
     from app.services.otp import get_options
     from app.services.review_check import verified_count
@@ -436,22 +338,20 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         request=request,
         name="admin/dashboard.html",
         context={
-            "store": {
-                "id": store.id,
-                "name": store.name,
-                "biz_no": store.biz_no,
-                "store_code": store.store_code
-            },
+            "store": {"id": store.id, "name": store.name, "biz_no": store.biz_no, "store_code": store.store_code},
             "active_menu": "dashboard",
-            "today": date.today(),
+            "range": rng,
             "stats": {
-                "today_sessions": today_sessions,
-                "sessions_change": sessions_change,
+                "sessions": sessions,
+                "sessions_change": sessions - sessions_prev,
                 "available_receipts": available_receipts,
                 "completed": completed,
                 "benefits_given": benefits_given,
-                **step_stats
+                "receipts": receipts_count,
+                "sales_total": sales_total,
             },
+            "menus": menus,
+            "options": options,
             "agent_online": agent_online,
             "last_heartbeat": last_heartbeat,
             "agent_version": agent_version,
@@ -459,9 +359,81 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "queue_length": queue_length,
             "today_receipts": today_receipts,
             "verified_7d": verified_7d,
-            "recent_activities": recent_activities
+            "recent_activities": recent_activities,
         }
     )
+
+
+KST_TZ = timezone(timedelta(hours=9))
+PERIOD_NAMES = {"day": "일", "week": "주", "month": "월"}
+
+
+def dashboard_range(p: str, d: Optional[str], cutoff: str = "05:00") -> dict:
+    """일(영업일)·주(월~일)·월 기간. d 는 그 기간 안의 날짜(YYYY-MM-DD, 월은 YYYY-MM 도 됨). 미래는 오늘로"""
+    p = p if p in PERIOD_NAMES else "day"
+    try:
+        h, m = map(int, (cutoff or "05:00").split(":"))
+    except ValueError:
+        h, m = 5, 0
+    now = datetime.now(KST_TZ)
+    biz_today = (now - timedelta(hours=h, minutes=m)).date()     # 새벽 5시 전이면 아직 어제 영업일
+    try:
+        day = date.fromisoformat(d) if d and len(d) == 10 else date.fromisoformat(d + "-01") if d and len(d) == 7 else biz_today
+    except ValueError:
+        day = biz_today
+    day = min(day, biz_today)
+    if p == "day":
+        first, last = day, day
+        prev_first = day - timedelta(days=1)
+        label = f"{day.month}월 {day.day}일 ({'월화수목금토일'[day.weekday()]})"
+        is_current = day == biz_today
+    elif p == "week":
+        first = day - timedelta(days=day.weekday())
+        last = first + timedelta(days=6)
+        prev_first = first - timedelta(days=7)
+        label = f"{first.month}월 {first.day}일 ~ {last.month}월 {last.day}일"
+        is_current = first <= biz_today <= last
+    else:
+        first = day.replace(day=1)
+        last = (first.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+        prev_first = (first - timedelta(days=1)).replace(day=1)
+        label = f"{first.year}년 {first.month}월"
+        is_current = first <= biz_today <= last
+
+    def at(x: date) -> datetime:
+        return datetime(x.year, x.month, x.day, h, m, tzinfo=KST_TZ)
+    start, end = at(first), at(last + timedelta(days=1))
+    prev_start = at(prev_first)
+    span = "어제" if p == "day" else "지난주" if p == "week" else "지난달"
+    nxt = last + timedelta(days=1)
+    return {"p": p, "label": label, "is_current": is_current, "span_prev": span,
+            "start": start, "end": end, "prev_start": prev_start, "prev_end": start,
+            "date": day.isoformat(), "month": first.strftime("%Y-%m"),
+            "prev": (prev_first if p != "day" else day - timedelta(days=1)).isoformat(),
+            "next": nxt.isoformat() if nxt <= biz_today else None,
+            "today": biz_today.isoformat()}
+
+
+def menu_ranking(item_lists) -> tuple[list, list]:
+    """영수증 품목 → 메뉴별 판매량 (수량 많은 순). 세트 구성·추가 선택(▶ 줄)은 따로"""
+    main, opt = {}, {}
+    for items in item_lists:
+        for it in items or []:
+            name = (it.get("name") or "").strip()
+            qty = it.get("qty") or 0
+            if not name or qty <= 0:
+                continue
+            bucket = opt if it.get("option") else main
+            row = bucket.setdefault(name, {"name": name, "qty": 0, "amount": 0})
+            row["qty"] += qty
+            row["amount"] += it.get("price") or 0
+    def ranked(b):
+        rows = sorted(b.values(), key=lambda r: (-r["qty"], -r["amount"], r["name"]))
+        top = rows[0]["qty"] if rows else 1
+        for i, r in enumerate(rows):
+            r["rank"], r["pct"] = i + 1, round(r["qty"] / top * 100) if top else 0
+        return rows
+    return ranked(main), ranked(opt)
 
 
 # ============ Customers ============
