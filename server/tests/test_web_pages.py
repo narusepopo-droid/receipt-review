@@ -614,3 +614,15 @@ async def test_internal_master_store_full_phone(web, monkeypatch):
     assert d["customer_list"][0]["phone"] == "010-1234-5678" and d["customer_list"][0]["visits"] == 2
     await web.post("/admin/login", data={"login_id": "owner@test.com", "password": "pw1234!"})
     assert "010-1234-5678" not in (await web.get("/admin/customers")).text
+
+
+@pytest.mark.asyncio
+async def test_admin_mypage_link_to_account(web, monkeypatch):
+    """점주 화면 [마이페이지] → 통합 계정 자동 로그인 주소 (로그인 안 했으면 계정 로그인)"""
+    monkeypatch.setattr(settings, "INTERNAL_SECRET", "s")
+    r = await web.get("/admin/mypage", follow_redirects=False)
+    assert r.headers["location"].endswith("/account/my")
+    await web.post("/admin/login", data={"login_id": "owner@test.com", "password": "pw1234!"})
+    r = await web.get("/admin/mypage", follow_redirects=False)
+    assert r.status_code == 302 and "/account/from-review?t=" in r.headers["location"]
+    assert "/admin/mypage" in (await web.get("/admin/dashboard")).text

@@ -536,3 +536,26 @@ async def test_master_stores(client, monkeypatch):
     j = (await client.get("/api/v1/master/stores/77", headers=h)).json()
     assert j["ok"] and j["owner"]["email"] == "shop2@test.com" and j["agent"]["live"] == "off"
     assert (await client.get("/api/v1/master/stores/5", headers=h)).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_from_review_auto_login(client):
+    """영수증리뷰 점주 화면 [마이페이지] → 다시 로그인 없이 그 매장 주인 계정 마이페이지"""
+    from itsdangerous import URLSafeTimedSerializer
+    from app.config import settings
+    from app.models import Store
+    from sqlalchemy import select as _sel
+    await signup(client, email="rv@test.com", products=("receipt_review",), store="가게R")
+    await client.get("/logout")
+    async with SessionLocal() as db:
+        st = (await db.execute(_sel(Store).where(Store.name == "가게R"))).scalar_one()
+        st.review_store_id = 88
+        await db.commit()
+    t = URLSafeTimedSerializer(settings.INTERNAL_SECRET, salt="review-to-account").dumps({"s": 88})
+    r = await client.get("/from-review?t=" + t)
+    assert r.status_code == 200 and str(r.url).endswith("/my") and "가게R" in r.text
+    await client.get("/logout")
+    r = await client.get("/from-review?t=bad", follow_redirects=False)
+    assert r.status_code == 303 and "/login" in r.headers["location"]
+    t = URLSafeTimedSerializer(settings.INTERNAL_SECRET, salt="review-to-account").dumps({"s": 999})
+    assert "/login" in (await client.get("/from-review?t=" + t, follow_redirects=False)).headers["location"]

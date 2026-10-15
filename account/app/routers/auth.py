@@ -90,6 +90,25 @@ async def login(request: Request, email: str = Form(...), password: str = Form(.
     return RedirectResponse(url(dest), status_code=303)
 
 
+@router.get("/from-review")
+async def from_review(request: Request, t: str = "", db: AsyncSession = Depends(get_db)):
+    """영수증리뷰 점주 화면 [마이페이지] → 그 매장 주인 계정으로 바로 로그인 (영수증 서버가 만든 1분짜리 서명)"""
+    from itsdangerous import BadSignature, URLSafeTimedSerializer
+    try:
+        d = URLSafeTimedSerializer(settings.INTERNAL_SECRET, salt="review-to-account").loads(t, max_age=60)
+        rid = int(d["s"])
+    except (BadSignature, KeyError, TypeError, ValueError):
+        return RedirectResponse(url("/login?next=/my"), status_code=303)
+    st = (await db.execute(select(Store).where(Store.review_store_id == rid, Store.archived.is_(False))
+                           .order_by(Store.id))).scalars().first()
+    acc = await db.get(Account, st.account_id) if st else None
+    if not acc or acc.blocked:
+        return RedirectResponse(url("/login?next=/my"), status_code=303)
+    request.session.clear()
+    request.session["aid"] = acc.id
+    return RedirectResponse(url("/my"), status_code=303)
+
+
 @router.get("/logout")
 async def logout(request: Request):
     request.session.clear()

@@ -196,6 +196,18 @@ async def sso(request: Request, t: str = "", db: AsyncSession = Depends(get_db))
     return RedirectResponse(url="/admin/dashboard", status_code=302)
 
 
+@router.get("/mypage", name="admin_mypage")
+async def mypage(request: Request, db: AsyncSession = Depends(get_db)):
+    """점주 화면 → 마이페이지(통합 계정: 이용권·결제·플마)를 다시 로그인 없이 (1분짜리 서명 주소)"""
+    from itsdangerous import URLSafeTimedSerializer
+    from app.config import settings as _cfg
+    store_data = await get_current_store(request, db)
+    if not store_data or not _cfg.INTERNAL_SECRET:
+        return RedirectResponse(url=f"{SIGN_BASE_URL}/account/my", status_code=302)
+    t = URLSafeTimedSerializer(_cfg.INTERNAL_SECRET, salt="review-to-account").dumps({"s": store_data["store"].id})
+    return RedirectResponse(url=f"{SIGN_BASE_URL}/account/from-review?t={t}", status_code=302)
+
+
 @router.get("/agent-sso", name="admin_agent_sso")
 async def agent_sso(request: Request, t: str = "", db: AsyncSession = Depends(get_db)):
     """포스 프로그램 [관리자 페이지] 버튼 → 다시 로그인 없이 그 매장 점주 화면 (2분짜리 서명 링크)"""
