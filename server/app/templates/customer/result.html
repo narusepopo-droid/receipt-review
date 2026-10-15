@@ -15,11 +15,19 @@
     <button type="button" class="btn btn--primary btn--large btn--full" onclick="location.reload()">다시 시도</button>
 </div>
 {% else %}
+{% if started %}
+<!-- 이미 네이버로 넘어갔던 손님이 다시 들어옴: 같은 영수증 재제출 막기 (네이버는 영수증 1장에 리뷰 1번, 반복 제출 시 계정 제한) -->
+<div class="photo-reminder" style="background:#fff0f1;">
+    <span class="photo-reminder__icon">⚠️</span>
+    <span class="photo-reminder__text" style="color:#d6283a;">오늘 이미 받은 영수증이에요. <b>이 영수증으로 리뷰를 등록하셨다면 다시 제출하지 마세요</b> — 네이버는 영수증 1장에 리뷰 1번만 받아요.</span>
+</div>
+{% else %}
 <!-- 사진 확인 알림 -->
 <div class="photo-reminder">
     <span class="photo-reminder__icon">📷</span>
     <span class="photo-reminder__text">음식·매장 사진 2장 찍어두셨나요? 아직이면 지금 찍고 돌아오세요</span>
 </div>
+{% endif %}
 
 <!-- 영수증 미리보기 -->
 <div class="card">
