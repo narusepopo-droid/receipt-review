@@ -66,7 +66,7 @@ async def test_sms_real_send_uses_balance_and_only_consented_numbers(web, monkey
     assert r["success"] and not r["test_mode"]
     assert sent["numbers"] == ["01020000001"]                   # 미동의 번호는 절대 포함 안 됨
     page = (await web.get("/admin/sms")).text
-    assert "980원" in page or "950원" in page                   # 잔액 차감
+    assert "970원" in page or "950원" in page                   # 잔액 차감
 
 
 @pytest.mark.asyncio

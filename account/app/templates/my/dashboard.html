@@ -91,7 +91,7 @@
             data-msg="요금제 변경 후 이용 가능하십니다"
             data-sub="{{ '매장을 추가하면 매장별로 이용을 신청할 수 있어요' if p.unit == Unit.STORE else ('신청하시면 담당자 확인 후 바로 열어 드려요' if p.signup_policy.value == 'approval' else '요금제를 고르고 결제하면 바로 이용할 수 있어요') }}"
             {% if p.unit == Unit.STORE %}data-href="{{ url('/my/stores/new') }}"{% else %}data-post="{{ url('/my/products/' ~ p.code ~ '/apply') }}"{% endif %}
-            data-label="{{ act_label }}">🔒</button>잠겨 있어요 <span class="badge gray">미이용</span></div>
+            data-label="{{ act_label }}">🔒</button>잠겨 있어요 <span class="badge gray">미사용</span></div>
           <div class="meta">요금제 변경 후 이용 가능하십니다 — 자물쇠를 누르면 신청할 수 있어요</div></div><div></div>
         <div class="acts">
           {% if p.unit == Unit.STORE %}<a class="btn sm brand" href="{{ url('/my/stores/new') }}">{{ act_label }}</a>
