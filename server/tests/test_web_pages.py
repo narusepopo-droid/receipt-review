@@ -575,3 +575,18 @@ async def test_internal_master_stores(web, monkeypatch):
     assert len(d["days"]) == 7 and d["days"][-1]["receipts"] == 1 and d["funnel"]["today"]["started"] == 0
     assert d["recent_receipts"][0]["amount"] == 15000 and "customers" in d and "settings" in d
     assert (await web.get("/internal/master-stores/999", headers=h)).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_agent_admin_link_auto_login(web):
+    """포스 프로그램 [관리자 페이지]: 프로그램 토큰으로 2분짜리 주소 → 다시 로그인 없이 점주 화면"""
+    from app.routers.auth import generate_token
+    assert (await web.post("/agent/v1/admin-link")).status_code in (401, 422)
+    r = await web.post("/agent/v1/admin-link", headers={"Authorization": "Bearer " + generate_token(1)})
+    url = r.json()["url"]
+    assert url.startswith("https://review.placemaster.co.kr/admin/agent-sso?t=")
+    r = await web.get(url.split("placemaster.co.kr")[1], follow_redirects=True)
+    assert r.status_code == 200 and "/admin/dashboard" in str(r.url) and "테스트매장" in r.text
+    web.cookies.clear()
+    r = await web.get("/admin/agent-sso?t=bad", follow_redirects=True)
+    assert "만료" in r.text and "/admin/dashboard" not in str(r.url)

@@ -196,6 +196,26 @@ async def sso(request: Request, t: str = "", db: AsyncSession = Depends(get_db))
     return RedirectResponse(url="/admin/dashboard", status_code=302)
 
 
+@router.get("/agent-sso", name="admin_agent_sso")
+async def agent_sso(request: Request, t: str = "", db: AsyncSession = Depends(get_db)):
+    """포스 프로그램 [관리자 페이지] 버튼 → 다시 로그인 없이 그 매장 점주 화면 (2분짜리 서명 링크)"""
+    from itsdangerous import BadSignature, URLSafeTimedSerializer
+    from app.config import settings as _cfg
+    from app.routers.agent import ADMIN_LINK_MAX_AGE, ADMIN_LINK_SALT
+    try:
+        data = URLSafeTimedSerializer(_cfg.SECRET_KEY, salt=ADMIN_LINK_SALT).loads(t, max_age=ADMIN_LINK_MAX_AGE)
+        store = await db.get(Store, int(data["s"]))
+    except (BadSignature, KeyError, TypeError, ValueError):
+        store = None
+    if not store:
+        return templates.TemplateResponse(request=request, name="admin/login.html",
+                                          context={"error": "바로가기 링크가 만료되었습니다. 프로그램에서 [관리자 페이지]를 다시 눌러 주세요."})
+    request.session.clear()
+    request.session["owner_store_ids"] = [store.id]
+    request.session["store_id"] = store.id
+    return RedirectResponse(url="/admin/dashboard", status_code=302)
+
+
 @router.get("/choose-store", response_class=HTMLResponse, name="admin_choose_store")
 async def choose_store(request: Request, db: AsyncSession = Depends(get_db)):
     ids = request.session.get("owner_store_ids") or []

@@ -324,3 +324,16 @@ async def get_latest_version(request: Request):
         release_notes=rel.notes,
         mandatory=False,
     )
+
+
+# ───────────── 포스 프로그램 [관리자 페이지] 버튼 → 다시 로그인 없이 점주 화면 ─────────────
+ADMIN_LINK_SALT = "agent-admin-sso"
+ADMIN_LINK_MAX_AGE = 120   # 2분 안에 열어야 함 (브라우저가 느리게 뜨는 포스 고려)
+
+
+@router.post("/admin-link")
+async def admin_link(store: Store = Depends(verify_auth_token)):
+    """프로그램 로그인 정보(토큰)로 점주 관리자 화면 자동 로그인 주소 발급 (2분짜리 서명)"""
+    from itsdangerous import URLSafeTimedSerializer
+    t = URLSafeTimedSerializer(get_settings().SECRET_KEY, salt=ADMIN_LINK_SALT).dumps({"s": store.id})
+    return {"url": f"https://review.placemaster.co.kr/admin/agent-sso?t={t}"}

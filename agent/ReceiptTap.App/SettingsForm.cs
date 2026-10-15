@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO.Ports;
@@ -250,6 +250,27 @@ namespace ReceiptTap.App
             };
             logBtn.Click += (s, e) => OpenLogs();
             Controls.Add(logBtn);
+
+            var adminBtn = new Button
+            {
+                Text = "관리자 페이지 열기",
+                Location = new Point(574, 548),
+                Size = new Size(152, 34),
+                BackColor = Color.FromArgb(3, 199, 90),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = BoldFont
+            };
+            adminBtn.FlatAppearance.BorderSize = 0;
+            adminBtn.Click += async (s, e) =>
+            {
+                adminBtn.Enabled = false;
+                adminBtn.Text = "여는 중...";
+                await CaptureService.OpenAdminPageAsync(_config);
+                adminBtn.Text = "관리자 페이지 열기";
+                adminBtn.Enabled = true;
+            };
+            Controls.Add(adminBtn);
 
             var closeBtn = new Button
             {

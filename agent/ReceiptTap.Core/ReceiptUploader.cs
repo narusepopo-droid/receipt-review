@@ -164,6 +164,29 @@ namespace ReceiptTap.Core
             }
         }
 
+        /// <summary>점주 관리자 화면 자동 로그인 주소 (2분짜리). 실패하면 null</summary>
+        public async Task<string> GetAdminLinkAsync()
+        {
+            try
+            {
+                var request = (HttpWebRequest)WebRequest.Create($"{_serverUrl}/agent/v1/admin-link");
+                request.Method = "POST";
+                request.Headers.Add("Authorization", $"Bearer {_authToken}");
+                request.ContentLength = 0;
+                request.Timeout = 8000;
+                using (var response = (HttpWebResponse)await request.GetResponseAsync())
+                using (var reader = new StreamReader(response.GetResponseStream()))
+                {
+                    var url = (string)Newtonsoft.Json.Linq.JObject.Parse(await reader.ReadToEndAsync())["url"];
+                    return !string.IsNullOrEmpty(url) && url.StartsWith("https://") ? url : null;
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         private void WriteMultipartField(Stream stream, string boundary, string name, string value)
         {
             var header = $"\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n{value}";

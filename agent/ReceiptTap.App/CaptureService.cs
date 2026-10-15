@@ -141,6 +141,21 @@ namespace ReceiptTap.App
             Log("캡처 중지");
         }
 
+        /// <summary>
+        /// [관리자 페이지] — 프로그램 로그인 정보로 점주 관리자 화면을 다시 로그인 없이 브라우저로 엶.
+        /// 서버 연결이 안 되면 로그인 화면이라도 엶
+        /// </summary>
+        public static async Task OpenAdminPageAsync(AgentConfig config)
+        {
+            string url = null;
+            if (!string.IsNullOrEmpty(config.AuthToken))
+                url = await new ReceiptUploader(config.ServerUrl, config.AuthToken).GetAdminLinkAsync();
+            if (url == null)
+                url = config.ServerUrl.TrimEnd('/') + "/admin/login";
+            try { System.Diagnostics.Process.Start(url); }
+            catch (Exception ex) { System.Windows.Forms.MessageBox.Show("브라우저를 열지 못했습니다.\n" + url + "\n\n" + ex.Message, "영수증리뷰"); }
+        }
+
         public async Task<UpdateInfo> CheckForUpdateAsync()
         {
             return await _autoUpdater.CheckForUpdateAsync();

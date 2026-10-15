@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Windows.Forms;
 using ReceiptTap.Core;
@@ -66,6 +66,7 @@ namespace ReceiptTap.App
             _statusItem = _menu.Items.Add("상태: 대기 중", null, OnSettings);
             _menu.Items.Add("-");
             _menu.Items.Add("상태 및 설정 열기", null, OnSettings);
+            _menu.Items.Add("관리자 페이지 열기 (매장 관리)", null, async (s, e) => await CaptureService.OpenAdminPageAsync(_config));
             _menu.Items.Add("로그 보기", null, OnViewLogs);
             _menu.Items.Add("-");
             _menu.Items.Add("종료", null, OnExit);
