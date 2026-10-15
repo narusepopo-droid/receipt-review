@@ -110,7 +110,9 @@ const ICONS = {
     <rect x="12" y="74" width="36" height="9" rx="4.5" class="ph-acc"/><text x="30" y="80.6" class="ph-btn-t">찰칵</text>`),
   save: phone(`<path class="ph-paper" d="M16 16 h28 v42 l-3.5 3 -3.5 -3 -3.5 3 -3.5 -3 -3.5 3 -3.5 -3 -3.5 3 -3.5 -3z"/>
     <g class="ph-line"><rect x="20" y="22" width="20" height="2.4" rx="1"/><rect x="20" y="28" width="14" height="2" rx="1"/><rect x="20" y="33" width="18" height="2" rx="1"/><rect x="20" y="38" width="12" height="2" rx="1"/><rect x="20" y="46" width="20" height="3" rx="1"/></g>
-    <circle cx="30" cy="74" r="9" class="ph-acc"/><path d="M30 69 v8 M26.5 74 l3.5 3.5 3.5-3.5" class="ph-white-stroke" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`),
+    <rect x="11" y="68" width="38" height="13" rx="6.5" class="ph-acc"/>
+    <path d="M17.5 71.5 v5 M15.5 74.5 l2 2 2-2" class="ph-white-stroke" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="23" y="76.6" class="ph-btn-t" style="text-anchor:start;font-size:5.4px">저장+복사</text>`),
   paste: phone(`<rect x="11" y="18" width="38" height="34" rx="3" class="ph-field"/>
     <g class="ph-line"><rect x="15" y="23" width="28" height="2.4" rx="1"/><rect x="15" y="29" width="30" height="2.4" rx="1"/><rect x="15" y="35" width="22" height="2.4" rx="1"/></g>
     <rect x="38.5" y="34" width="1.6" height="5" class="ph-acc"/>
@@ -120,7 +122,8 @@ const ICONS = {
 const ICON_GIFT = `<svg viewBox="0 0 24 24" class="ic-gift" aria-hidden="true"><path d="M3 10h18v4H3zM5 14h14v7H5z" fill="currentColor" opacity=".9"/><path d="M12 10v11" stroke="#fff" stroke-width="2"/><path d="M12 10c-2-4-6-5-6-2 0 1.6 2.4 2 6 2zm0 0c2-4 6-5 6-2 0 1.6-2.4 2-6 2z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`;
 
 function flowHTML() {
-  const steps = [['qr', 'QR 찍기', '번호만 입력'], ['save', '영수증 자동 저장', '요청할 필요 없어요'], ['paste', '리뷰 글 붙여넣기', '글도 자동으로 준비']];
+  // ② 버튼 한 번에 영수증 저장 + 리뷰 글 복사 → ③ 네이버에서 영수증 고르고 글 붙여넣기
+  const steps = [['qr', 'QR 찍기', '휴대폰 번호만 입력'], ['save', '저장·복사 한 번에', '영수증 + 리뷰 글'], ['paste', '네이버에 붙여넣기', '영수증 고르고 등록']];
   return `<div class="s-flow">${steps.map(([k, t, s], i) =>
     `<div class="fl"><div class="fl-ic">${ICONS[k]}<span class="fl-no">${i + 1}</span></div><div class="fl-t">${t}</div><div class="fl-s">${s}</div></div>` +
     (i < 2 ? '<div class="fl-arr" aria-hidden="true">›</div>' : '')).join('')}</div>`;
@@ -131,7 +134,7 @@ window.signHTML = function (d, qrSrc, tableLabel) {
   const lines = esc(d.headline || '').split(/\r?\n/).filter(s => s.trim());
   const steps = esc(d.steps || '').split(/\r?\n/).filter(s => s.trim());
   const logo = d.logo && /^data:image\/(png|jpe?g|gif|webp);base64,/.test(d.logo) ? d.logo : null;
-  const guide = ['pic', 'text', 'both'].includes(d.guide) ? d.guide : 'pic';
+  const guide = 'pic';   // 이용 안내는 항상 그림 (QR → 저장·복사 한 번에 → 붙여넣기)
   const table = esc(tableLabel || '');
   const qr = `<div class="s-qr"><div class="s-qr-box"><img src="${qrSrc}" alt="QR"></div><div class="s-qr-cap">카메라로 QR을 찍어 주세요</div></div>`;
   return `<div class="sg-in">
@@ -159,7 +162,7 @@ window.signHTML = function (d, qrSrc, tableLabel) {
 // 안내판 상자 꾸미기 (클래스·크기·글꼴·색 변수)
 window.signApply = function (el, d, mix) {
   const z = window.signSize(d), t = tplOf(d), tf = titleFont(d), bf = FONTS[d.bodyFont] ? d.bodyFont : BODY;
-  el.className = `sign t-${t} ${z.land ? 'land' : 'port'}${(d.guide || 'pic') === 'both' ? ' g-both' : ''}${(d.guide || 'pic') === 'text' ? ' g-text' : ''}`;
+  el.className = `sign t-${t} ${z.land ? 'land' : 'port'}`;
   // 굵기가 한 가지뿐인 글꼴(배민체 등)에 '아주 굵게' → 글자 테두리로 더 굵게
   if (d.titleWeight === 'black' && Object.keys(FONTS[tf.key].weights).length === 1) el.classList.add('fx-bold');
   el.style.width = z.w + 'px'; el.style.height = z.h + 'px'; el.style.fontSize = z.fs.toFixed(3) + 'px';
@@ -179,15 +182,27 @@ window.signApply = function (el, d, mix) {
 // 글꼴마다 글자 폭이 달라 큰 제목·혜택이 두 줄로 넘치면 한 줄에 맞게 조금씩 줄임 (글꼴 불러온 뒤 호출)
 window.signFit = function (el) {
   el.querySelectorAll('.s-head, .s-sub, .s-benefit, .s-store').forEach(n => {
-    n.style.fontSize = ''; n.style.whiteSpace = 'nowrap';
-    const box = n.parentElement;
-    let avail = box.clientWidth - parseFloat(getComputedStyle(box).paddingLeft) - parseFloat(getComputedStyle(box).paddingRight);
-    if (n.classList.contains('s-store')) [...box.children].forEach(c => { if (c !== n && getComputedStyle(c).position !== 'absolute') avail -= c.offsetWidth + 8; });
-    if (n.classList.contains('s-store') && el.classList.contains('port')) { const t = box.querySelector('.s-table'); if (t) avail -= 2 * t.offsetWidth + 8; }
-    const need = () => Math.max(n.scrollWidth, n.getBoundingClientRect().width / (el.getBoundingClientRect().width / el.offsetWidth || 1));
+    n.style.fontSize = ''; n.style.whiteSpace = 'nowrap'; n.style.maxWidth = '100%';
+    if (n.classList.contains('s-store')) {      // 매장명: 로고·테이블 번호 자리를 빼고
+      let box = n.parentElement, avail = box.clientWidth;
+      [...box.children].forEach(c => { if (c !== n && getComputedStyle(c).position !== 'absolute') avail -= c.offsetWidth + 8; });
+      const t = box.querySelector('.s-table');
+      if (t && getComputedStyle(t).position === 'absolute') avail -= 2 * t.offsetWidth + 8;
+      n.style.maxWidth = Math.max(40, avail) + 'px';
+    }
+    // 자기 칸(최대 폭)보다 글자가 길면 넘침 → 조금씩 줄임
+    // 혜택 칸은 꾸밈(쿠폰 홈 등)이 밖으로 나와 있어 안쪽 내용 폭으로 잼
+    const need = () => {
+      if (!n.classList.contains('s-benefit')) return n.scrollWidth;
+      const cs = getComputedStyle(n), kids = [...n.children];
+      const k = (el.getBoundingClientRect().width / el.offsetWidth) || 1;   // 미리보기 축소 배율
+      return kids.reduce((a, c) => a + (c.scrollWidth || c.getBoundingClientRect().width / k), 0)
+        + (kids.length - 1) * parseFloat(cs.columnGap || cs.gap || 0) + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
+        + (n.closest('.t-receipt') ? 3 * parseFloat(cs.fontSize) : 0);
+    };
     let fs = parseFloat(getComputedStyle(n).fontSize), i = 0;
-    while (need() > avail + 1 && i++ < 18) { fs *= 0.95; n.style.fontSize = fs + 'px'; }
-    if (need() > avail + 1) n.style.whiteSpace = '';    // 그래도 넘치면 줄바꿈 허용
+    while (need() > n.clientWidth + 1 && i++ < 18) { fs *= 0.95; n.style.fontSize = fs + 'px'; }
+    if (need() > n.clientWidth + 1) n.style.whiteSpace = '';    // 그래도 넘치면 줄바꿈 허용
   });
 };
 

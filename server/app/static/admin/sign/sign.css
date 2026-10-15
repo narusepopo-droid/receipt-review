@@ -12,20 +12,20 @@
 .sign .s-store { font-family: var(--tf); font-weight: var(--tw); font-size: 1.02em; letter-spacing: -.01em; line-height: 1.2; text-align: center; }
 .sign .s-table { position: absolute; right: 0; top: 50%; transform: translateY(-50%); font-size: .62em; font-weight: 800; padding: .38em .75em; border-radius: 99em; background: var(--ac); color: #fff; white-space: nowrap; }
 .sign .s-hero { text-align: center; position: relative; z-index: 2; }
-.sign .s-kicker { display: inline-flex; align-items: center; gap: .4em; font-size: .6em; font-weight: 800; padding: .3em .85em .3em .32em; border-radius: 99em; background: #e8f8ef; color: #029a47; letter-spacing: -.01em; }
+.sign .s-kicker { display: inline-flex; align-items: center; gap: .4em; font-size: .68em; font-weight: 800; padding: .3em .85em .3em .32em; border-radius: 99em; background: #e8f8ef; color: #029a47; letter-spacing: -.01em; }
 .sign .nv { display: inline-grid; place-items: center; width: 1.55em; height: 1.55em; border-radius: .38em; background: #03C75A; color: #fff; font: 900 .92em/1 Arial, sans-serif; }
 .sign .s-head { font-family: var(--tf); font-weight: var(--tw); font-size: 2.05em; line-height: 1.12; letter-spacing: -.035em; margin-top: .26em; }
-.sign .s-sub { font-size: .86em; font-weight: 700; margin-top: .42em; color: #4e5968; letter-spacing: -.02em; line-height: 1.35; }
+.sign .s-sub { font-size: .94em; font-weight: 700; margin-top: .42em; color: #4e5968; letter-spacing: -.02em; line-height: 1.35; }
 .sign .s-benefit { display: flex; align-items: center; justify-content: center; gap: .45em; font-family: var(--tf); font-weight: var(--tw); font-size: 1em; line-height: 1.25;
   padding: .62em 1em; border-radius: .8em; background: var(--ac-ll); color: var(--ac-d); text-align: center; position: relative; z-index: 2; }
 .sign .ic-gift { width: 1.3em; height: 1.3em; flex: none; }
 .sign .s-qr { display: flex; flex-direction: column; align-items: center; position: relative; z-index: 2; }
-.sign .s-qr-box { width: 8.4em; height: 8.4em; padding: .48em; background: #fff; border-radius: .9em; box-shadow: 0 .35em 1.3em rgba(17, 24, 39, .14); }
+.sign .s-qr-box { width: 8.2em; height: 8.2em; padding: .48em; background: #fff; border-radius: .9em; box-shadow: 0 .35em 1.3em rgba(17, 24, 39, .14); }
 .sign .s-qr-box img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
-.sign .s-qr-cap { font-size: .66em; font-weight: 800; margin-top: .6em; color: #4e5968; letter-spacing: -.01em; }
-.sign .s-flow { display: flex; align-items: flex-start; justify-content: center; gap: .15em; position: relative; z-index: 2; }
-.sign .fl { width: 6.3em; text-align: center; }
-.sign .fl-ic { position: relative; width: 2.55em; margin: 0 auto .38em; }
+.sign .s-qr-cap { font-size: .78em; font-weight: 800; margin-top: .6em; color: #4e5968; letter-spacing: -.01em; }
+.sign .s-flow { display: flex; align-items: flex-start; justify-content: center; gap: 0; position: relative; z-index: 2; }
+.sign .fl { width: 6.75em; text-align: center; }
+.sign .fl-ic { position: relative; width: 2.6em; margin: 0 auto .38em; }
 .sign .ph { width: 100%; display: block; filter: drop-shadow(0 .12em .25em rgba(0, 0, 0, .15)); }
 .sign .ph-body, .sign .ph-notch { fill: #1f2933; }
 .sign .ph-screen { fill: #fff; }
@@ -39,14 +39,14 @@
 .sign .ph-field { fill: var(--ac-ll); stroke: var(--ac-m); stroke-width: 1; }
 .sign .ph-btn-t { font-family: var(--bf), sans-serif; font-weight: 800; font-size: 6px; fill: #fff; text-anchor: middle; }
 .sign .fl-no { position: absolute; left: -.55em; top: -.4em; width: 1.6em; height: 1.6em; border-radius: 50%; background: var(--ac); color: #fff;
-  font-size: .58em; font-weight: 900; display: grid; place-items: center; border: .16em solid #fff; }
-.sign .fl-t { font-size: .64em; font-weight: 800; line-height: 1.25; white-space: nowrap; letter-spacing: -.02em; }
-.sign .fl-s { font-size: .52em; color: #8b95a1; margin-top: .2em; white-space: nowrap; font-weight: 600; }
-.sign .fl-arr { font-size: 1.15em; color: #c4cad2; margin-top: .85em; font-weight: 300; line-height: 1; }
+  font-size: .64em; font-weight: 900; display: grid; place-items: center; border: .16em solid #fff; }
+.sign .fl-t { font-size: .74em; font-weight: 800; line-height: 1.2; letter-spacing: -.02em; }
+.sign .fl-s { font-size: .62em; color: #6b7684; margin-top: .22em; line-height: 1.25; font-weight: 600; }
+.sign .fl-arr { font-size: 1.1em; color: #b0b8c1; margin-top: .85em; width: .5em; text-align: center; font-weight: 300; line-height: 1; }
 .sign .s-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .32em; font-size: .64em; font-weight: 600; position: relative; z-index: 2; }
 .sign .s-steps li { display: flex; gap: .55em; align-items: center; line-height: 1.3; }
 .sign .s-steps b { flex: none; width: 1.6em; height: 1.6em; border-radius: 50%; background: var(--ac); color: #fff; display: grid; place-items: center; font-size: .82em; }
-.sign .s-foot { text-align: center; font-size: .5em; font-weight: 700; color: #adb5bd; letter-spacing: .06em; position: relative; z-index: 2; }
+.sign .s-foot { text-align: center; font-size: .56em; font-weight: 700; color: #9aa3ad; letter-spacing: .06em; position: relative; z-index: 2; }
 /* 한 가지 굵기뿐인 글꼴에 '아주 굵게' */
 .sign.fx-bold .s-head, .sign.fx-bold .s-benefit, .sign.fx-bold .s-store { -webkit-text-stroke: .035em currentColor; }
 
@@ -73,17 +73,17 @@
 .sign.land .s-sub { font-size: 1.22em; }
 .sign.land .s-benefit { align-self: flex-start; justify-content: flex-start; font-size: 1.32em; padding: .62em 1.15em; }
 .sign.land .s-flow { justify-content: flex-start; gap: .5em; }
-.sign.land .fl { width: 8.2em; }
+.sign.land .fl { width: 8.6em; }
 .sign.land .fl-ic { width: 3.5em; }
-.sign.land .fl-t { font-size: .8em; }
-.sign.land .fl-s { font-size: .64em; }
+.sign.land .fl-t { font-size: .86em; }
+.sign.land .fl-s { font-size: .7em; }
 .sign.land .fl-arr { font-size: 1.5em; margin-top: 1em; }
 .sign.land .s-steps { font-size: .82em; }
 .sign.land .s-right { grid-column: 2; grid-row: 2; display: flex; align-items: center; justify-content: center; }
 .sign.land .s-qr { padding: 1.5em 1.7em 1.2em; border-radius: 1.6em; background: rgba(17, 24, 39, .035); }
 .sign.land .s-qr-box { width: 13.6em; height: 13.6em; padding: .75em; border-radius: 1.2em; }
 .sign.land .s-qr-cap { font-size: 1em; margin-top: .75em; }
-.sign.land .s-foot { grid-column: 1 / -1; text-align: right; font-size: .6em; }
+.sign.land .s-foot { grid-column: 1 / -1; text-align: right; font-size: .66em; }
 .sign.land.g-both .s-flow { transform: scale(.82); transform-origin: left center; margin: -.7em 0; }
 .sign.land.g-both .s-head { font-size: 2.9em; }
 .t-bold.land .s-qr, .t-midnight.land .s-qr, .t-gradient.land .s-qr, .t-luxury.land .s-qr { background: rgba(255, 255, 255, .08); }
@@ -130,7 +130,7 @@
 .t-midnight .ic-gift { color: var(--ac-m); }
 .t-midnight .s-qr-box { box-shadow: 0 0 0 .18em var(--ac), 0 0 1.6em var(--ac); }
 .t-midnight .s-qr-cap, .t-midnight .fl-t { color: #fff; }
-.t-midnight .fl-s, .t-midnight .s-foot { color: #8b95a1; }
+.t-midnight .fl-s, .t-midnight .s-foot { color: #a9b3c6; }
 .t-midnight .fl-arr { color: #4b5577; }
 .t-midnight .ph-body, .t-midnight .ph-notch { fill: #2a3354; }
 .t-midnight .fl-no { border-color: #0b1020; }
@@ -164,7 +164,7 @@
 .t-luxury .s-qr-box { border-radius: .25em; box-shadow: 0 0 0 .14em #c9a962, 0 0 0 .3em #0e0d0b, 0 0 0 .36em rgba(201, 169, 98, .5); }
 .t-luxury .s-qr-cap { color: #c9a962; letter-spacing: .1em; }
 .t-luxury .fl-t { color: #f3ead6; }
-.t-luxury .fl-s, .t-luxury .s-foot { color: #8a7f68; }
+.t-luxury .fl-s, .t-luxury .s-foot { color: #a99d82; }
 .t-luxury .fl-arr { color: #6b5f45; }
 .t-luxury .ph-body, .t-luxury .ph-notch { fill: #2b2720; }
 .t-luxury .ph-acc { fill: #c9a962; } .t-luxury .ph-acc-stroke { stroke: #c9a962; }
@@ -184,7 +184,7 @@
 .t-pop .fl-s { color: #5c5220; }
 .t-pop .fl-arr { color: #191f28; }
 .t-pop .fl-no { background: #191f28; border-color: #ffe14d; }
-.t-pop .s-foot { color: #8a7a2a; }
+.t-pop .s-foot { color: #6b5d1c; }
 
 /* ═════════ 7. 카페 크라프트 ═════════ */
 .t-kraft { background: #eadcc4 repeating-linear-gradient(45deg, rgba(120, 90, 50, .035) 0 .2em, transparent .2em .5em); color: #4a3626; }
@@ -198,7 +198,7 @@
 .t-kraft .s-table { background: #4a3626; }
 .t-kraft .s-qr-box { border-radius: .4em; box-shadow: 0 0 0 .3em #fff8ec, 0 0 0 .38em #b58b5d, 0 .5em 1.2em rgba(74, 54, 38, .25); }
 .t-kraft .s-qr-cap, .t-kraft .fl-t { color: #4a3626; }
-.t-kraft .fl-s, .t-kraft .s-foot { color: #8f7458; }
+.t-kraft .fl-s, .t-kraft .s-foot { color: #7a5e44; }
 .t-kraft .fl-arr { color: #b58b5d; }
 .t-kraft .ph-body, .t-kraft .ph-notch { fill: #4a3626; }
 .t-kraft .fl-no { border-color: #eadcc4; }

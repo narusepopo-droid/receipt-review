@@ -3,9 +3,9 @@
 {% block title %}테이블 안내판{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="{{ url_for('static', path='admin/sign/sign.css') }}?v=10">
+<link rel="stylesheet" href="{{ url_for('static', path='admin/sign/sign.css') }}?v=11">
 <style>
-.sg-wrap { display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 24px; align-items: start; }
+.sg-wrap { display: grid; grid-template-columns: minmax(290px, 380px) minmax(0, 1fr); gap: 20px; align-items: start; }
 .sg-panel .card-body { padding: 20px; }
 .sg-sec { margin-bottom: 22px; }
 .sg-sec-title { font-size: 12px; font-weight: 700; color: var(--gray-600); margin-bottom: 10px; letter-spacing: .3px; display: flex; justify-content: space-between; align-items: center; }
@@ -39,7 +39,7 @@
 .sg-th .box .sign { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
 .sg-th span { display: block; font-size: 11.5px; font-weight: 700; color: var(--gray-700); margin-top: 4px; }
 /* 미리보기 */
-.sg-preview { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border-radius: 16px; padding: 28px; display: flex; flex-direction: column; align-items: center; gap: 14px; position: sticky; top: 16px; }
+.sg-preview { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; position: sticky; top: 12px; min-width: 0; }
 .sg-preview-note { color: rgba(255,255,255,.75); font-size: 13px; text-align: center; }
 .sg-stage { position: relative; width: 100%; display: flex; justify-content: center; }
 .sg-scaler { position: relative; }
@@ -51,9 +51,11 @@
 .sg-status { font-size: 12.5px; color: var(--gray-600); min-height: 18px; text-align: center; }
 .sg-help { background: var(--gray-100); border-radius: 10px; padding: 12px 14px; font-size: 12.5px; color: var(--gray-700); line-height: 1.6; }
 #sg-print { display: none; }
-@media (max-width: 1100px) {
+/* 화면이 좁아도 미리보기는 오른쪽에 그대로 (휴대폰만 위쪽에 고정) */
+@media (max-width: 760px) {
     .sg-wrap { grid-template-columns: 1fr; }
-    .sg-preview { position: static; padding: 18px 10px; }
+    .sg-preview { order: -1; top: 0; z-index: 20; padding: 10px; border-radius: 0 0 14px 14px; gap: 6px; }
+    .sg-preview-note, .sg-tablet-note { display: none !important; }
 }
 @media print {
     body * { visibility: hidden !important; }
@@ -124,13 +126,6 @@
             </div>
 
             <div class="sg-sec">
-                <div class="sg-sec-title">이용 안내 방식</div>
-                <div class="sg-seg" id="sg-guide">
-                    <button type="button" data-v="pic">그림 (자동 저장·붙여넣기)</button><button type="button" data-v="text">글 (단계)</button><button type="button" data-v="both">둘 다</button>
-                </div>
-            </div>
-
-            <div class="sg-sec">
                 <div class="sg-sec-title">문구</div>
                 <div class="form-group">
                     <label class="form-label">강조 문구 <span style="font-weight:400;color:var(--gray-500);">(첫 줄 크게 · 둘째 줄 작게)</span></label>
@@ -145,10 +140,6 @@
                 <div class="form-group">
                     <label class="form-label">혜택 문구</label>
                     <input type="text" id="sg-benefit" class="form-input" maxlength="60">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">이용 안내 <span style="font-weight:400;color:var(--gray-500);">(한 줄에 한 단계 · '글' 방식에서 보여요)</span></label>
-                    <textarea id="sg-steps" class="form-input" rows="5" maxlength="400"></textarea>
                 </div>
                 <div class="form-group">
                     <label class="form-label">매장 로고 (선택)</label>
@@ -211,7 +202,7 @@
 {% block scripts %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="{{ url_for('static', path='admin/sign/sign-templates.js') }}?v=10"></script>
+<script src="{{ url_for('static', path='admin/sign/sign-templates.js') }}?v=11"></script>
 <script>
 (function () {
 const QR_URL = "{{ url_for('admin_sign_qr') }}";
@@ -257,12 +248,16 @@ async function fontsReady(d) {
     } catch (e) {}
 }
 let fitTimer = null;
+function isTabSize() { return !!(SIGN_SIZES[D.size] && SIGN_SIZES[D.size].px); }
 function render() {
     const ts = tables(), el = $('sg-sign');
     const z = paint(el, ts[0]);
     // 미리보기 칸 폭에 맞게 줄여서 보여주기 (실제 크기는 그대로)
-    const avail = Math.min($('sg-stage').clientWidth || 600, z.land ? 980 : 520);
-    const k = Math.min(1, avail / z.w);
+    // 미리보기는 화면 폭·높이 안에 다 보이게 (스크롤해서 색·글꼴을 바꿔도 옆에서 바로 보임)
+    const mobile = window.innerWidth <= 760;
+    const aw = $('sg-stage').clientWidth || 600;
+    const ah = mobile ? window.innerHeight * 0.38 : window.innerHeight - (isTabSize() ? 210 : 120);
+    const k = Math.min(1, aw / z.w, Math.max(160, ah) / z.h);
     el.style.transform = `scale(${k})`;
     $('sg-scaler').style.width = (z.w * k) + 'px'; $('sg-scaler').style.height = (z.h * k) + 'px';
     const isTab = !!(SIGN_SIZES[D.size] && SIGN_SIZES[D.size].px);
@@ -278,7 +273,7 @@ function renderGallery() {
     const g = $('sg-gal'); const z0 = signSize(D);
     g.classList.toggle('land', z0.land);
     const cur = signTemplateKey(D);
-    const W = z0.land ? 168 : 108;
+    const cols = z0.land ? 2 : 3, W = Math.max(70, Math.floor((g.clientWidth - 10 * (cols - 1)) / cols) - 12);
     if (g.children.length !== Object.keys(SIGN_TEMPLATES).length || g.dataset.k !== D.size + (D.customW || '') + (D.customH || '')) {
         g.innerHTML = ''; g.dataset.k = D.size + (D.customW || '') + (D.customH || '');
         for (const t in SIGN_TEMPLATES) {
@@ -307,7 +302,7 @@ function fontOptions(sel, withAuto) {
 }
 function syncForm() {
     activate('sg-size', D.size); activate('sg-color', D.color); activate('sg-qrmode', D.qrMode);
-    activate('sg-tweight', D.titleWeight || 'auto'); activate('sg-guide', D.guide || 'pic');
+    activate('sg-tweight', D.titleWeight || 'auto');
     $('sg-color-pick').value = D.color;
     $('sg-tfont').value = SIGN_FONTS[D.titleFont] ? D.titleFont : 'auto';
     $('sg-bfont').value = SIGN_FONTS[D.bodyFont] ? D.bodyFont : 'pretendard';
@@ -315,7 +310,7 @@ function syncForm() {
     const n = signWeightsOf(fk);
     $('sg-weight-hint').textContent = n > 1 ? `${SIGN_FONTS[fk].name}: 굵기 ${n}단계` : `${SIGN_FONTS[fk].name}은(는) 굵기가 한 가지예요. '아주 굵게'를 고르면 테두리를 더해 더 굵게 보여요.`;
     $('sg-headline').value = D.headline || ''; $('sg-store').value = D.storeName || ''; $('sg-benefit').value = D.benefit || '';
-    $('sg-steps').value = D.steps || ''; $('sg-ts').value = D.tableStart; $('sg-te').value = D.tableEnd; $('sg-tp').value = D.tablePrefix || '';
+    $('sg-ts').value = D.tableStart; $('sg-te').value = D.tableEnd; $('sg-tp').value = D.tablePrefix || '';
     $('sg-cw').value = D.customW || ''; $('sg-ch').value = D.customH || '';
     $('sg-table-opts').style.display = D.qrMode === 'table' ? '' : 'none';
     $('sg-logo-img').style.display = D.logo ? '' : 'none'; $('sg-logo-del').style.display = D.logo ? '' : 'none';
@@ -327,13 +322,13 @@ function change(fn) { fn(); touched(); syncForm(); render(); }
 // 크기 버튼
 $('sg-size').innerHTML = Object.entries(SIGN_SIZES).map(([k, s]) => `<button type="button" class="sg-opt" data-v="${k}"><b>${s.name}</b><small>${s.sub}</small></button>`).join('');
 fontOptions($('sg-tfont'), true); fontOptions($('sg-bfont'), false);
-[['sg-size', 'size'], ['sg-color', 'color'], ['sg-qrmode', 'qrMode'], ['sg-tweight', 'titleWeight'], ['sg-guide', 'guide']].forEach(([g, k]) => {
+[['sg-size', 'size'], ['sg-color', 'color'], ['sg-qrmode', 'qrMode'], ['sg-tweight', 'titleWeight']].forEach(([g, k]) => {
     document.querySelectorAll('#' + g + ' [data-v]').forEach(b => b.addEventListener('click', () => change(() => { D[k] = b.dataset.v; })));
 });
 $('sg-color-pick').addEventListener('input', e => change(() => { D.color = e.target.value; }));
 $('sg-tfont').addEventListener('change', e => change(() => { D.titleFont = e.target.value; }));
 $('sg-bfont').addEventListener('change', e => change(() => { D.bodyFont = e.target.value; }));
-[['sg-headline', 'headline'], ['sg-store', 'storeName'], ['sg-benefit', 'benefit'], ['sg-steps', 'steps'], ['sg-tp', 'tablePrefix']].forEach(([id, k]) => {
+[['sg-headline', 'headline'], ['sg-store', 'storeName'], ['sg-benefit', 'benefit'], ['sg-tp', 'tablePrefix']].forEach(([id, k]) => {
     $(id).addEventListener('input', e => { D[k] = e.target.value; touched(); render(); });
 });
 function clampTables() {
