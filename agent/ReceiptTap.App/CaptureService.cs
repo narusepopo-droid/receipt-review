@@ -48,6 +48,8 @@ namespace ReceiptTap.App
         public DateTime? LastServerOkAt { get; private set; }
         public int QueueLength => SafeQueueCount();
         public string ReceiptPort => _capture?.ReceiptPort ?? _config.DetectedPort;
+        public System.Collections.Generic.IReadOnlyList<string> ReceiptPorts =>
+            (System.Collections.Generic.IReadOnlyList<string>)_capture?.ReceiptPorts ?? (string.IsNullOrEmpty(_config.DetectedPort) ? new string[0] : new[] { _config.DetectedPort });
         public string[] WatchedPorts => _capture == null ? new string[0] : new System.Collections.Generic.List<string>(_capture.WatchedPorts).ToArray();
         public bool PortLocked => _config.PortLocked;
 

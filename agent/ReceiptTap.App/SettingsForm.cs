@@ -397,9 +397,11 @@ namespace ReceiptTap.App
             _storeVal.Text = string.IsNullOrEmpty(_config.StoreName) ? "-" : _config.StoreName;
 
             var port = _service?.ReceiptPort;
+            var ports = _service?.ReceiptPorts ?? new string[0];
             _portVal.Text = string.IsNullOrEmpty(port)
                 ? "찾는 중 (영수증 1장 출력 필요)"
-                : DisplayPort(port) + (_config.PortLocked ? " (직접 선택)" : " (자동 연결됨)");
+                : (ports.Count > 1 ? string.Join(" · ", ports.Select(DisplayPort)) : DisplayPort(port))
+                  + (_config.PortLocked ? " (직접 선택)" : " (자동 연결됨)");
             _portVal.ForeColor = string.IsNullOrEmpty(port) ? Color.FromArgb(41, 121, 255) : Color.FromArgb(0, 140, 60);
 
             var watched = _service?.WatchedPorts ?? new string[0];

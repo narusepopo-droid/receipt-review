@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -40,6 +40,10 @@ namespace ReceiptTap.Core
         /// <summary>마지막으로 영수증이 들어온 포트</summary>
         public string ReceiptPort { get; private set; }
 
+        // 영수증이 나온 포트들 (영수증 프린터 + 주방 프린터처럼 여러 개일 수 있음 — 모두 계속 감시)
+        private readonly List<string> _receiptPorts = new List<string>();
+        public IReadOnlyList<string> ReceiptPorts { get { lock (_receiptPorts) return _receiptPorts.ToList(); } }
+
         public event EventHandler<ReceiptCapturedEventArgs> ReceiptCaptured;
         public event EventHandler<CaptureErrorEventArgs> ErrorOccurred;
         /// <summary>영수증 포트를 (처음으로 또는 새로) 찾았을 때</summary>
@@ -52,6 +56,7 @@ namespace ReceiptTap.Core
         {
             _lockedPort = string.IsNullOrWhiteSpace(lockedPort) ? null : lockedPort;
             ReceiptPort = knownPort;
+            if (!string.IsNullOrEmpty(knownPort)) _receiptPorts.Add(knownPort);
         }
 
         public void Start()
@@ -152,7 +157,12 @@ namespace ReceiptTap.Core
                 return;
             }
 
-            var isNew = !string.Equals(ReceiptPort, e.Source, StringComparison.OrdinalIgnoreCase);
+            bool isNew;
+            lock (_receiptPorts)
+            {
+                isNew = !_receiptPorts.Contains(e.Source, StringComparer.OrdinalIgnoreCase);   // 처음 보는 포트만 알림 (번갈아 나와도 반복 알림 없음)
+                if (isNew) _receiptPorts.Add(e.Source);
+            }
             ReceiptPort = e.Source;
             if (isNew)
             {
