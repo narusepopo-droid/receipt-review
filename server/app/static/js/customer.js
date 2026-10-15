@@ -639,14 +639,18 @@
             if (saved) this.recordEvent('downloaded');
 
             if (inApp) {
-                // 앱 안 브라우저: 저장됐는지 손님이 확인할 수 있게 두 번 누르기 (안 되면 길게 눌러 저장)
+                // 앱 안 브라우저(네이버앱 등): 서버 주소 저장은 됨(실기기 확인) → 저장이 시작될 시간(2초) 뒤 자동으로 네이버로.
+                // 혹시 안 넘어가면 버튼을 다시 누르면 됨
                 this.readyToGo = true;
                 mainBtn.disabled = false;
-                mainBtn.innerHTML = '<span>저장됐으면</span><strong>네이버로 이동</strong>';
-                mainBtn.classList.add('btn--pulse');
+                mainBtn.innerHTML = '<span class="loading__spinner"></span> 저장하고 네이버로 이동 중...';
                 copyPromise.then((ok) => {
-                    Toast.show((ok ? '문구 복사 완료! ' : '') + '영수증이 저장 안 됐으면 위 영수증 사진을 길게 눌러 "이미지 저장"을 눌러 주세요', 'success', 5000);
+                    Toast.show(ok ? '영수증 저장·문구 복사 완료!' : '영수증 저장 완료! 문구는 길게 눌러 복사해 주세요', 'success', 2000);
                 });
+                setTimeout(() => {
+                    mainBtn.innerHTML = '<span>다시</span><strong>네이버로 이동</strong>';
+                    this.goNaver();
+                }, 2000);
                 return;
             }
 
