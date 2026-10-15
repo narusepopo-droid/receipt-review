@@ -590,3 +590,27 @@ async def test_agent_admin_link_auto_login(web):
     web.cookies.clear()
     r = await web.get("/admin/agent-sso?t=bad", follow_redirects=True)
     assert "만료" in r.text and "/admin/dashboard" not in str(r.url)
+
+
+@pytest.mark.asyncio
+async def test_internal_master_store_full_phone(web, monkeypatch):
+    """마스터 매장 요약: 전체 번호 (점주 화면은 계속 가린 번호)"""
+    from app.main import app
+    from app.db import get_db
+    from app.models.customer import Customer, StoreCustomer
+    from app.services.customers import encrypt_phone
+    monkeypatch.setattr(settings, "INTERNAL_SECRET", "s")
+    gen = app.dependency_overrides[get_db]()
+    db = await gen.__anext__()
+    c = Customer(phone_enc=encrypt_phone("01012345678"), phone_hash="h-full", phone_last4="5678")
+    db.add(c)
+    await db.flush()
+    now = datetime.now()
+    db.add(StoreCustomer(store_id=1, customer_id=c.id, visit_count=2, marketing_opt_in=True,
+                         first_visit_at=now, last_visit_at=now))
+    await db.commit()
+    await gen.aclose()
+    d = (await web.get("/internal/master-stores/1", headers={"X-Internal-Secret": "s"})).json()
+    assert d["customer_list"][0]["phone"] == "010-1234-5678" and d["customer_list"][0]["visits"] == 2
+    await web.post("/admin/login", data={"login_id": "owner@test.com", "password": "pw1234!"})
+    assert "010-1234-5678" not in (await web.get("/admin/customers")).text

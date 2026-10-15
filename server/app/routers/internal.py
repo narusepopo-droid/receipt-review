@@ -222,13 +222,35 @@ async def master_store_detail(store_id: int, x_internal_secret: str = Header("")
 
     STEP = {"started": "번호 입력", "assigned": "영수증 받음", "downloaded": "영수증 저장", "redirected": "네이버 이동",
             "completed": "리뷰 완료", "benefit_given": "혜택 지급", "expired": "만료"}
+    # 마스터(광고토대왕)는 동의서의 '수집·이용 주체'라 전체 번호를 봄 (점주 화면은 계속 가린 번호)
+    from app.services.customers import decrypt_phone
+
+    def full_phone(enc, last4):
+        try:
+            n = decrypt_phone(enc) if enc else ""
+        except Exception:
+            n = ""
+        n = "".join(ch for ch in n if ch.isdigit())
+        if len(n) == 11:
+            return f"{n[:3]}-{n[3:7]}-{n[7:]}"
+        if len(n) == 10:
+            return f"{n[:3]}-{n[3:6]}-{n[6:]}"
+        return n or (f"***-{last4}" if last4 else "****")
+
     recent_s = []
-    q = (select(S, Customer.phone_last4).join(Customer, Customer.id == S.customer_id, isouter=True)
+    q = (select(S, Customer.phone_enc, Customer.phone_last4).join(Customer, Customer.id == S.customer_id, isouter=True)
          .where(S.store_id == s.id).order_by(S.started_at.desc()).limit(10))
-    for ss, last4 in (await db.execute(q)).all():
+    for ss, enc, last4 in (await db.execute(q)).all():
         recent_s.append({"at": _iso(ss.started_at), "table": ss.table_no if ss.table_no not in (None, "", "0") else "",
-                         "phone": f"***-{last4}" if last4 else "****",
+                         "phone": full_phone(enc, last4),
                          "status": STEP.get(ss.status.value, ss.status.value), "completed": ss.completed_at is not None})
+    customer_list = []
+    q = (select(SC, Customer.phone_enc, Customer.phone_last4).join(Customer, Customer.id == SC.customer_id)
+         .where(SC.store_id == s.id).order_by(SC.last_visit_at.desc()).limit(100))
+    for sc_, enc, last4 in (await db.execute(q)).all():
+        customer_list.append({"phone": full_phone(enc, last4), "visits": sc_.visit_count or 0,
+                              "first": _iso(sc_.first_visit_at), "last": _iso(sc_.last_visit_at),
+                              "opt_in": bool(sc_.marketing_opt_in)})
     recent_r = []
     for r in (await db.execute(select(R).where(R.store_id == s.id).order_by(R.created_at.desc()).limit(10))).scalars():
         recent_r.append({"at": _iso(r.created_at), "paid_at": _iso(r.paid_at), "amount": r.amount,
@@ -254,5 +276,6 @@ async def master_store_detail(store_id: int, x_internal_secret: str = Header("")
         "settings": settings_info,
         "recent_sessions": recent_s,
         "recent_receipts": recent_r,
+        "customer_list": customer_list,
         "live_minutes": LIVE_MINUTES,
     }
