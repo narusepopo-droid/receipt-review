@@ -279,3 +279,18 @@ async def master_store_detail(store_id: int, x_internal_secret: str = Header("")
         "customer_list": customer_list,
         "live_minutes": LIVE_MINUTES,
     }
+
+
+@router.get("/store-live")
+async def store_live(ids: str = "", x_internal_secret: str = Header(""), db: AsyncSession = Depends(get_db)):
+    """마이페이지용: 매장들의 포스 프로그램 상태 (live/idle/off/never, 마지막 신호, 버전)"""
+    _check(x_internal_secret)
+    from app.routers.ops import _latest_agents
+    want = {int(x) for x in ids.split(",") if x.strip().isdigit()}
+    agents = await _latest_agents(db)
+    out = {}
+    for sid in want:
+        a = agents.get(sid)
+        out[str(sid)] = {"live": _live(a), "last_heartbeat_at": _iso(a.last_heartbeat_at) if a else None,
+                         "version": a.version if a else None}
+    return {"stores": out}

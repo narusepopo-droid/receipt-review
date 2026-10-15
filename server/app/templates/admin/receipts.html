@@ -47,7 +47,7 @@
                         <td>
                             {% set st = r.status.value if r.status.value is defined else r.status %}
                             {% if st == 'available' %}<span class="badge badge-success">사용 가능</span>
-                            {% elif st == 'assigned' %}<span class="badge badge-info">배정됨</span>
+                            {% elif st == 'assigned' %}<span class="badge" style="background: #03C75A; color: #fff; font-weight: 800; box-shadow: 0 0 0 3px rgba(3,199,90,.18);">배정됨</span>
                             {% else %}<span class="badge" style="background: var(--gray-200); color: var(--gray-700);">폐기됨</span>{% endif %}
                         </td>
                         <td style="color: var(--gray-600);">

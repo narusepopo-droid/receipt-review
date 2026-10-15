@@ -12,8 +12,11 @@
           data-sub="{{ '승인되면 문자로 알려드려요 (보통 1영업일)' if st == 'pending' and approval else ('사용이 멈춘 이용권이에요' if st in ('suspended','cancelled') else '요금제를 고르고 결제하시면 바로 다시 쓸 수 있어요') }}"
           {% if not (st == 'pending' and approval) and st not in ('suspended','cancelled') and p.monthly_price > 0 %}data-href="{{ url('/my/buy/' ~ l.id) }}" data-label="요금제 보기"{% endif %}>🔒</button>{% endif %}{{ title }} <span class="badge {{ lb[1] }}">{{ lb[0] }}</span>
         {% if l.autopay %}<span class="badge brand plain">월 자동결제{% if l.autopay_cancel_requested %} · 해지 예정{% endif %}</span>{% endif %}</div>
-      <div class="meta">{{ sub }}{% if l.note == 'plma-import' %} · 플마 기존 이용권{% elif l.plan and st != 'pending' %} · {{ l.plan.name }}{% endif %}
-        {% if st != 'pending' %} · PC {{ l.device_name or ('등록됨' if l.device_id else '아직 없음') }}{% endif %}</div>
+      <div class="meta">{{ sub }}{% if l.plan and st != 'pending' and l.note != 'plma-import' %} · {{ l.plan.name }}{% endif %}
+        {% if st != 'pending' %}{% if p.code == 'receipt_review' %}{% set ps = pos.get(l.store.review_store_id) if l.store else none %}
+          {% if ps %}<span class="pos pos-{{ ps.live }}"><i></i>{{ {'live': '포스 프로그램 사용 중', 'idle': '포스 프로그램 신호 끊김', 'off': '포스 프로그램 꺼짐', 'never': '포스 프로그램 설치 전'}[ps.live] }}</span>
+          {% elif l.device_id %} · PC {{ l.device_name or '등록됨' }}{% endif %}
+        {% elif l.device_name %} · PC {{ l.device_name }}{% endif %}{% endif %}</div>
     </div>
     <div class="period">
       {% if st == 'pending' %}
@@ -61,7 +64,7 @@
 </div>
 
 {% set ns = namespace(setup=[]) %}
-{% for p in products %}{% for l in by_product[p.id] %}{% if usable(l) and not l.device_id %}{% set ns.setup = ns.setup + [(p, l)] %}{% endif %}{% endfor %}{% endfor %}
+{% for p in products %}{% for l in by_product[p.id] %}{% if l.id in setup_ids %}{% set ns.setup = ns.setup + [(p, l)] %}{% endif %}{% endfor %}{% endfor %}
 {% if ns.setup %}
 <div class="card mb" style="border-color:#a7e8c4;background:linear-gradient(135deg,#e8f8ef,#fff)"><div class="card-body">
   <h3>🎉 이용 준비가 끝났어요 — 이제 PC에 설치해 주세요</h3>
@@ -132,7 +135,11 @@
 .lockbtn { border: 1px solid var(--line); background: #fff; border-radius: 8px; width: 30px; height: 30px; margin-right: 8px;
   cursor: pointer; font-size: 15px; line-height: 1; vertical-align: middle; transition: transform .15s, box-shadow .15s; }
 .lockbtn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15,23,42,.1); }
-.lockdlg { border: none; border-radius: 18px; padding: 28px 26px 22px; max-width: 380px; width: calc(100% - 32px); text-align: center;
+.pos { display: inline-flex; align-items: center; gap: 5px; margin-left: 6px; font-weight: 700; color: var(--faint); }
+.pos i { width: 8px; height: 8px; border-radius: 50%; background: #c4cad2; display: inline-block; }
+.pos-live { color: #029a47; } .pos-live i { background: #03C75A; box-shadow: 0 0 0 3px rgba(3,199,90,.18); }
+.pos-idle { color: #b86e00; } .pos-idle i { background: #f59e0b; }
+.lockdlg { position: fixed; inset: 0; margin: auto; height: fit-content; border: none; border-radius: 18px; padding: 28px 26px 22px; max-width: 380px; width: calc(100% - 32px); text-align: center;
   box-shadow: 0 24px 60px rgba(15,23,42,.25); }
 .lockdlg::backdrop { background: rgba(15,23,42,.45); }
 .lockdlg .lock-ico { font-size: 34px; margin-bottom: 6px; }

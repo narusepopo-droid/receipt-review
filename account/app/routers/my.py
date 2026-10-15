@@ -36,8 +36,42 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     by_product = {p.id: [l for l in lics if l.product_id == p.id] for p in products}
     from app import firebase
     plma_hint = request.session.pop("_plma_hint", False)
+    pos = await _pos_status([l.store.review_store_id for l in lics if l.store and l.store.review_store_id])
     return render(request, "my/dashboard.html", acc=acc, products=products, by_product=by_product, stores=stores,
-                  Unit=Unit, plma_ready=firebase.sa_available(), plma_hint=plma_hint)
+                  Unit=Unit, plma_ready=firebase.sa_available(), plma_hint=plma_hint,
+                  pos=pos, setup_ids=_needs_setup(lics, pos))
+
+
+def _needs_setup(lics, pos: dict) -> set:
+    """'이제 PC에 설치해 주세요' 안내가 필요한 이용권: 영수증리뷰는 포스 프로그램이 한 번도 연결 안 된 매장,
+    플마는 계정에서 새로 받은 이용권 중 3일 안 (플마 PC 등록은 프로그램 쪽에서 해서 여기선 알 수 없음)"""
+    from datetime import timedelta
+    now = licensing.now_utc()
+    out = set()
+    for l in lics:
+        if not licensing.usable(l):
+            continue
+        if l.product.code == "receipt_review":
+            ps = pos.get(l.store.review_store_id) if l.store and l.store.review_store_id else None
+            if (ps["live"] == "never") if ps else not l.device_id:
+                out.add(l.id)
+        elif l.note != "plma-import" and not l.device_id and l.created_at                 and now - licensing.aware(l.created_at) < timedelta(days=3):
+            out.add(l.id)
+    return out
+
+
+async def _pos_status(review_ids: list) -> dict:
+    """영수증리뷰 매장별 포스 프로그램 상태 {review_store_id: {live, last_heartbeat_at}} — 실패하면 빈 값(화면은 그대로)"""
+    if not review_ids:
+        return {}
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=3) as c:
+            r = await c.get(f"{settings.REVIEW_API_URL}/internal/store-live", params={"ids": ",".join(map(str, review_ids))},
+                            headers={"X-Internal-Secret": settings.INTERNAL_SECRET})
+        return {int(k): v for k, v in r.json().get("stores", {}).items()} if r.status_code == 200 else {}
+    except Exception:
+        return {}
 
 
 @router.get("/stores/new")
