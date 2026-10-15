@@ -15,7 +15,7 @@ PRODUCTS = [
 
 PLANS = [
     # name, kind, months, discount, badge, public, sort
-    ("무료 (무제한)", PlanKind.FREE, None, 0, "", False, 0),
+    ("무료 (매달 자동 연장)", PlanKind.FREE, None, 0, "", False, 0),
     ("월 결제 · 12개월 약정", PlanKind.MONTHLY, 12, 0, "", True, 10),
     ("월 결제 · 24개월 약정", PlanKind.MONTHLY, 24, 5, "", True, 11),
     ("1년 일시불", PlanKind.PREPAID, 12, 15, "인기", True, 20),

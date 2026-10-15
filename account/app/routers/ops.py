@@ -200,7 +200,7 @@ async def license_action(request: Request, lid: int, db: AsyncSession = Depends(
         if action == "approve" and licensing.paid_mode(prod0):
             raise licensing.LicenseError("결제제로 운영 중이라 무료 승인은 막혀 있습니다. "
                                          "꼭 필요하면 '요금제 지급'으로 기간을 정해 지급해 주세요.")
-        if action == "approve":                  # 승인 = 무료(무제한) 지급
+        if action == "approve":                  # 승인 = 무료 지급 (한 달 단위, 매달 자동 연장)
             plan = (await db.execute(select(Plan).where(Plan.product_id == lic.product_id,
                                                         Plan.kind == PlanKind.FREE))).scalars().first()
             await licensing.apply_plan(db, lic, plan, actor)

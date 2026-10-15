@@ -41,7 +41,7 @@
         {% if p.download_url %}<a class="btn sm" href="{{ url('/my/download/' ~ l.id) }}">설치 파일</a>
         {% else %}<button class="btn sm" disabled title="설치 파일 준비 중">설치 파일 준비 중</button>{% endif %}
       {% endif %}
-      {% if p.monthly_price > 0 and st not in ('cancelled', 'suspended') and not (st == 'pending' and approval) and (st != 'active' or l.expires_at) %}
+      {% if p.monthly_price > 0 and st not in ('cancelled', 'suspended') and not (st == 'pending' and approval) and (st != 'active' or l.expires_at) and not auto_monthly(l) %}
         <a class="btn sm {{ 'brand' if st in ('pending','grace','expired') or (dl is not none and dl <= 7) else '' }}" href="{{ url('/my/buy/' ~ l.id) }}">
           {{ '결제하기' if st == 'pending' else '연장하기' }}</a>
       {% endif %}

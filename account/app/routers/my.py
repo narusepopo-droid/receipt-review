@@ -43,19 +43,14 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 def _needs_setup(lics, pos: dict) -> set:
-    """'이제 PC에 설치해 주세요' 안내가 필요한 이용권: 영수증리뷰는 포스 프로그램이 한 번도 연결 안 된 매장,
-    플마는 계정에서 새로 받은 이용권 중 3일 안 (플마 PC 등록은 프로그램 쪽에서 해서 여기선 알 수 없음)"""
-    from datetime import timedelta
-    now = licensing.now_utc()
+    """'이제 PC에 설치해 주세요' 안내가 필요한 이용권: 영수증리뷰 매장 중 포스 프로그램이 한 번도 연결 안 된 곳
+    (플마는 PC 등록을 플마 프로그램이 관리해 여기선 설치 여부를 알 수 없어 안내하지 않음 — [설치 파일] 버튼은 그대로)"""
     out = set()
     for l in lics:
-        if not licensing.usable(l):
+        if not licensing.usable(l) or l.product.code != "receipt_review":
             continue
-        if l.product.code == "receipt_review":
-            ps = pos.get(l.store.review_store_id) if l.store and l.store.review_store_id else None
-            if (ps["live"] == "never") if ps else not l.device_id:
-                out.add(l.id)
-        elif l.note != "plma-import" and not l.device_id and l.created_at                 and now - licensing.aware(l.created_at) < timedelta(days=3):
+        ps = pos.get(l.store.review_store_id) if l.store and l.store.review_store_id else None
+        if (ps["live"] == "never") if ps else not l.device_id:
             out.add(l.id)
     return out
 

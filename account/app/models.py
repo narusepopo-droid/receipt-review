@@ -100,7 +100,7 @@ class Product(Base, Stamp):
 
 
 class PlanKind(str, enum.Enum):
-    FREE = "free"                  # 무료 (운영자 지급, 기본 무제한)
+    FREE = "free"                  # 무료 (운영자 지급, 한 달 단위 매달 자동 연장)
     MONTHLY = "monthly"            # 매월 자동결제 (약정 개월 동안)
     PREPAID = "prepaid"            # 일시불 N개월
     LIFETIME = "lifetime"          # 영구 (일시불)
