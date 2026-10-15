@@ -7,6 +7,7 @@
 - GET  /api/v1/master/summary         영수증리뷰·이용권·결제 현황 숫자
 - POST /api/v1/master/sso             통합 계정 운영 화면 / 영수증리뷰 운영 화면 바로 열기 (1분짜리 주소)
 - GET  /ops/sso?t=                    통합 계정 운영 화면 자동 로그인
+- GET  /api/v1/master/stores[/{id}]   매장 목록(포스 프로그램 실시간 사용 여부)·매장 요약
 """
 import hmac
 from datetime import timedelta
@@ -357,3 +358,70 @@ async def customers(request: Request, db: AsyncSession = Depends(get_db)):
 
     rows = sorted(people.values(), key=lambda p: (p["company"] or p["name"] or p["email"]))
     return _json(request, {"ok": True, "rows": rows, "plma_ok": plma_ok, "review_ok": review_ok})
+
+
+# ───────────── 매장 목록 (포스 프로그램 실시간 사용 여부 + 매장별 핵심 데이터) ─────────────
+
+async def _review_get(path: str):
+    async with httpx.AsyncClient(timeout=10) as c:
+        r = await c.get(f"{settings.REVIEW_API_URL}/internal/{path}",
+                        headers={"X-Internal-Secret": settings.INTERNAL_SECRET})
+    if r.status_code == 404:
+        raise HTTPException(status_code=404, detail="매장을 찾을 수 없습니다")
+    if r.status_code != 200:
+        raise HTTPException(status_code=502, detail="영수증리뷰 서버에서 정보를 받지 못했습니다")
+    return r.json()
+
+
+async def _owners(db: AsyncSession) -> dict:
+    """영수증 매장 번호 → 점주(통합 계정)·이용권"""
+    from app.models import Plan, Store
+    from app.web import KST
+    now = now_utc()
+    prod = (await db.execute(select(Product).where(Product.code == "receipt_review"))).scalar_one_or_none()
+    plans = {x.id: x for x in (await db.execute(select(Plan))).scalars()}
+    lic_by_store = {}
+    if prod:
+        for l in (await db.execute(select(License).where(License.product_id == prod.id))).scalars():
+            if l.store_id:
+                lic_by_store[l.store_id] = l
+    out = {}
+    for st in (await db.execute(select(Store).where(Store.review_store_id.isnot(None)))).scalars():
+        acc = await db.get(Account, st.account_id)
+        l = lic_by_store.get(st.id)
+        plan = plans.get(l.plan_id) if l else None
+        out[st.review_store_id] = {
+            "account_id": acc.id if acc else None,
+            "name": acc.name if acc else "", "email": acc.email if acc else "", "phone": acc.phone if acc else "",
+            "last_login_at": acc.last_login_at.astimezone(KST).isoformat(timespec="seconds") if acc and acc.last_login_at else None,
+            "address": st.address or "",
+            "license": {"state": licensing.state(l, now), "plan": plan.name if plan else "",
+                        "expires_at": l.expires_at.astimezone(KST).strftime("%Y-%m-%d") if l.expires_at else "",
+                        "days_left": licensing.days_left(l, now), "autopay": bool(l.autopay),
+                        "device_name": l.device_name or "", "license_id": l.id} if l else None,
+        }
+    return out
+
+
+@router.get("/api/v1/master/stores")
+async def master_stores(request: Request, db: AsyncSession = Depends(get_db)):
+    try:
+        await _master(request)
+        data = await _review_get("master-stores")
+    except HTTPException as e:
+        return _err(request, e)
+    owners = await _owners(db)
+    for s in data.get("stores", []):
+        s["owner"] = owners.get(s["id"])
+    return _json(request, {"ok": True, **data})
+
+
+@router.get("/api/v1/master/stores/{store_id}")
+async def master_store(store_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    try:
+        await _master(request)
+        data = await _review_get(f"master-stores/{int(store_id)}")
+    except HTTPException as e:
+        return _err(request, e)
+    data["owner"] = (await _owners(db)).get(store_id)
+    return _json(request, {"ok": True, **data})

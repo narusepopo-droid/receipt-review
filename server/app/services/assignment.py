@@ -98,14 +98,15 @@ class AssignmentService:
         policy = store_settings.assignment_policy if store_settings else "latest_same_day"
 
         order_col = Receipt.paid_at.desc() if policy == "latest_same_day" else Receipt.paid_at.asc()
-        # 영업일 시작 이후 + 생성 후 24시간 이내(폐기 기준과 동일)인 미배정 정상 영수증
+        # 결제·생성 후 24시간 이내(폐기 기준과 동일, D5)인 미배정 정상 영수증
+        # (예전: 영업일 05:00 이후 결제분만 → 전날 저녁 영수증을 다음 날 점심에 못 씀)
         query = (
             select(Receipt.id)
             .where(
                 Receipt.store_id == session.store_id,
                 Receipt.status == ReceiptStatus.AVAILABLE,
                 Receipt.classification == ReceiptClassification.NORMAL,
-                Receipt.paid_at >= business_day_start,
+                Receipt.paid_at >= now - timedelta(hours=24),
                 Receipt.created_at >= now - timedelta(hours=24),
             )
             .order_by(order_col)

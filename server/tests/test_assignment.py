@@ -139,3 +139,33 @@ class TestConcurrency:
 
         assert len(assigned_receipt_ids) <= 10, \
             "10개 영수증보다 더 많이 배정됨"
+
+
+@pytest.mark.asyncio
+async def test_receipts_kept_24h_not_business_day(db_session):
+    """D5: 영수증은 생성 후 24시간 보관 — 새벽 5시(영업일 마감)에 일괄 폐기하지 않음, 전날 저녁 영수증도 배정"""
+    from app.services.disposal import dispose_expired_receipts
+    from app.models.store import StoreSettings
+    now = datetime.now(timezone.utc)
+    store = Store(name="보관매장", store_code="keep24")
+    db_session.add(store)
+    customer = Customer(phone_enc="enc", phone_hash="hash-keep")
+    db_session.add(customer)
+    await db_session.flush()
+    db_session.add(StoreSettings(store_id=store.id))
+    old = Receipt(store_id=store.id, approval_no="11112222", paid_at=now - timedelta(hours=26), amount=1000,
+                  status=ReceiptStatus.AVAILABLE, classification=ReceiptClassification.NORMAL,
+                  created_at=now - timedelta(hours=25))
+    keep = Receipt(store_id=store.id, approval_no="33334444", paid_at=now - timedelta(hours=20), amount=2000,
+                   status=ReceiptStatus.AVAILABLE, classification=ReceiptClassification.NORMAL,
+                   created_at=now - timedelta(hours=20))
+    db_session.add_all([old, keep])
+    await db_session.flush()
+
+    await dispose_expired_receipts(db_session)
+    assert old.status == ReceiptStatus.DISPOSED
+    assert keep.status == ReceiptStatus.AVAILABLE
+
+    service = AssignmentService(db_session)
+    session = await service.create_session(store.id, customer.id)
+    assert (await service.assign_receipt(session)).id == keep.id

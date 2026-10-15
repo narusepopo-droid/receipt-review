@@ -77,7 +77,7 @@ class StoreSettings(Base):
         String(30),
         default="latest_same_day"
     )
-    retention: Mapped[str] = mapped_column(String(30), default="end_of_day")
+    retention: Mapped[str] = mapped_column(String(30), default="hours:24")   # D5: 생성 후 24시간 보관
     business_day_cutoff: Mapped[str] = mapped_column(String(5), default="05:00")
 
     daily_assign_limit: Mapped[Optional[int]] = mapped_column(Integer)

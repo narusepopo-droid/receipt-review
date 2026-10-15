@@ -542,3 +542,36 @@ async def test_sign_editor_design_and_qr(web):
     web.cookies.clear()
     assert (await web.get("/admin/tables/qr.png?t=0")).status_code == 401
     assert (await web.post("/admin/tables/design", json={})).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_internal_master_stores(web, monkeypatch):
+    """마스터 매장 목록: 공유 비밀 필수, 포스 프로그램 3분 안 신호면 '사용 중', 매장 요약 숫자"""
+    from datetime import timezone
+    from app.main import app
+    from app.db import get_db
+    from app.models.store import Agent
+    from app.models.receipt import Receipt, ReceiptStatus, ReceiptClassification
+    monkeypatch.setattr(settings, "INTERNAL_SECRET", "s")
+    now = datetime.now(timezone.utc)
+    gen = app.dependency_overrides[get_db]()
+    db = await gen.__anext__()
+    db.add(Agent(store_id=1, version="1.2.2", capture_mode="spmc", last_heartbeat_at=now - timedelta(seconds=50)))
+    db.add(Receipt(store_id=1, approval_no="12345678", amount=15000, paid_at=now,
+                   status=ReceiptStatus.AVAILABLE, classification=ReceiptClassification.NORMAL))
+    db.add(Store(name="꺼진매장", store_code="OFF01"))
+    await db.commit()
+    await gen.aclose()
+
+    assert (await web.get("/internal/master-stores")).status_code == 403
+    h = {"X-Internal-Secret": "s"}
+    st = {x["name"]: x for x in (await web.get("/internal/master-stores", headers=h)).json()["stores"]}
+    assert st["테스트매장"]["agent"]["live"] == "live" and st["테스트매장"]["today"]["receipts"] == 1
+    assert st["테스트매장"]["today"]["amount"] == 15000 and st["테스트매장"]["available"] == 1
+    assert st["꺼진매장"]["agent"]["live"] == "never"
+
+    d = (await web.get(f"/internal/master-stores/{st['테스트매장']['id']}", headers=h)).json()
+    assert d["agent"]["version"] == "1.2.2" and d["receipts"]["d30"]["amount"] == 15000
+    assert len(d["days"]) == 7 and d["days"][-1]["receipts"] == 1 and d["funnel"]["today"]["started"] == 0
+    assert d["recent_receipts"][0]["amount"] == 15000 and "customers" in d and "settings" in d
+    assert (await web.get("/internal/master-stores/999", headers=h)).status_code == 404

@@ -93,7 +93,7 @@ async def dispose_expired_receipts(db: AsyncSession) -> dict:
 
     for store_id, settings in stores_result.fetchall():
         cutoff_str = settings.business_day_cutoff if settings else "05:00"
-        retention = settings.retention if settings else "end_of_day"
+        retention = settings.retention if settings else "hours:24"
 
         cutoff = parse_cutoff_time(cutoff_str)
 

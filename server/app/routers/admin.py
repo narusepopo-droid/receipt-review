@@ -236,7 +236,8 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     settings = store_data["settings"]
 
     # 오늘 날짜 (영업일 기준)
-    now = datetime.now(timezone.utc)
+    # 한국 시간 기준 (UTC 로 계산하면 '오늘'이 오후 2시에 바뀌던 문제)
+    now = datetime.now(timezone(timedelta(hours=9)))
     cutoff = settings.business_day_cutoff if settings else "05:00"
     h, m = map(int, cutoff.split(":"))
     today_start = now.replace(hour=h, minute=m, second=0, microsecond=0)

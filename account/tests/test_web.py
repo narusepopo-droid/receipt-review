@@ -498,3 +498,41 @@ async def test_unified_flow_locks_and_review_admin(client):
     assert "/my/review-admin" in page and "홈페이지" in page
     r = await client.get("/my/review-admin", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].endswith("/my")
+
+
+@pytest.mark.asyncio
+async def test_master_stores(client, monkeypatch):
+    """마스터 매장 목록: 마스터만, 영수증 서버 숫자 + 점주·이용권 합쳐서"""
+    from app.config import settings
+    from app.routers import master
+
+    async def fake_verify(tok):
+        return {"uid": settings.MASTER_UID if tok == "master" else "x", "email": "boss@test.com"}
+    monkeypatch.setattr(firebase, "verify_id_token", fake_verify)
+    await signup(client, email="shop2@test.com", products=("receipt_review",), store="가게B")
+    await client.get("/logout")
+    from app.db import SessionLocal
+    from app.models import Store
+    from sqlalchemy import select as _sel
+    async with SessionLocal() as db:
+        st = (await db.execute(_sel(Store).where(Store.name == "가게B"))).scalar_one()
+        st.review_store_id = 77
+        await db.commit()
+
+    async def fake_get(path):
+        if path == "master-stores":
+            return {"stores": [{"id": 77, "name": "가게B", "agent": {"live": "live"}}], "live_minutes": 3}
+        if path == "master-stores/77":
+            return {"store": {"id": 77, "name": "가게B"}, "agent": {"live": "off"}}
+        raise master.HTTPException(status_code=404, detail="매장을 찾을 수 없습니다")
+    monkeypatch.setattr(master, "_review_get", fake_get)
+
+    assert (await client.get("/api/v1/master/stores", headers={"Authorization": "Bearer other"})).status_code == 403
+    h = {"Authorization": "Bearer master"}
+    j = (await client.get("/api/v1/master/stores", headers=h)).json()
+    s = j["stores"][0]
+    assert j["ok"] and s["agent"]["live"] == "live" and s["owner"]["email"] == "shop2@test.com"
+    assert s["owner"]["license"]["state"] in ("pending", "active")
+    j = (await client.get("/api/v1/master/stores/77", headers=h)).json()
+    assert j["ok"] and j["owner"]["email"] == "shop2@test.com" and j["agent"]["live"] == "off"
+    assert (await client.get("/api/v1/master/stores/5", headers=h)).status_code == 404
