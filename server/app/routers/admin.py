@@ -427,7 +427,7 @@ def dashboard_range(p: str, d: Optional[str], cutoff: str = "05:00") -> dict:
 
 
 def menu_ranking(item_lists) -> tuple[list, list]:
-    """영수증 품목 → 메뉴별 판매량 (수량 많은 순). 세트 구성·추가 선택(▶ 줄)은 따로"""
+    """영수증 품목 → 메뉴별 판매량 (수량 많은 순). 세트 구성·추가 선택(▶ 줄)과 0원 기본 제공(죽·반찬 등)은 따로"""
     main, opt = {}, {}
     for items in item_lists:
         for it in items or []:
@@ -435,7 +435,8 @@ def menu_ranking(item_lists) -> tuple[list, list]:
             qty = it.get("qty") or 0
             if not name or qty <= 0:
                 continue
-            bucket = opt if it.get("option") else main
+            free = not (it.get("price") or 0) and not (it.get("unit") or 0)
+            bucket = opt if it.get("option") or free else main
             row = bucket.setdefault(name, {"name": name, "qty": 0, "amount": 0})
             row["qty"] += qty
             row["amount"] += it.get("price") or 0

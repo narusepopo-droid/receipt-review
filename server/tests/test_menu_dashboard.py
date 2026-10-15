@@ -41,10 +41,11 @@ def test_extract_items_kasol_and_wrapped_name():
 def test_menu_ranking_order():
     menus, opts = menu_ranking([
         [{"name": "A", "qty": 1, "price": 1000}, {"name": "B", "qty": 3, "price": 900}],
-        [{"name": "A", "qty": 1, "price": 1000}, {"name": "옵션", "qty": 2, "price": 0, "option": True}],
+        [{"name": "A", "qty": 1, "price": 1000}, {"name": "옵션", "qty": 2, "price": 0, "option": True},
+         {"name": "죽 (기본제공", "qty": 1, "price": 0, "unit": 0}],
         None])
     assert [(m["name"], m["qty"], m["rank"]) for m in menus] == [("B", 3, 1), ("A", 2, 2)]
-    assert menus[0]["pct"] == 100 and opts[0]["name"] == "옵션"
+    assert menus[0]["pct"] == 100 and opts[0]["name"] == "옵션" and "죽 (기본제공" in [o["name"] for o in opts]
 
 
 def test_dashboard_range_day_week_month():
