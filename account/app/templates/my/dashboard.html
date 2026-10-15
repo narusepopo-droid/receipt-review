@@ -31,6 +31,7 @@
           {% if dl is not none and dl >= 0 %}<span style="{{ 'color:var(--red)' if dl <= 7 else 'color:var(--faint)' }}">· {{ dl }}일 남음</span>{% endif %}</div>
         {% if st == 'grace' %}<div class="meta" style="color:var(--amber)">유예 기간 — 오늘까지 연장하지 않으면 사용이 중지돼요</div>
         {% elif st == 'expired' %}<div class="meta" style="color:var(--red)">이용 기간이 끝났어요</div>
+        {% elif auto_monthly(l) %}<div class="meta" style="color:var(--brand,#03a94d);font-weight:700">매달 자동 연장</div>
         {% else %}<div class="bar"><i style="width:{{ progress(l) }}%"></i></div>{% endif %}
       {% endif %}
     </div>

@@ -206,7 +206,7 @@ async def test_license_api_device_lock_and_store_choice(client):
         await licensing.apply_plan(db, lic, free, "test")
         await db.commit()
     r = (await client.post("/api/v1/license/login", json={**body, "store_id": sid})).json()
-    assert r["ok"] and r["unlimited"] and r["store"]["name"] == "테스트 매장"
+    assert r["ok"] and r["expires_at"] and r["store"]["name"] == "테스트 매장"     # 무료도 한 달 단위
     token = r["token"]
     r = (await client.post("/api/v1/license/check", json={"token": token, "device_id": "PC-1"})).json()
     assert r["ok"]
@@ -366,7 +366,7 @@ async def test_paid_mode_blocks_free_paths(client):
     await _set_policy("receipt_review", "approval")
     await client.post(f"/ops/licenses/{lic.id}", data={"action": "approve"})
     async with SessionLocal() as db:
-        assert (await db.get(License, lic.id)).expires_at is None
+        assert (await db.get(License, lic.id)).expires_at is not None       # 무료도 한 달 단위
         pid = (await db.get(License, lic.id)).product_id
     r = await client.post(f"/ops/products/{pid}/free-until", data={"until": "2099-01-31"})
     assert "1개를 2099-01-31까지로" in r.text

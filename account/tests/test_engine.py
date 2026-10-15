@@ -129,7 +129,8 @@ async def test_lifetime_and_free_unlimited(db):
     acc = await _account(db)
     lic = await licensing.get_or_create(db, acc, pm, None)
     await licensing.apply_plan(db, lic, await _plan(db, pm, PlanKind.FREE), "test")
-    assert lic.expires_at is None and licensing.state(lic) == "active"
+    # 무료는 한 달 단위 (한 달 뒤 23:59 한국 시간)
+    assert lic.expires_at is not None and licensing.state(lic) == "active" and 27 <= licensing.days_left(lic) <= 31
     # 무료 무제한에서 기간권을 사면 기간권으로 바뀜 (유료 전환)
     await licensing.apply_plan(db, lic, await _plan(db, pm, PlanKind.PREPAID, 12), "test")
     assert lic.expires_at is not None
@@ -199,7 +200,7 @@ async def test_expiry_notifications_and_suspend(db):
         return True
 
     stats = await licensing.run_expiry_jobs(db, fake_sms, now=now)
-    assert stats == {"suspended": 1, "notified": 2}
+    assert stats["suspended"] == 1 and stats["notified"] == 2
     assert any("7일 후" in m for _, m in sent) and any("1일 후" in m for _, m in sent)
     assert lx.status == LicenseStatus.SUSPENDED and licensing.state(lx, now) == "expired"
     # 같은 날 다시 돌려도 중복 발송 없음
@@ -280,3 +281,33 @@ async def test_monthly_autopay(db, monkeypatch):
     lic.next_charge_at = datetime(2027, 1, 16, tzinfo=timezone.utc)
     s = await orders.run_autopay(db, sms, now=datetime(2027, 1, 16, 1, tzinfo=timezone.utc))
     assert s["stopped"] == 1 and not lic.autopay
+
+
+@pytest.mark.asyncio
+async def test_free_monthly_convert_and_renew(db):
+    """무료 이용권: 예전 무제한 → 다음 달 기념일까지, 만료일이 되면 한 달 자동 연장, 결제제면 연장 안 함"""
+    from datetime import timedelta
+    from app.models import SignupPolicy
+    pm = await _prod(db, "plma")
+    acc = await _account(db)
+    lic = await licensing.get_or_create(db, acc, pm, None)
+    lic.plan_id = (await _plan(db, pm, PlanKind.FREE)).id
+    lic.status = LicenseStatus.ACTIVE
+    lic.starts_at = datetime(2026, 9, 3, 1, tzinfo=timezone.utc)
+    lic.expires_at = None
+    await db.commit()
+    now = datetime(2026, 10, 15, 3, tzinfo=timezone.utc)
+    st = await licensing.renew_free_monthly(db, now)
+    assert st["converted"] == 1
+    exp = licensing.aware(lic.expires_at).astimezone(licensing.KST)
+    assert (exp.month, exp.day, exp.hour, exp.minute) == (11, 3, 23, 59)
+    # 만료일 당일 → 한 달 연장
+    day = datetime(2026, 11, 3, 2, tzinfo=timezone.utc)
+    assert (await licensing.renew_free_monthly(db, day))["renewed"] == 1
+    exp = licensing.aware(lic.expires_at).astimezone(licensing.KST)
+    assert (exp.month, exp.day) == (12, 3)
+    assert (await licensing.renew_free_monthly(db, day))["renewed"] == 0          # 같은 날 두 번 연장 안 함
+    # 결제제 상품이면 자동 연장 안 함
+    pm.signup_policy = SignupPolicy.PAYMENT
+    await db.commit()
+    assert (await licensing.renew_free_monthly(db, datetime(2026, 12, 3, 2, tzinfo=timezone.utc)))["renewed"] == 0

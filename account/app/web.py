@@ -112,3 +112,14 @@ async def require_operator(request: Request, db: AsyncSession) -> Account:
 
 def render(request: Request, name: str, **ctx):
     return templates.TemplateResponse(request=request, name=name, context=ctx)
+
+
+def auto_monthly(lic) -> bool:
+    """마이페이지 '매달 자동 연장' 표시"""
+    from app.models import PlanKind
+    plan = getattr(lic, "plan", None)
+    prod = getattr(lic, "product", None)
+    return bool(lic.expires_at) and licensing.is_free_monthly(lic, plan) and not (prod and licensing.paid_mode(prod))
+
+
+templates.env.globals.update(auto_monthly=auto_monthly)

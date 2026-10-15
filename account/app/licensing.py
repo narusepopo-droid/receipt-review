@@ -1,7 +1,9 @@
 """
 이용권 규칙
 
-- 연장: 남은 기간이 있으면 기존 만료일 뒤에 이어 붙이고, 만료됐으면 오늘부터. 영구/무료 무제한은 만료일 없음.
+- 연장: 남은 기간이 있으면 기존 만료일 뒤에 이어 붙이고, 만료됐으면 오늘부터. 영구는 만료일 없음.
+- 무료 이용권은 한 달 단위 (요청자 결정 2026-10-15): 만료일(그날 23:59)이 되면 자동으로 한 달 연장.
+  상품이 결제제로 바뀌면 자동 연장 안 함 → 결제해야 연장.
 - 유예: 만료일 다음 날 23:59(한국 시간)까지 사용 가능. 그 뒤 정지.
 - 알림: 만료 7일·3일·1일 전 문자 (같은 만료일에 한 번씩).
 - PC: 이용권당 1대. 다른 PC에서 로그인하면 거부. 점주는 30일에 1번 직접 PC 변경 가능, 운영자는 언제든.
@@ -120,11 +122,52 @@ def _add_months(base: datetime, months: int) -> datetime:
     return base + relativedelta(months=months)
 
 
+def month_end_from(base: datetime) -> datetime:
+    """base 에서 한 달 뒤 날의 23:59:59 (한국 시간) — 무료 한 달 이용권의 만료 시각"""
+    d = (aware(base).astimezone(KST) + relativedelta(months=1)).replace(hour=23, minute=59, second=59, microsecond=0)
+    return d.astimezone(timezone.utc)
+
+
+def is_free_monthly(lic: License, plan: Optional[Plan]) -> bool:
+    """매달 자동 연장되는 무료 이용권 (무료 요금제, 자동결제 아님)"""
+    return not lic.autopay and plan is not None and plan.kind == PlanKind.FREE
+
+
+async def renew_free_monthly(db: AsyncSession, now: Optional[datetime] = None) -> dict:
+    """무료 이용권: 만료일 없던 것(예전 '무제한')은 다음 달 기념일까지로, 만료일이 된 것은 한 달 연장"""
+    now = now or now_utc()
+    stats = {"converted": 0, "renewed": 0}
+    rows = (await db.execute(select(License).where(License.status == LicenseStatus.ACTIVE))).scalars().all()
+    for lic in rows:
+        plan = await db.get(Plan, lic.plan_id) if lic.plan_id else None
+        if not is_free_monthly(lic, plan):
+            continue
+        product = await db.get(Product, lic.product_id)
+        if lic.expires_at is None:
+            exp = month_end_from(aware(lic.starts_at or lic.created_at or now) - relativedelta(months=1))
+            while exp < now:
+                exp = month_end_from(exp)
+            await set_expiry(db, lic, exp, "system", "무료 이용권 한 달 단위로 전환 (매달 자동 연장)")
+            stats["converted"] += 1
+            continue
+        if paid_mode(product):
+            continue          # 결제제 상품은 결제해야 연장
+        exp = aware(lic.expires_at)
+        if days_left(lic, now) <= 0:
+            new = month_end_from(exp)
+            while new < now:
+                new = month_end_from(new)
+            await set_expiry(db, lic, new, "system", "무료 한 달 자동 연장")
+            stats["renewed"] += 1
+    await db.commit()
+    return stats
+
+
 async def apply_plan(db: AsyncSession, lic: License, plan: Plan, actor: str, *, months: Optional[int] = None,
                      now: Optional[datetime] = None) -> License:
     """
     요금제 적용 (결제 완료·운영자 지급).
-    - 무료(개월 없음)·영구: 만료일 없음 (무제한)
+    - 영구: 만료일 없음 / 무료(개월 없음): 한 달 (매달 자동 연장)
     - 일시불/무료 N개월: 남은 기간 뒤에 N개월 이어 붙임
     - 월 자동결제: 1개월 연장 + 다음 청구일, 약정 종료일 설정
     """
@@ -134,8 +177,13 @@ async def apply_plan(db: AsyncSession, lic: License, plan: Plan, actor: str, *, 
     if lic.expires_at is not None and aware(lic.expires_at) > now and state(lic, now) in ("active", "grace"):
         base = aware(lic.expires_at)
 
-    if plan.kind == PlanKind.LIFETIME or (plan.kind == PlanKind.FREE and not (months or plan.months)):
+    if plan.kind == PlanKind.LIFETIME:
         lic.expires_at = None
+        lic.autopay = False
+        lic.next_charge_at = None
+    elif plan.kind == PlanKind.FREE and not (months or plan.months):
+        if lic.expires_at is None or aware(lic.expires_at) < now:
+            lic.expires_at = month_end_from(now)      # 무료는 한 달 단위, 매달 자동 연장
         lic.autopay = False
         lic.next_charge_at = None
     elif plan.kind == PlanKind.MONTHLY:
@@ -222,9 +270,9 @@ async def reset_device(db: AsyncSession, lic: License, actor: str, by_owner: boo
 # ───────────── 만료 처리·알림 (스케줄러) ─────────────
 
 async def run_expiry_jobs(db: AsyncSession, send_sms, now: Optional[datetime] = None) -> dict:
-    """유예 지난 이용권 정지 + 7·3·1일 전 알림"""
+    """무료 한 달 자동 연장 + 유예 지난 이용권 정지 + 7·3·1일 전 알림"""
     now = now or now_utc()
-    stats = {"suspended": 0, "notified": 0}
+    stats = {"suspended": 0, "notified": 0, **(await renew_free_monthly(db, now))}
     rows = (await db.execute(select(License).where(
         License.status == LicenseStatus.ACTIVE, License.expires_at.isnot(None)))).scalars().all()
     for lic in rows:
@@ -241,6 +289,9 @@ async def run_expiry_jobs(db: AsyncSession, send_sms, now: Optional[datetime] = 
             continue
         if lic.autopay and not lic.autopay_cancel_requested:
             continue       # 자동결제는 만료 알림 대신 청구 알림
+        plan_ = await db.get(Plan, lic.plan_id) if lic.plan_id else None
+        if is_free_monthly(lic, plan_) and not paid_mode(await db.get(Product, lic.product_id)):
+            continue       # 무료 한 달 이용권은 자동 연장이라 만료 알림 안 보냄
         dl = days_left(lic, now)
         if dl in NOTIFY_DAYS:
             ref = aware(lic.expires_at).astimezone(KST).strftime("%Y-%m-%d")

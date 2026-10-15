@@ -204,7 +204,7 @@ async def license_action(request: Request, lid: int, db: AsyncSession = Depends(
             plan = (await db.execute(select(Plan).where(Plan.product_id == lic.product_id,
                                                         Plan.kind == PlanKind.FREE))).scalars().first()
             await licensing.apply_plan(db, lic, plan, actor)
-            msg = "승인했습니다 (무료·무제한)."
+            msg = "승인했습니다 (무료 · 한 달 단위 매달 자동 연장)."
             acc_ = await db.get(Account, lic.account_id)
             prod_ = await db.get(Product, lic.product_id)
             store_ = await db.get(Store, lic.store_id) if lic.store_id else None
@@ -281,12 +281,12 @@ async def free_until(request: Request, pid: int, db: AsyncSession = Depends(get_
     free_ids = [x.id for x in (await db.execute(select(Plan).where(Plan.product_id == pid,
                                                                     Plan.kind == PlanKind.FREE))).scalars()]
     rows = (await db.execute(select(License).where(
-        License.product_id == pid, License.plan_id.in_(free_ids), License.expires_at.is_(None),
+        License.product_id == pid, License.plan_id.in_(free_ids),
         License.status == LicenseStatus.ACTIVE))).scalars().all()
     for lic in rows:
-        await licensing.set_expiry(db, lic, until, f"operator:{op.email}", reason="유료 전환 (무료 무제한 → 기한)")
+        await licensing.set_expiry(db, lic, until, f"operator:{op.email}", reason="유료 전환 (무료 이용권 → 기한)")
     await db.commit()
-    flash(request, f"{product.name} 무료(무제한) 이용권 {len(rows)}개를 {until.astimezone(KST):%Y-%m-%d}까지로 바꿨습니다.")
+    flash(request, f"{product.name} 무료 이용권 {len(rows)}개를 {until.astimezone(KST):%Y-%m-%d}까지로 바꿨습니다.")
     return RedirectResponse(url("/ops/products"), status_code=303)
 
 

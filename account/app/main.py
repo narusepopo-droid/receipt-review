@@ -28,6 +28,13 @@ async def job_expiry():
         logger.info("expiry job: %s", await licensing.run_expiry_jobs(db, send_sms))
 
 
+async def job_renew():
+    async with SessionLocal() as db:
+        st = await licensing.renew_free_monthly(db)
+        if st["converted"] or st["renewed"]:
+            logger.info("free monthly renew: %s", st)
+
+
 async def job_autopay():
     if not settings.toss_enabled:
         return
@@ -42,6 +49,7 @@ async def lifespan(app: FastAPI):
     async with SessionLocal() as db:
         await seed(db)
     scheduler.add_job(job_expiry, "cron", hour=10, minute=0, id="expiry")      # 알림은 오전 10시
+    scheduler.add_job(job_renew, "cron", minute=5, id="renew")                 # 무료 한 달 이용권 전환·자동 연장 (매시)
     scheduler.add_job(job_autopay, "cron", hour="9,15", minute=0, id="autopay")
     scheduler.start()
     yield
