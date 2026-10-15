@@ -1144,6 +1144,43 @@ async def sms_cancel(request: Request, campaign_id: int, db: AsyncSession = Depe
 
 # ============ 선택 기능 (Phase 9) ============
 
+def _place_id_from_text(text: str) -> Optional[str]:
+    """플레이스 주소/번호 → 플레이스 번호. 지도 주소의 좌표 숫자는 무시하고 /place/123 같은 경로를 먼저 본다"""
+    import re as _re
+    m = _re.search(r"/(?:place|restaurant|cafe|hairshop|nailshop|hospital|accommodation|entry/place)/(\d{5,15})", text) \
+        or _re.search(r"[?&](?:id|placeId)=(\d{5,15})", text)
+    if m:
+        return m.group(1)
+    if "://" not in text:
+        m = _re.search(r"(\d{5,15})", text)
+        return m.group(1) if m else None
+    return None
+
+
+async def resolve_place_id(text: str) -> Optional[str]:
+    """naver.me 짧은 주소(공유하기 링크)는 연결되는 주소를 따라가 번호를 찾는다"""
+    text = (text or "").strip()
+    place = _place_id_from_text(text)
+    if place or "naver.me" not in text:
+        return place
+    import httpx
+    url = text if text.startswith("http") else "https://" + text
+    try:
+        async with httpx.AsyncClient(timeout=5, follow_redirects=False) as c:
+            for _ in range(4):
+                r = await c.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                loc = r.headers.get("location")
+                if not loc:
+                    break
+                place = _place_id_from_text(loc)
+                if place:
+                    return place
+                url = loc
+    except httpx.HTTPError:
+        pass
+    return None
+
+
 class OptionsUpdate(BaseModel):
     phone_verify: bool = False
     review_check: bool = False
@@ -1158,10 +1195,7 @@ async def save_options(request: Request, data: OptionsUpdate, db: AsyncSession =
     import re as _re
     from app.models.options import StoreOptions
     store = store_data["store"]
-    place = None
-    if data.naver_place_id:
-        m = _re.search(r"(\d{5,15})", data.naver_place_id)   # 플레이스 주소를 붙여넣어도 번호만 추출
-        place = m.group(1) if m else None
+    place = await resolve_place_id(data.naver_place_id) if data.naver_place_id else None
     if data.review_check and not place:
         return JSONResponse({"success": False, "error": "리뷰 확인을 켜려면 네이버 플레이스 주소(또는 번호)가 필요합니다"}, status_code=400)
     o = (await db.execute(select(StoreOptions).where(StoreOptions.store_id == store.id))).scalar_one_or_none()

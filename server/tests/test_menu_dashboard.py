@@ -86,3 +86,11 @@ async def test_dashboard_menu_sales_and_periods(web):
         assert r.status_code == 200, q
     old = (await web.get("/admin/dashboard?p=day&d=2020-01-01")).text
     assert "메뉴가 읽힌 영수증이 없어요" in old and "location.reload" not in old
+
+
+def test_place_id_from_links():
+    from app.routers.admin import _place_id_from_text as f
+    assert f("https://map.naver.com/p/entry/place/1872106859?lng=127.1027852&lat=37.5077616") == "1872106859"
+    assert f("https://m.place.naver.com/restaurant/1872106859/home") == "1872106859"
+    assert f("1872106859") == "1872106859"
+    assert f("https://naver.me/5UExGN8X") is None       # 짧은 주소는 resolve_place_id 가 따라감
