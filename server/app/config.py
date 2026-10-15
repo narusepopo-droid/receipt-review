@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     NAVER_MY_REVIEW_URL: str = "https://m.place.naver.com/my/review/list"   # 완료 화면 [내 리뷰 확인하기] — MY플레이스 리뷰 탭
     SMS_RELAY_URL: str = "https://placeranking.com/api/sms/send"   # 이 서버 IP 가 알리고 미등록이면 플마와 같은 계정으로 중계
     ALIGO_OPTOUT_080: str = ""      # 080 무료수신거부 번호 (있으면 문구에 포함)
-    SMS_COST_SMS: int = 20          # 건당 비용 (원)
+    SMS_COST_SMS: int = 30          # 건당 비용 (원, VAT 별도)
     SMS_COST_LMS: int = 50
 
     # 운영자 알림 받을 휴대폰 (에이전트 끊김 등). 알리고 키도 있어야 문자 발송
